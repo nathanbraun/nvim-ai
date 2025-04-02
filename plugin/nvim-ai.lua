@@ -24,15 +24,6 @@ vim.api.nvim_create_user_command('NAINew', function()
   require('nai').new_chat()
 end, { desc = 'Create new empty AI chat file' })
 
--- For backwards compatibility (will show notices directing to NAIChat)
-vim.api.nvim_create_user_command('NAI', function(opts)
-  require('nai').complete(opts)
-end, { range = true, nargs = '?', desc = 'AI complete text (deprecated)' })
-
-vim.api.nvim_create_user_command('NAIEdit', function(opts)
-  require('nai').edit(opts)
-end, { range = true, nargs = '?', desc = 'AI edit text (deprecated)' })
-
 -- Register the file type
 vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
   pattern = "*.naichat",
