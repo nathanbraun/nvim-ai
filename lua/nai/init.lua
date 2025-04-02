@@ -101,25 +101,34 @@ function M.chat(opts)
     vim.api.nvim_win_set_cursor(0, { line_count, 0 })
 
     -- Create indicator at the end of buffer
-    local indicator = utils.indicators.create_at_cursor(buffer_id, line_count - 1, 0)
+    local indicator = utils.indicators.create_assistant_placeholder(buffer_id, line_count)
 
     -- Cancel any ongoing requests
     if M.active_request then
-      M.active_request:terminate()
-      M.active_request = nil
+      M.cancel()
     end
 
     -- Call API
     M.active_request = api.chat_request(
       messages,
       function(response)
-        -- Remove indicator
-        utils.indicators.remove(indicator)
+        -- Get the position where we need to replace the placeholder
+        local insertion_row = utils.indicators.remove(indicator)
 
         -- Format response and append to buffer
         local formatted_response = parser.format_assistant_message(response)
         local lines_to_append = vim.split(formatted_response, "\n")
-        vim.api.nvim_buf_set_lines(buffer_id, line_count, line_count, false, lines_to_append)
+
+        -- Replace the placeholder with the actual content
+        -- We need to figure out how many lines the placeholder took up
+        local placeholder_height = indicator.end_row - indicator.start_row
+        vim.api.nvim_buf_set_lines(
+          buffer_id,
+          insertion_row,
+          insertion_row + placeholder_height,
+          false,
+          lines_to_append
+        )
 
         -- Auto-save if enabled
         if config.options.chat_files.auto_save then
@@ -133,16 +142,40 @@ function M.chat(opts)
         -- Notify completion
         vim.notify("AI response complete", vim.log.levels.INFO)
         M.active_request = nil
+        M.active_indicator = nil
       end,
       function(error_msg)
-        -- Remove indicator
-        utils.indicators.remove(indicator)
+        -- Get the position where we need to insert the error message
+        local insertion_row = utils.indicators.remove(indicator)
 
-        -- Show error
+        -- Create error message
+        local error_lines = {
+          "",
+          "<<< assistant",
+          "",
+          "❌ Error: " .. error_msg,
+          "",
+        }
+
+        -- Replace placeholder with error message
+        local placeholder_height = indicator.end_row - indicator.start_row
+        vim.api.nvim_buf_set_lines(
+          buffer_id,
+          insertion_row,
+          insertion_row + placeholder_height,
+          false,
+          error_lines
+        )
+
+        -- Show error notification
         vim.notify(error_msg, vim.log.levels.ERROR)
         M.active_request = nil
+        M.active_indicator = nil
       end
     )
+
+    -- Store indicator for cancellation
+    M.active_indicator = indicator
   else
     -- Starting a new chat
     -- Get the text from selection or command args
@@ -210,20 +243,29 @@ function M.chat(opts)
     local line_count = vim.api.nvim_buf_line_count(0)
     vim.api.nvim_win_set_cursor(0, { line_count, 0 })
 
-    -- Create indicator
-    local indicator = utils.indicators.create_at_cursor(0, line_count - 1, 0)
+    -- Create indicator with nice placeholder
+    local indicator = utils.indicators.create_assistant_placeholder(0, line_count)
 
     -- Call API
     M.active_request = api.chat_request(
       messages,
       function(response)
-        -- Remove indicator
-        utils.indicators.remove(indicator)
+        -- Get the position where we need to replace the placeholder
+        local insertion_row = utils.indicators.remove(indicator)
 
         -- Format response and append to buffer
         local formatted_response = parser.format_assistant_message(response)
         local lines_to_append = vim.split(formatted_response, "\n")
-        vim.api.nvim_buf_set_lines(0, -1, -1, false, lines_to_append)
+
+        -- Replace the placeholder with the actual content
+        local placeholder_height = indicator.end_row - indicator.start_row
+        vim.api.nvim_buf_set_lines(
+          0,
+          insertion_row,
+          insertion_row + placeholder_height,
+          false,
+          lines_to_append
+        )
 
         -- Add a new user message template
         local new_user = parser.format_user_message("")
@@ -239,20 +281,89 @@ function M.chat(opts)
         -- Notify completion
         vim.notify("AI chat saved to " .. filename, vim.log.levels.INFO)
         M.active_request = nil
+        M.active_indicator = nil
       end,
       function(error_msg)
-        -- Remove indicator
-        utils.indicators.remove(indicator)
+        -- Get the position where we need to insert the error message
+        local insertion_row = utils.indicators.remove(indicator)
 
-        -- Show error
+        -- Create error message
+        local error_lines = {
+          "",
+          "<<< assistant",
+          "",
+          "❌ Error: " .. error_msg,
+          "",
+        }
+
+        -- Replace placeholder with error message
+        local placeholder_height = indicator.end_row - indicator.start_row
+        vim.api.nvim_buf_set_lines(
+          0,
+          insertion_row,
+          insertion_row + placeholder_height,
+          false,
+          error_lines
+        )
+
+        -- Show error notification
         vim.notify(error_msg, vim.log.levels.ERROR)
         M.active_request = nil
+        M.active_indicator = nil
       end
     )
-  end
 
-  -- Store indicator for cancellation
-  M.active_indicator = indicator
+    -- Store indicator for cancellation
+    M.active_indicator = indicator
+  end
+end
+
+function M.cancel()
+  if M.active_request then
+    if vim.system and M.active_request.terminate then
+      M.active_request:terminate()
+    elseif not vim.system and M.active_request.close then
+      M.active_request:close()
+    end
+    M.active_request = nil
+
+    -- Handle indicator cleanup
+    if M.active_indicator then
+      if M.active_indicator.legacy then
+        -- Handle legacy indicators (the simple virt_text ones)
+        utils.indicators.remove_legacy(M.active_indicator)
+      else
+        -- Get insertion point for replacing with cancellation message
+        local buffer_id = M.active_indicator.buffer_id
+        local insertion_row = utils.indicators.remove(M.active_indicator)
+
+        -- Create cancelled message
+        local cancelled_lines = {
+          "",
+          "<<< assistant",
+          "",
+          "⚠️ Request cancelled",
+          "",
+        }
+
+        -- Replace placeholder with cancelled message
+        local placeholder_height = M.active_indicator.end_row - M.active_indicator.start_row
+        if vim.api.nvim_buf_is_valid(buffer_id) then
+          vim.api.nvim_buf_set_lines(
+            buffer_id,
+            insertion_row,
+            insertion_row + placeholder_height,
+            false,
+            cancelled_lines
+          )
+        end
+      end
+
+      M.active_indicator = nil
+    end
+
+    vim.notify("AI completion cancelled", vim.log.levels.INFO)
+  end
 end
 
 function M.new_chat()
