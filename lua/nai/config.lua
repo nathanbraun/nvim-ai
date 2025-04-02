@@ -25,6 +25,15 @@ M.defaults = {
   ui = {
     chat_position = "split", -- "split", "vsplit", or "tab"
   },
+  chat_files = {
+    directory = vim.fn.expand("~/naichat/"), -- Default save location
+    format = "{id}-ai.naichat",              -- Filename format
+    auto_save = false,                       -- Save after each interaction
+    id_length = 4,                           -- Length of random ID
+    use_timestamp = false,                   -- Use timestamp instead of random ID if true
+  },
+  default_system_prompt =
+  "You are a general assistant.",
 }
 
 -- Current configuration (will be populated by setup)

@@ -2,25 +2,13 @@
 -- Settings for naichat filetype
 
 -- Set basic buffer options
-vim.bo.buftype = "nofile"
 vim.bo.swapfile = false
 
+-- Add additional mappings for convenience
+vim.api.nvim_buf_set_keymap(0, 'n', '<Leader>r', ':NAIChat<CR>',
+  { noremap = true, silent = true, desc = 'Continue chat' })
+
+vim.api.nvim_buf_set_keymap(0, 'n', '<Leader>n', ':NAINew<CR>',
+  { noremap = true, silent = true, desc = 'Create new empty chat' })
+
 -- You can add more filetype-specific settings here
-```
-
-### 7. `syntax/naichat.lua`
-
-```lua
--- syntax/naichat.lua
--- Syntax highlighting for naichat filetype
-
--- Define syntax groups
-vim.cmd([[
-  syntax match naichatUser ">>> user"
-  syntax match naichatAssistant "<<< assistant"
-  syntax match naichatSystem ">>> system"
-  
-  highlight default link naichatUser Comment
-  highlight default link naichatAssistant Identifier
-  highlight default link naichatSystem Statement
-]])
