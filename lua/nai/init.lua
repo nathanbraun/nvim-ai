@@ -58,23 +58,20 @@ function M.complete(opts)
   local start_line = cursor_pos[1] - 1 -- Convert to 0-indexed
   local start_col = cursor_pos[2]
 
-  -- Show a notification that we're working
-  local notification_id = vim.notify("Generating AI completion...", vim.log.levels.INFO, {
-    title = "nvim-ai",
-    replace = notification_id
-  })
+  -- Create visual indicator at cursor position
+  local indicator = utils.indicators.create_at_cursor(destination_buffer, start_line, start_col)
 
-  -- Use the simple non-streaming version temporarily
+  -- Use the simple non-streaming version
   M.active_request = api.complete_simple(
     full_prompt,
 
     function(final_text)
+      -- Remove the indicator
+      utils.indicators.remove(indicator)
+
       -- Check if the buffer still exists
       if not vim.api.nvim_buf_is_valid(destination_buffer) then
-        notification_id = vim.notify("Target buffer no longer exists", vim.log.levels.WARN, {
-          title = "nvim-ai",
-          replace = notification_id
-        })
+        vim.notify("Target buffer no longer exists", vim.log.levels.WARN)
         return
       end
 
@@ -86,34 +83,41 @@ function M.complete(opts)
         vim.split(final_text, "\n")
       )
 
-      notification_id = vim.notify("AI completion inserted", vim.log.levels.INFO, {
-        title = "nvim-ai",
-        replace = notification_id
-      })
+      -- Simple notification (optional)
+      vim.notify("AI completion inserted", vim.log.levels.INFO)
       M.active_request = nil
     end,
 
     function(err_msg)
-      notification_id = vim.notify(err_msg, vim.log.levels.ERROR, {
-        title = "nvim-ai",
-        replace = notification_id
-      })
+      -- Remove the indicator
+      utils.indicators.remove(indicator)
+
+      -- Show error notification
+      vim.notify(err_msg, vim.log.levels.ERROR)
       M.active_request = nil
     end
   )
+
+  -- Store the indicator with the active request for cancellation
+  M.active_indicator = indicator
 end
 
--- Add a function to cancel the current request
 function M.cancel()
   if M.active_request then
     if vim.system and M.active_request.terminate then
       M.active_request:terminate()
-      vim.notify("AI completion cancelled", vim.log.levels.INFO)
     elseif not vim.system and M.active_request.close then
       M.active_request:close()
-      vim.notify("AI completion cancelled", vim.log.levels.INFO)
     end
     M.active_request = nil
+
+    -- Remove the indicator if it exists
+    if M.active_indicator then
+      utils.indicators.remove(M.active_indicator)
+      M.active_indicator = nil
+    end
+
+    vim.notify("AI completion cancelled", vim.log.levels.INFO)
   end
 end
 
