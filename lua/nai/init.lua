@@ -70,121 +70,18 @@ end
 function M.chat(opts)
   local parser = require('nai.parser')
   local fileutils = require('nai.fileutils')
-
-  -- Get buffer content
   local buffer_id = vim.api.nvim_get_current_buf()
   local buffer_type = vim.bo.filetype
-  local is_chat_buffer = buffer_type == "naichat"
 
-  -- Handle different scenarios:
-  -- 1. Opening a new chat with potential selection/text
-  -- 2. Continuing an existing chat
-
-  if is_chat_buffer then
-    -- Continuing an existing chat
-    -- Get all buffer content
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-    local buffer_content = table.concat(lines, "\n")
-
-    -- Parse buffer content into messages
-    local messages = parser.parse_chat_buffer(buffer_content)
-
-    -- Check if we have a user message at the end
-    local last_message = messages[#messages]
-    if not last_message or last_message.role ~= "user" then
-      vim.notify("No user message to respond to", vim.log.levels.WARN)
-      return
-    end
-
-    -- Position cursor at the end of the buffer
-    local line_count = vim.api.nvim_buf_line_count(buffer_id)
-    vim.api.nvim_win_set_cursor(0, { line_count, 0 })
-
-    -- Create indicator at the end of buffer
-    local indicator = utils.indicators.create_assistant_placeholder(buffer_id, line_count)
-
-    -- Cancel any ongoing requests
-    if M.active_request then
-      M.cancel()
-    end
-
-    -- Call API
-    M.active_request = api.chat_request(
-      messages,
-      function(response)
-        -- Get the position where we need to replace the placeholder
-        local insertion_row = utils.indicators.remove(indicator)
-
-        -- Format response and append to buffer
-        local formatted_response = parser.format_assistant_message(response)
-        local lines_to_append = vim.split(formatted_response, "\n")
-
-        -- Replace the placeholder with the actual content
-        -- We need to figure out how many lines the placeholder took up
-        local placeholder_height = indicator.end_row - indicator.start_row
-        vim.api.nvim_buf_set_lines(
-          buffer_id,
-          insertion_row,
-          insertion_row + placeholder_height,
-          false,
-          lines_to_append
-        )
-
-        -- Auto-save if enabled
-        if config.options.chat_files.auto_save then
-          fileutils.save_chat_buffer(buffer_id)
-        end
-
-        -- Move cursor to end
-        local new_line_count = vim.api.nvim_buf_line_count(buffer_id)
-        vim.api.nvim_win_set_cursor(0, { new_line_count, 0 })
-
-        -- Notify completion
-        vim.notify("AI response complete", vim.log.levels.INFO)
-        M.active_request = nil
-        M.active_indicator = nil
-      end,
-      function(error_msg)
-        -- Get the position where we need to insert the error message
-        local insertion_row = utils.indicators.remove(indicator)
-
-        -- Create error message
-        local error_lines = {
-          "",
-          "<<< assistant",
-          "",
-          "❌ Error: " .. error_msg,
-          "",
-        }
-
-        -- Replace placeholder with error message
-        local placeholder_height = indicator.end_row - indicator.start_row
-        vim.api.nvim_buf_set_lines(
-          buffer_id,
-          insertion_row,
-          insertion_row + placeholder_height,
-          false,
-          error_lines
-        )
-
-        -- Show error notification
-        vim.notify(error_msg, vim.log.levels.ERROR)
-        M.active_request = nil
-        M.active_indicator = nil
-      end
-    )
-
-    -- Store indicator for cancellation
-    M.active_indicator = indicator
-  else
-    -- Starting a new chat
-    -- Get the text from selection or command args
+  -- If we're not in a chat buffer, create a new one first
+  if buffer_type ~= "naichat" then
+    -- Get text from selection if available
     local text = ""
     if opts.range > 0 then
       text = utils.get_visual_selection()
     end
 
-    -- Get the prompt from command arguments
+    -- Get prompt from command args
     local prompt = opts.args or ""
 
     -- Combine text and prompt
@@ -197,125 +94,115 @@ function M.chat(opts)
       end
     end
 
-    -- Don't do anything if no input
+    -- If no input, create an empty chat
     if user_input == "" then
-      vim.notify("No input provided", vim.log.levels.WARN)
-      return
+      return M.new_chat()
+    else
+      return M.new_chat_with_content(user_input)
     end
-
-    -- Create a title from user input
-    local title = user_input:sub(1, 40) .. (user_input:len() > 40 and "..." or "")
-
-    -- Generate filename based on title
-    local filename = fileutils.generate_filename(title)
-
-    -- Create new buffer with filename
-    vim.cmd("enew")
-    vim.api.nvim_buf_set_name(0, filename)
-    vim.bo.filetype = "naichat"
-
-    -- Generate header
-    local header = parser.generate_header(title)
-    local header_lines = vim.split(header, "\n")
-
-    -- Add user message right after header with exactly one blank line
-    table.insert(header_lines, "")         -- One blank line after YAML header
-    table.insert(header_lines, ">>> user") -- User prompt
-    table.insert(header_lines, "")         -- One blank line after user prompt
-    table.insert(header_lines, user_input) -- User input
-
-    -- Add all lines to the buffer
-    vim.api.nvim_buf_set_lines(0, 0, 0, false, header_lines)
-
-    -- Create messages for API
-    local messages = {
-      {
-        role = "system",
-        content = config.options.default_system_prompt
-      },
-      {
-        role = "user",
-        content = user_input
-      }
-    }
-
-    -- Position cursor at the end
-    local line_count = vim.api.nvim_buf_line_count(0)
-    vim.api.nvim_win_set_cursor(0, { line_count, 0 })
-
-    -- Create indicator with nice placeholder
-    local indicator = utils.indicators.create_assistant_placeholder(0, line_count)
-
-    -- Call API
-    M.active_request = api.chat_request(
-      messages,
-      function(response)
-        -- Get the position where we need to replace the placeholder
-        local insertion_row = utils.indicators.remove(indicator)
-
-        -- Format response and append to buffer
-        local formatted_response = parser.format_assistant_message(response)
-        local lines_to_append = vim.split(formatted_response, "\n")
-
-        -- Replace the placeholder with the actual content
-        local placeholder_height = indicator.end_row - indicator.start_row
-        vim.api.nvim_buf_set_lines(
-          0,
-          insertion_row,
-          insertion_row + placeholder_height,
-          false,
-          lines_to_append
-        )
-
-        -- Add a new user message template
-        local new_user = parser.format_user_message("")
-        vim.api.nvim_buf_set_lines(0, -1, -1, false, vim.split(new_user, "\n"))
-
-        -- Save the file
-        vim.cmd("write")
-
-        -- Move cursor to end
-        local new_line_count = vim.api.nvim_buf_line_count(0)
-        vim.api.nvim_win_set_cursor(0, { new_line_count - 1, 0 })
-
-        -- Notify completion
-        vim.notify("AI chat saved to " .. filename, vim.log.levels.INFO)
-        M.active_request = nil
-        M.active_indicator = nil
-      end,
-      function(error_msg)
-        -- Get the position where we need to insert the error message
-        local insertion_row = utils.indicators.remove(indicator)
-
-        -- Create error message
-        local error_lines = {
-          "",
-          "<<< assistant",
-          "",
-          "❌ Error: " .. error_msg,
-          "",
-        }
-
-        -- Replace placeholder with error message
-        local placeholder_height = indicator.end_row - indicator.start_row
-        vim.api.nvim_buf_set_lines(
-          0,
-          insertion_row,
-          insertion_row + placeholder_height,
-          false,
-          error_lines
-        )
-
-        -- Show error notification
-        vim.notify(error_msg, vim.log.levels.ERROR)
-        M.active_request = nil
-        M.active_indicator = nil
-      end
-    )
-
-    -- Store indicator for cancellation
-    M.active_indicator = indicator
   end
+
+  -- At this point, we're guaranteed to be in a chat buffer
+  -- Get all buffer content
+  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+  local buffer_content = table.concat(lines, "\n")
+
+  -- Parse buffer content into messages
+  local messages = parser.parse_chat_buffer(buffer_content)
+
+  -- Check if we have a user message at the end
+  local last_message = messages[#messages]
+  if not last_message or last_message.role ~= "user" then
+    vim.notify("No user message to respond to", vim.log.levels.WARN)
+    return
+  end
+
+  -- Position cursor at the end of the buffer
+  local line_count = vim.api.nvim_buf_line_count(buffer_id)
+  vim.api.nvim_win_set_cursor(0, { line_count, 0 })
+
+  -- Create indicator at the end of buffer
+  local indicator = utils.indicators.create_assistant_placeholder(buffer_id, line_count)
+
+  -- Cancel any ongoing requests
+  if M.active_request then
+    M.cancel()
+  end
+
+  -- Call API
+  M.active_request = api.chat_request(
+    messages,
+    function(response)
+      -- Get the position where we need to replace the placeholder
+      local insertion_row = utils.indicators.remove(indicator)
+
+      -- Format response and append to buffer
+      local formatted_response = parser.format_assistant_message(response)
+      local lines_to_append = vim.split(formatted_response, "\n")
+
+      -- Replace the placeholder with the actual content
+      local placeholder_height = indicator.end_row - indicator.start_row
+      vim.api.nvim_buf_set_lines(
+        buffer_id,
+        insertion_row,
+        insertion_row + placeholder_height,
+        false,
+        lines_to_append
+      )
+
+      -- Add a new user message template if not at the end
+      local new_line_count = vim.api.nvim_buf_line_count(buffer_id)
+      if new_line_count == insertion_row + #lines_to_append then
+        local new_user = parser.format_user_message("")
+        vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, vim.split(new_user, "\n"))
+      end
+
+      -- Auto-save if enabled
+      if config.options.chat_files.auto_save then
+        fileutils.save_chat_buffer(buffer_id)
+      end
+
+      -- Move cursor to end
+      local final_line_count = vim.api.nvim_buf_line_count(buffer_id)
+      vim.api.nvim_win_set_cursor(0, { final_line_count, 0 })
+
+      -- Notify completion
+      vim.notify("AI response complete", vim.log.levels.INFO)
+      M.active_request = nil
+      M.active_indicator = nil
+    end,
+    function(error_msg)
+      -- Handle errors (same as before)
+      local insertion_row = utils.indicators.remove(indicator)
+
+      -- Create error message
+      local error_lines = {
+        "",
+        "<<< assistant",
+        "",
+        "❌ Error: " .. error_msg,
+        "",
+      }
+
+      -- Replace placeholder with error message
+      local placeholder_height = indicator.end_row - indicator.start_row
+      vim.api.nvim_buf_set_lines(
+        buffer_id,
+        insertion_row,
+        insertion_row + placeholder_height,
+        false,
+        error_lines
+      )
+
+      -- Show error notification
+      vim.notify(error_msg, vim.log.levels.ERROR)
+      M.active_request = nil
+      M.active_indicator = nil
+    end
+  )
+
+  -- Store indicator for cancellation
+  M.active_indicator = indicator
 end
 
 function M.cancel()
@@ -402,6 +289,128 @@ function M.new_chat()
 
   -- Notify
   vim.notify("New AI chat file created", vim.log.levels.INFO)
+end
+
+-- Create a new chat with initial user content
+function M.new_chat_with_content(user_input)
+  local parser = require('nai.parser')
+  local fileutils = require('nai.fileutils')
+
+  -- Create a title from user input
+  local title_text = user_input:sub(1, 40) .. (user_input:len() > 40 and "..." or "")
+  local filename = fileutils.generate_filename(title_text)
+
+  -- Create new buffer with filename
+  vim.cmd("enew")
+  vim.api.nvim_buf_set_name(0, filename)
+  vim.bo.filetype = "naichat"
+
+  -- Generate header
+  local header = parser.generate_header(title_text)
+  local header_lines = vim.split(header, "\n")
+
+  -- Add user message right after header with exactly one blank line
+  table.insert(header_lines, "")         -- One blank line after YAML header
+  table.insert(header_lines, ">>> user") -- User prompt
+  table.insert(header_lines, "")         -- One blank line after user prompt
+  table.insert(header_lines, user_input) -- User input
+
+  -- Add all lines to the buffer
+  vim.api.nvim_buf_set_lines(0, 0, 0, false, header_lines)
+
+  -- Position cursor at the end
+  local line_count = vim.api.nvim_buf_line_count(0)
+  vim.api.nvim_win_set_cursor(0, { line_count, 0 })
+
+  -- Create indicator with nice placeholder
+  local indicator = utils.indicators.create_assistant_placeholder(0, line_count)
+
+  -- Create messages for API
+  local messages = {
+    {
+      role = "system",
+      content = config.options.default_system_prompt
+    },
+    {
+      role = "user",
+      content = user_input
+    }
+  }
+
+  -- Cancel any ongoing requests
+  if M.active_request then
+    M.cancel()
+  end
+
+  -- Call API
+  M.active_request = api.chat_request(
+    messages,
+    function(response)
+      -- Get the position where we need to replace the placeholder
+      local insertion_row = utils.indicators.remove(indicator)
+
+      -- Format response and append to buffer
+      local formatted_response = parser.format_assistant_message(response)
+      local lines_to_append = vim.split(formatted_response, "\n")
+
+      -- Replace the placeholder with the actual content
+      local placeholder_height = indicator.end_row - indicator.start_row
+      vim.api.nvim_buf_set_lines(
+        0,
+        insertion_row,
+        insertion_row + placeholder_height,
+        false,
+        lines_to_append
+      )
+
+      -- Add a new user message template
+      local new_user = parser.format_user_message("")
+      vim.api.nvim_buf_set_lines(0, -1, -1, false, vim.split(new_user, "\n"))
+
+      -- Save the file
+      vim.cmd("write")
+
+      -- Move cursor to end
+      local new_line_count = vim.api.nvim_buf_line_count(0)
+      vim.api.nvim_win_set_cursor(0, { new_line_count - 1, 0 })
+
+      -- Notify completion
+      vim.notify("AI chat saved to " .. filename, vim.log.levels.INFO)
+      M.active_request = nil
+      M.active_indicator = nil
+    end,
+    function(error_msg)
+      -- Handle errors (same as before)
+      local insertion_row = utils.indicators.remove(indicator)
+
+      -- Create error message
+      local error_lines = {
+        "",
+        "<<< assistant",
+        "",
+        "❌ Error: " .. error_msg,
+        "",
+      }
+
+      -- Replace placeholder with error message
+      local placeholder_height = indicator.end_row - indicator.start_row
+      vim.api.nvim_buf_set_lines(
+        0,
+        insertion_row,
+        insertion_row + placeholder_height,
+        false,
+        error_lines
+      )
+
+      -- Show error notification
+      vim.notify(error_msg, vim.log.levels.ERROR)
+      M.active_request = nil
+      M.active_indicator = nil
+    end
+  )
+
+  -- Store indicator for cancellation
+  M.active_indicator = indicator
 end
 
 return M
