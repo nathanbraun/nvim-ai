@@ -24,6 +24,10 @@ vim.api.nvim_create_user_command('NAIProvider', function(opts)
   require('nai').switch_provider(opts.args)
 end, { nargs = 1, desc = 'Switch AI provider (openai or openrouter)' })
 
+vim.api.nvim_create_user_command('NAICancel', function()
+  require('nai').cancel()
+end, { desc = 'Cancel ongoing AI request' })
+
 -- Register the file type (different from aichat)
 -- This autocmd associates .naichat files with our custom filetype
 vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {

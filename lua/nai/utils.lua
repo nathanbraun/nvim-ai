@@ -34,4 +34,32 @@ function M.insert_text_at_cursor(text)
   vim.api.nvim_put(lines, "c", true, true)
 end
 
+function M.replace_last_insertion(old_text, new_text)
+  -- Save current position
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)
+  local line_num, col = cursor_pos[1], cursor_pos[2]
+
+  -- Calculate lines in old and new text
+  local old_lines = vim.split(old_text, "\n")
+  local new_lines = vim.split(new_text, "\n")
+
+  -- Calculate the region to replace
+  local start_line = line_num - #old_lines + 1
+  if start_line < 1 then start_line = 1 end
+
+  -- Replace the text
+  vim.api.nvim_buf_set_text(0,
+    start_line - 1, -- 0-indexed start line
+    0,              -- Start column
+    line_num - 1,   -- 0-indexed end line
+    col,            -- End column
+    new_lines
+  )
+
+  -- Update cursor position
+  local new_line_num = start_line + #new_lines - 1
+  local new_col = #new_lines[#new_lines]
+  vim.api.nvim_win_set_cursor(0, { new_line_num, new_col })
+end
+
 return M

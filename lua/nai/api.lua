@@ -4,6 +4,235 @@
 local M = {}
 local config = require('nai.config')
 
+--  function for streaming completions
+function M.complete_streaming(prompt, on_chunk, on_complete, on_error)
+  -- Get the active provider config
+  local provider_config = config.get_provider_config()
+
+  -- Ensure we have an API key
+  local api_key = provider_config.api_key
+  if not api_key then
+    on_error("API key not found for " .. config.options.provider)
+    return
+  end
+
+  -- Prepare the data
+  local data = {
+    model = provider_config.model,
+    messages = {
+      { role = "user", content = prompt }
+    },
+    temperature = provider_config.temperature,
+    max_tokens = provider_config.max_tokens,
+    stream = true, -- Enable streaming
+  }
+
+  -- Convert to JSON
+  local json_data = vim.json.encode(data)
+
+  -- Determine endpoint URL
+  local endpoint_url = provider_config.endpoint
+
+  -- Set up auth header based on provider
+  local auth_header = "Authorization: Bearer " .. api_key
+
+  -- Process each chunk of the response
+  local buffer = ""
+  local accumulated_text = ""
+
+  if vim.system then
+    -- Use vim.system for Neovim 0.10+
+    local handle = vim.system({
+      "curl",
+      "-N", -- Crucial for proper streaming
+      "-s",
+      "-X", "POST",
+      endpoint_url,
+      "-H", "Content-Type: application/json",
+      "-H", auth_header,
+      "-d", json_data
+    }, {
+      stdout = function(err, chunk)
+        if err then
+          vim.schedule(function()
+            on_error("Stream error: " .. tostring(err))
+          end)
+          return
+        end
+
+        if chunk then
+          -- Process the chunk
+          buffer = buffer .. chunk
+
+          -- Process complete data lines
+          local lines = {}
+          for line in (buffer .. "\n"):gmatch("([^\n]*)\n") do
+            table.insert(lines, line)
+          end
+
+          -- Update buffer to contain only the last incomplete line
+          buffer = lines[#lines] or ""
+
+          -- Remove the last element (incomplete line)
+          lines[#lines] = nil
+
+          for _, line in ipairs(lines) do
+            -- Skip empty lines and [DONE] message
+            if line ~= "" and line ~= "data: [DONE]" then
+              if line:sub(1, 6) == "data: " then
+                local json_str = line:sub(7)
+                local success, parsed = pcall(vim.json.decode, json_str)
+
+                if success and parsed and parsed.choices and #parsed.choices > 0 then
+                  local delta = parsed.choices[1].delta
+                  if delta and delta.content then
+                    accumulated_text = accumulated_text .. delta.content
+                    vim.schedule(function()
+                      on_chunk(delta.content, accumulated_text)
+                    end)
+                  end
+                end
+              end
+            end
+          end
+        end
+      end,
+      stderr = function(err, chunk)
+        if chunk and #chunk > 0 then
+          vim.schedule(function()
+            on_error("API error: " .. chunk)
+          end)
+        end
+      end,
+      on_exit = function(obj)
+        if obj.code == 0 then
+          vim.schedule(function()
+            on_complete(accumulated_text)
+          end)
+        else
+          vim.schedule(function()
+            on_error("Process exited with code " .. obj.code)
+          end)
+        end
+      end
+    })
+
+    -- Return the handle so it can be cancelled if needed
+    return handle
+  else
+    -- Fallback for older Neovim versions using vim.loop
+    local uv = vim.loop
+    local stdin = uv.new_pipe(false)
+    local stdout = uv.new_pipe(false)
+    local stderr = uv.new_pipe(false)
+
+    -- Write data to a temporary file
+    local temp_input_file = os.tmpname()
+    local f = io.open(temp_input_file, "w")
+    f:write(json_data)
+    f:close()
+
+    -- Build the curl command for streaming
+    local curl_cmd = {
+      "curl",
+      "-N",
+      "-s",
+      "-X", "POST",
+      endpoint_url,
+      "-H", "Content-Type: application/json",
+      "-H", auth_header,
+      "-d", "@" .. temp_input_file
+    }
+
+    local handle
+    handle = uv.spawn("curl", {
+      args = curl_cmd,
+      stdio = { stdin, stdout, stderr }
+    }, function(code, signal)
+      -- Clean up temp file
+      os.remove(temp_input_file)
+
+      -- Close pipes
+      stdin:close()
+      stdout:close()
+      stderr:close()
+
+      -- Handle exit
+      if code == 0 then
+        vim.schedule(function()
+          on_complete(accumulated_text)
+        end)
+      else
+        vim.schedule(function()
+          on_error("Process exited with code " .. code)
+        end)
+      end
+
+      -- Clear handle
+      handle:close()
+    end)
+
+    -- Process stdout
+    stdout:read_start(function(err, chunk)
+      if err then
+        vim.schedule(function()
+          on_error("Stream read error: " .. tostring(err))
+        end)
+        return
+      end
+
+      if chunk then
+        -- Process the chunk
+        buffer = buffer .. chunk
+
+        -- Process complete data lines
+        local lines = {}
+        for line in (buffer .. "\n"):gmatch("([^\n]*)\n") do
+          table.insert(lines, line)
+        end
+
+        -- Update buffer to contain only the last incomplete line
+        buffer = lines[#lines] or ""
+
+        -- Remove the last element (incomplete line)
+        lines[#lines] = nil
+
+        for _, line in ipairs(lines) do
+          -- Skip empty lines and [DONE] message
+          if line ~= "" and line ~= "data: [DONE]" then
+            if line:sub(1, 6) == "data: " then
+              local json_str = line:sub(7)
+              local success, parsed = pcall(vim.json.decode, json_str)
+
+              if success and parsed and parsed.choices and #parsed.choices > 0 then
+                local delta = parsed.choices[1].delta
+                if delta and delta.content then
+                  accumulated_text = accumulated_text .. delta.content
+                  vim.schedule(function()
+                    on_chunk(delta.content, accumulated_text)
+                  end)
+                end
+              end
+            end
+          end
+        end
+      end
+    end)
+
+    -- Process stderr
+    stderr:read_start(function(err, chunk)
+      if chunk and #chunk > 0 then
+        vim.schedule(function()
+          on_error("API error: " .. chunk)
+        end)
+      end
+    end)
+
+    -- Return handle for cancellation
+    return handle
+  end
+end
+
 -- Safe notification function for callbacks
 local function safe_notify(msg, level)
   vim.schedule(function()
