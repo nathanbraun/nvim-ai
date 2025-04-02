@@ -16,7 +16,6 @@ end
 
 M.active_request = nil
 
--- Update the complete function
 function M.complete(opts)
   -- Get the text range if a range was provided
   local text = ""
@@ -53,71 +52,47 @@ function M.complete(opts)
     M.active_request = nil
   end
 
+  -- Remember the original buffer and position
+  local destination_buffer = vim.api.nvim_get_current_buf()
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)
+  local start_line = cursor_pos[1] - 1 -- Convert to 0-indexed
+  local start_col = cursor_pos[2]
+
   -- Show a notification that we're working
   local notification_id = vim.notify("Generating AI completion...", vim.log.levels.INFO, {
     title = "nvim-ai",
     replace = notification_id
   })
 
-  -- Set up state for the streaming text
-  local current_text = ""
-  local insert_started = false
-
-  -- Call the streaming API
-  M.active_request = api.complete_streaming(
+  -- Use the simple non-streaming version temporarily
+  M.active_request = api.complete_simple(
     full_prompt,
 
-    -- Chunk callback
-    function(chunk, full_text)
-      -- Handle the initial chunk differently
-      if not insert_started then
-        insert_started = true
-        notification_id = vim.notify("Receiving completion...", vim.log.levels.INFO, {
+    function(final_text)
+      -- Check if the buffer still exists
+      if not vim.api.nvim_buf_is_valid(destination_buffer) then
+        notification_id = vim.notify("Target buffer no longer exists", vim.log.levels.WARN, {
           title = "nvim-ai",
           replace = notification_id
         })
-
-        -- Insert the first bit of text
-        utils.insert_text_at_cursor(chunk)
-        current_text = chunk
-      else
-        -- For subsequent chunks, compute what's new
-        local new_text = full_text
-
-        -- We need to replace the current text with the new full text
-        -- To do this, delete the current text and insert the new text
-        -- Extract what we've inserted so far
-        local old_text_len = #current_text
-
-        if old_text_len > 0 then
-          -- Delete the previously inserted text
-          local lines_to_delete = vim.split(current_text, "\n")
-          local cursor_pos = vim.api.nvim_win_get_cursor(0)
-          local row, col = cursor_pos[1], cursor_pos[2]
-
-          -- Calculate the position to return to
-          local end_row = row
-          local end_lines = vim.split(new_text, "\n")
-
-          -- Insert the new text
-          utils.replace_last_insertion(current_text, new_text)
-
-          -- Update our tracking
-          current_text = new_text
-        end
+        return
       end
-    end,
 
-    -- Complete callback
-    function(final_text)
-      notification_id = vim.notify("AI completion finished", vim.log.levels.INFO, {
+      -- Insert the text
+      vim.api.nvim_buf_set_text(
+        destination_buffer,
+        start_line, start_col,
+        start_line, start_col,
+        vim.split(final_text, "\n")
+      )
+
+      notification_id = vim.notify("AI completion inserted", vim.log.levels.INFO, {
         title = "nvim-ai",
         replace = notification_id
       })
       M.active_request = nil
     end,
 
-    -- Error callback
     function(err_msg)
       notification_id = vim.notify(err_msg, vim.log.levels.ERROR, {
         title = "nvim-ai",

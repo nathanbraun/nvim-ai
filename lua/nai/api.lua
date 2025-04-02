@@ -6,6 +6,9 @@ local config = require('nai.config')
 
 --  function for streaming completions
 function M.complete_streaming(prompt, on_chunk, on_complete, on_error)
+  -- Add debug notification
+  vim.notify("Starting API request", vim.log.levels.DEBUG)
+
   -- Get the active provider config
   local provider_config = config.get_provider_config()
 
@@ -61,6 +64,11 @@ function M.complete_streaming(prompt, on_chunk, on_complete, on_error)
         end
 
         if chunk then
+          -- Debug log
+          vim.schedule(function()
+            vim.notify("Got chunk of size: " .. #chunk, vim.log.levels.DEBUG)
+          end)
+
           -- Process the chunk
           buffer = buffer .. chunk
 
@@ -77,6 +85,10 @@ function M.complete_streaming(prompt, on_chunk, on_complete, on_error)
           lines[#lines] = nil
 
           for _, line in ipairs(lines) do
+            -- Debug log what we're getting
+            vim.schedule(function()
+              vim.notify("Processing line: " .. line:sub(1, 20) .. "...", vim.log.levels.DEBUG)
+            end)
             -- Skip empty lines and [DONE] message
             if line ~= "" and line ~= "data: [DONE]" then
               if line:sub(1, 6) == "data: " then
@@ -105,6 +117,10 @@ function M.complete_streaming(prompt, on_chunk, on_complete, on_error)
         end
       end,
       on_exit = function(obj)
+        vim.schedule(function()
+          vim.notify("Process exited with code " .. obj.code, vim.log.levels.DEBUG)
+        end)
+
         if obj.code == 0 then
           vim.schedule(function()
             on_complete(accumulated_text)
@@ -478,6 +494,96 @@ function M.complete(prompt, callback)
       safe_notify("No choices in API response", vim.log.levels.ERROR)
       callback(nil)
     end
+  end
+end
+
+function M.complete_simple(prompt, on_complete, on_error)
+  local provider_config = config.get_provider_config()
+  local api_key = provider_config.api_key
+
+  if not api_key then
+    vim.schedule(function()
+      on_error("API key not found for " .. config.options.provider)
+    end)
+    return
+  end
+
+  local data = {
+    model = provider_config.model,
+    messages = {
+      { role = "user", content = prompt }
+    },
+    temperature = provider_config.temperature,
+    max_tokens = provider_config.max_tokens,
+    stream = false -- No streaming
+  }
+
+  local json_data = vim.json.encode(data)
+  local endpoint_url = provider_config.endpoint
+  local auth_header = "Authorization: Bearer " .. api_key
+
+  -- Remove debug notifications
+  -- vim.notify("Starting simple API request", vim.log.levels.INFO)
+
+  if vim.system then
+    local handle = vim.system({
+      "curl",
+      "-s",
+      "-X", "POST",
+      endpoint_url,
+      "-H", "Content-Type: application/json",
+      "-H", auth_header,
+      "-d", json_data
+    }, { text = true }, function(obj)
+      -- Don't use vim.notify here
+      -- vim.notify("API request completed", vim.log.levels.INFO)
+
+      if obj.code ~= 0 then
+        vim.schedule(function()
+          on_error("Request failed with code " .. obj.code)
+        end)
+        return
+      end
+
+      local response = obj.stdout
+      if not response or response == "" then
+        vim.schedule(function()
+          on_error("Empty response from API")
+        end)
+        return
+      end
+
+      local success, parsed = pcall(vim.json.decode, response)
+      if not success then
+        vim.schedule(function()
+          on_error("Failed to parse API response: " .. parsed)
+        end)
+        return
+      end
+
+      if parsed.error then
+        vim.schedule(function()
+          on_error("API Error: " .. (parsed.error.message or "Unknown error"))
+        end)
+        return
+      end
+
+      if parsed and parsed.choices and #parsed.choices > 0 then
+        local content = parsed.choices[1].message.content
+        vim.schedule(function()
+          on_complete(content)
+        end)
+      else
+        vim.schedule(function()
+          on_error("No valid content in API response")
+        end)
+      end
+    end)
+
+    return handle
+  else
+    -- Implementation for older Neovim versions
+    -- (Omitted for brevity)
   end
 end
 
