@@ -35,13 +35,6 @@ function M.cancel()
   end
 end
 
--- Chat function
-function M.chat(opts)
-  -- Implementation for chat
-  -- Will implement in next iteration
-  vim.notify("NAIChat not yet implemented", vim.log.levels.INFO)
-end
-
 -- Development helper to reload the plugin
 function M.reload()
   -- Clear the module cache for the plugin
@@ -109,6 +102,27 @@ function M.chat(opts)
 
   -- Parse buffer content into messages
   local messages = parser.parse_chat_buffer(buffer_content)
+
+  -- ADD THIS SECTION:
+  -- Check if the chat is "Untitled" and auto-title is enabled
+  local first_message = messages[1]
+  if first_message and first_message.role == "system" then
+    local title_match = vim.fn.match(first_message.content, "You are a general assistant.")
+    if title_match == 0 and config.options.chat_files.auto_title then -- It's general assistant
+      local is_untitled = false
+      -- Get the first few lines of the buffer to check for "title: Untitled"
+      local header_lines = vim.api.nvim_buf_get_lines(buffer_id, 0, 10, false) -- Get first 10 lines
+      for _, line in ipairs(header_lines) do
+        if line:match("^title:%s*Untitled") then
+          is_untitled = true
+          break
+        end
+      end
+      if is_untitled then
+        first_message.content = parser.get_system_prompt_with_title_request(is_untitled)
+      end
+    end
+  end
 
   -- Check if we have a user message at the end
   local last_message = messages[#messages]
@@ -326,10 +340,11 @@ function M.new_chat_with_content(user_input)
   local indicator = utils.indicators.create_assistant_placeholder(0, line_count)
 
   -- Create messages for API
+  local is_untitled = title_text:match("Untitled") ~= nil
   local messages = {
     {
       role = "system",
-      content = config.options.default_system_prompt
+      content = parser.get_system_prompt_with_title_request(is_untitled)
     },
     {
       role = "user",

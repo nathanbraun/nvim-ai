@@ -9,6 +9,12 @@ function M.chat_request(messages, on_complete, on_error)
   local provider_config = config.get_provider_config()
   local api_key = provider_config.api_key
 
+  -- Debug print the messages
+  print("Messages being sent to API:")
+  for i, msg in ipairs(messages) do
+    print(i, msg.role, msg.content:sub(1, 100) .. (msg.content:len() > 100 and "..." or ""))
+  end
+
   if not api_key then
     vim.schedule(function()
       on_error("API key not found for " .. config.options.provider)

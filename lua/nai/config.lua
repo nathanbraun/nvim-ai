@@ -31,6 +31,7 @@ M.defaults = {
     auto_save = false,                       -- Save after each interaction
     id_length = 4,                           -- Length of random ID
     use_timestamp = false,                   -- Use timestamp instead of random ID if true
+    auto_title = true,                       -- Automatically generate title for untitled chats
   },
   default_system_prompt =
   "You are a general assistant.",
