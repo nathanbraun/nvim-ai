@@ -77,6 +77,15 @@ function M.parse_chat_buffer(content)
       end
       current_message = { role = "user" }
       current_type = "snapshot"
+    elseif line:match("^>>> web") then
+      -- Finish previous message if exists
+      if current_message then
+        current_message.content = table.concat(text_buffer, "\n")
+        table.insert(messages, current_message)
+        text_buffer = {}
+      end
+      current_message = { role = "user" }
+      current_type = "web"
     elseif current_message then
       -- Skip the first empty line after a marker
       if #text_buffer == 0 and line == "" then
@@ -96,6 +105,9 @@ function M.parse_chat_buffer(content)
     elseif current_type == "snapshot" then
       local snapshot_module = require('nai.fileutils.snapshot')
       current_message.content = snapshot_module.process_snapshot_block(text_buffer)
+    elseif current_type == "web" then
+      local web_module = require('nai.fileutils.web')
+      current_message.content = web_module.process_web_block(text_buffer)
     else
       current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
     end
@@ -131,6 +143,11 @@ end
 function M.format_user_message(content)
   -- No leading newline for new chats, but keep it for continuing chats
   return ">>> user\n\n" .. content
+end
+
+-- In lua/nai/parser.lua
+function M.format_web_block(content)
+  return "\n>>> web\n\n" .. content
 end
 
 -- Format a system message for the buffer
