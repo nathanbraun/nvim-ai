@@ -70,4 +70,17 @@ vim.cmd([[
   highlight default link naichatNumberedItem Normal
   highlight default link naichatBold Bold
   highlight default link naichatItalic Italic
+
+  " Special block markers
+  syntax match naichatScrape "^>>> scrape"
+
+  " Content markers
+  syntax match naichatContent "^<<< content\(\s\+\[.*\]\)\?"
+
+  " Content regions
+  syntax region naichatScrapeText start=/^>>> scrape/ end=/^\(>>>\|<<<\)/ contains=naichatScrape,naichatUrl,naichatContent
+
+  " Color assignments
+  highlight default link naichatScrape Special
+  highlight default link naichatContent Identifier
 ]])

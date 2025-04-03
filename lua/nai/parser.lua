@@ -86,6 +86,21 @@ function M.parse_chat_buffer(content)
       end
       current_message = { role = "user" }
       current_type = "web"
+    elseif line:match("^>>> scrape") then
+      -- Finish previous message if exists
+      if current_message then
+        current_message.content = table.concat(text_buffer, "\n")
+        table.insert(messages, current_message)
+        text_buffer = {}
+      end
+      current_message = { role = "user" }
+      current_type = "scrape"
+    elseif line:match("^<<< content") then
+      -- Content from scrape blocks is ignored in parsing
+      -- But we want to include it in the current scrape block
+      if current_type == "scrape" then
+        table.insert(text_buffer, line)
+      end
     elseif current_message then
       -- Skip the first empty line after a marker
       if #text_buffer == 0 and line == "" then
@@ -108,6 +123,27 @@ function M.parse_chat_buffer(content)
     elseif current_type == "web" then
       local web_module = require('nai.fileutils.web')
       current_message.content = web_module.process_web_block(text_buffer)
+    elseif current_type == "scrape" then
+      -- Special handling for scrape blocks
+      -- In API requesting mode, we want to include the content, not the command
+      local in_content_section = false
+      local content_lines = {}
+
+      for _, line in ipairs(text_buffer) do
+        if line:match("^<<< content%s+%[") then
+          in_content_section = true
+        elseif in_content_section then
+          table.insert(content_lines, line)
+        end
+      end
+
+      if #content_lines > 0 then
+        -- If we have content, use that
+        current_message.content = table.concat(content_lines, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+      else
+        -- Otherwise, use the raw text
+        current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+      end
     else
       current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
     end

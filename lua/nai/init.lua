@@ -66,6 +66,49 @@ function M.chat(opts)
   local buffer_id = vim.api.nvim_get_current_buf()
   local buffer_type = vim.bo.filetype
 
+  -- First, check for unexpanded scrape blocks
+  local scrape = require('nai.fileutils.scrape')
+
+  -- Only proceed with scrape check if we weren't already called by a scrape expansion
+  local is_rescanning = opts and opts.after_scrape
+
+  if buffer_type == "naichat" and not is_rescanning then
+    -- Check if there are any scrape blocks that need expanding
+    if scrape.has_unexpanded_scrape_blocks(buffer_id) then
+      -- Handle the case where we have unexpanded scrape blocks
+      vim.notify("Expanding scrape blocks before processing chat...", vim.log.levels.INFO)
+
+      -- Expand all scrape blocks
+      scrape.expand_scrape_blocks_in_buffer(buffer_id)
+
+      -- Schedule a check to see when all scrape operations are complete
+      local timer = vim.loop.new_timer()
+      timer:start(300, 300, vim.schedule_wrap(function()
+        -- Check if dumpling has active requests
+        if not scrape.has_active_requests() then
+          -- All scrape requests complete, continue with chat
+          timer:stop()
+          timer:close()
+
+          -- Make sure buffer is still valid
+          if vim.api.nvim_buf_is_valid(buffer_id) then
+            -- Continue with chat processing, but mark that we're already post-scrape
+            vim.schedule(function()
+              vim.notify("Scrape blocks expanded, continuing with chat", vim.log.levels.INFO)
+              -- Pass a flag to indicate we're being called after scrape expansion
+              opts = opts or {}
+              opts.after_scrape = true
+              M.chat(opts)
+            end)
+          end
+        end
+      end))
+
+      -- Return early to wait for scrape operations to complete
+      return
+    end
+  end
+
   -- If we're not in a chat buffer, create a new one first
   if buffer_type ~= "naichat" then
     -- Get text from selection if available

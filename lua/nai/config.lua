@@ -29,6 +29,7 @@ M.defaults = {
         format = "markdown",                                   -- Output format: markdown, html, or screenshot
         cleaned = true,                                        -- Whether to clean the output
         render_js = true,                                      -- Whether to render JavaScript
+        max_content_length = 100000                            -- Max length to prevent excessively large responses
       },
     },
   },
