@@ -6,12 +6,13 @@ local config = require('nai.config')
 
 -- Handle chat API request
 function M.chat_request(messages, on_complete, on_error)
+  local provider = config.options.active_provider
   local provider_config = config.get_provider_config()
-  local api_key = provider_config.api_key
+  local api_key = config.get_api_key(provider)
 
   if not api_key then
     vim.schedule(function()
-      on_error("API key not found for " .. config.options.provider)
+      on_error("API key not found for " .. provider)
     end)
     return
   end

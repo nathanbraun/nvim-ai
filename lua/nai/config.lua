@@ -1,26 +1,36 @@
 -- lua/nai/config.lua
--- Configuration for the plugin
-
 local M = {}
 
 -- Default configuration
 M.defaults = {
-  provider = "openrouter", -- "openai" or "openrouter"
-  openai = {
-    api_key = nil,
-    model = "gpt-4o",
-    temperature = 0.7,
-    max_tokens = 1000,
-    token_file_path = "~/.config/openai.token",
-    endpoint = "https://api.openai.com/v1/chat/completions",
+  credentials = {
+    file_path = "~/.config/nvim-ai/credentials.json", -- Single file for all credentials
   },
-  openrouter = {
-    api_key = nil,
-    model = "google/gemini-2.0-flash-001",
-    temperature = 0.7,
-    max_tokens = 1000,
-    token_file_path = "~/.config/open-router.token",
-    endpoint = "https://openrouter.ai/api/v1/chat/completions",
+  active_provider = "openrouter",                     -- "openai", "openrouter", etc.
+  providers = {
+    openai = {
+      model = "gpt-4o",
+      temperature = 0.7,
+      max_tokens = 1000,
+      endpoint = "https://api.openai.com/v1/chat/completions",
+    },
+    openrouter = {
+      model = "google/gemini-2.0-flash-001",
+      temperature = 0.7,
+      max_tokens = 1000,
+      endpoint = "https://openrouter.ai/api/v1/chat/completions",
+    },
+  },
+  tools = {
+    web = {
+      method = "dumpling",                                     -- "simple" for basic curl/html2text, "dumpling" for Dumpling AI
+      dumpling = {
+        endpoint = "https://app.dumplingai.com/api/v1/scrape", -- Dumpling browse endpoint
+        format = "markdown",                                   -- Output format: markdown, html, or screenshot
+        cleaned = true,                                        -- Whether to clean the output
+        render_js = true,                                      -- Whether to render JavaScript
+      },
+    },
   },
   ui = {
     chat_position = "split", -- "split", "vsplit", or "tab"
@@ -40,43 +50,88 @@ M.defaults = {
 -- Current configuration (will be populated by setup)
 M.options = vim.deepcopy(M.defaults) -- Initialize with defaults immediately
 
--- Helper function to read API key from file
-local function read_api_key_from_file(file_path)
-  -- Expand ~ to home directory
-  file_path = vim.fn.expand(file_path)
+-- Function to ensure the credentials directory exists
+local function ensure_config_dir()
+  local config_dir = vim.fn.fnamemodify(vim.fn.expand(M.options.credentials.file_path), ":h")
+  if vim.fn.isdirectory(config_dir) == 0 then
+    vim.fn.mkdir(config_dir, "p")
+    return true -- Directory was created
+  end
+  return false  -- Directory already existed
+end
+
+-- Function to read credentials from JSON file
+local function read_credentials()
+  local credentials = {}
+  local config_file = vim.fn.expand(M.options.credentials.file_path)
 
   -- Check if file exists
-  if vim.fn.filereadable(file_path) == 0 then
-    return nil
+  if vim.fn.filereadable(config_file) == 1 then
+    local content = vim.fn.readfile(config_file)
+    local success, creds = pcall(vim.json.decode, table.concat(content, '\n'))
+
+    if success and type(creds) == "table" then
+      credentials = creds
+    else
+      -- Log error but don't expose details that might contain API keys
+      vim.notify("Error parsing credentials file", vim.log.levels.ERROR)
+    end
   end
 
-  -- Read the file
-  local lines = vim.fn.readfile(file_path)
-  if #lines == 0 then
-    return nil
+  return credentials
+end
+
+-- Function to get API key for a specific provider
+function M.get_api_key(provider)
+  -- Try environment variable first
+  local env_var = provider:upper() .. "_API_KEY"
+  local key = vim.env[env_var]
+  if key and key ~= "" then
+    return key
   end
 
-  -- Return the first line, trimmed
-  return vim.fn.trim(lines[1])
+  -- Try credentials file
+  local credentials = read_credentials()
+  if credentials[provider] then
+    return credentials[provider]
+  end
+
+  -- For backward compatibility, try old token files
+  local legacy_paths = {
+    openai = "~/.config/openai.token",
+    openrouter = "~/.config/open-router.token"
+  }
+
+  if legacy_paths[provider] then
+    local token_file = vim.fn.expand(legacy_paths[provider])
+    if vim.fn.filereadable(token_file) == 1 then
+      local lines = vim.fn.readfile(token_file)
+      if #lines > 0 then
+        key = vim.fn.trim(lines[1])
+        if key ~= "" then
+          return key
+        end
+      end
+    end
+  end
+
+  return nil
+end
+
+-- Function to get the current provider configuration
+function M.get_provider_config()
+  local provider = M.options.active_provider
+  return M.options.providers[provider]
 end
 
 -- Auto-initialize with defaults and try to load API key
 local function init_config()
-  -- Get the active provider settings
-  local provider = M.options.provider
-  local provider_config = M.options[provider]
+  -- Create config directory if needed
+  ensure_config_dir()
 
-  -- Try to load API key in this order:
-  -- 1. From user provided config
-  -- 2. From environment variable (provider specific)
-  -- 3. From token file
-  if not provider_config.api_key then
-    local env_var = provider:upper() .. "_API_KEY"
-    provider_config.api_key = vim.env[env_var]
-  end
-
-  if not provider_config.api_key then
-    provider_config.api_key = read_api_key_from_file(provider_config.token_file_path)
+  -- For backward compatibility with old config structure
+  if M.options.provider then
+    M.options.active_provider = M.options.provider
   end
 end
 
@@ -85,18 +140,98 @@ function M.setup(opts)
   -- Merge user options with defaults
   M.options = vim.tbl_deep_extend("force", M.defaults, opts or {})
 
-  -- Try to load API key
+  -- Handle backward compatibility
+  if opts and opts.openai then
+    -- Convert old config structure to new
+    if not M.options.providers then
+      M.options.providers = {}
+    end
+
+    -- Migrate openai config
+    if not M.options.providers.openai then
+      M.options.providers.openai = {}
+    end
+    for k, v in pairs(opts.openai) do
+      if k ~= "api_key" and k ~= "token_file_path" then
+        M.options.providers.openai[k] = v
+      end
+    end
+
+    -- Migrate openrouter config
+    if opts.openrouter and not M.options.providers.openrouter then
+      M.options.providers.openrouter = {}
+      for k, v in pairs(opts.openrouter) do
+        if k ~= "api_key" and k ~= "token_file_path" then
+          M.options.providers.openrouter[k] = v
+        end
+      end
+    end
+  end
+
+  -- Initialize configuration
   init_config()
 
   return M.options
 end
 
--- Function to get current provider config
-function M.get_provider_config()
-  return M.options[M.options.provider]
+-- For backward compatibility
+function M.switch_provider(provider)
+  M.options.active_provider = provider
 end
 
--- Initialize with defaults right away
-init_config()
+function M.save_credential(provider, api_key)
+  -- Ensure directory exists
+  ensure_config_dir()
+
+  -- Read existing credentials
+  local credentials = read_credentials()
+
+  -- Update the credential
+  credentials[provider] = api_key
+
+  -- Write back to file
+  local config_file = vim.fn.expand(M.options.credentials.file_path)
+  local json_str = vim.json.encode(credentials)
+
+  local file = io.open(vim.fn.expand(config_file), "w")
+  if file then
+    file:write(json_str)
+    file:close()
+    vim.notify("Saved API key for " .. provider, vim.log.levels.INFO)
+    return true
+  else
+    vim.notify("Failed to save API key", vim.log.levels.ERROR)
+    return false
+  end
+end
+
+function M.get_dumpling_api_key()
+  -- Try environment variable first
+  local key = vim.env["DUMPLING_API_KEY"]
+  if key and key ~= "" then
+    return key
+  end
+
+  -- Try credentials file
+  local credentials = read_credentials()
+  if credentials["dumpling"] then
+    return credentials["dumpling"]
+  end
+
+  -- Fall back to legacy path (if any)
+  local legacy_path = "~/.config/dumpling.token"
+  local token_file = vim.fn.expand(legacy_path)
+  if vim.fn.filereadable(token_file) == 1 then
+    local lines = vim.fn.readfile(token_file)
+    if #lines > 0 then
+      key = vim.fn.trim(lines[1])
+      if key ~= "" then
+        return key
+      end
+    end
+  end
+
+  return nil
+end
 
 return M
