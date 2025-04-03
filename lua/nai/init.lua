@@ -66,11 +66,12 @@ function M.chat(opts)
   local buffer_id = vim.api.nvim_get_current_buf()
   local buffer_type = vim.bo.filetype
 
-  -- First, check for unexpanded scrape blocks
-  local scrape = require('nai.fileutils.scrape')
-
   if buffer_type == "naichat" then
-    -- Check if there are any scrape blocks that need expanding
+    -- Check for unexpanded blocks
+    local scrape = require('nai.fileutils.scrape')
+    local snapshot = require('nai.fileutils.snapshot')
+
+    -- First, check for unexpanded scrape blocks
     if scrape.has_unexpanded_scrape_blocks(buffer_id) then
       -- Handle the case where we have unexpanded scrape blocks
       vim.notify("Expanding scrape blocks. Press <Leader>r again after completion to chat.", vim.log.levels.INFO)
@@ -86,7 +87,48 @@ function M.chat(opts)
         vim.log.levels.WARN)
       return
     end
+
+    -- Check for unexpanded snapshot blocks
+    if snapshot.has_unexpanded_snapshot_blocks(buffer_id) then
+      -- Handle the case where we have unexpanded snapshot blocks
+      vim.notify("Expanding snapshot blocks. Press <Leader>r again to chat.", vim.log.levels.INFO)
+
+      -- Process lines in buffer to expand snapshots
+      local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      local line_offset = 0
+
+      -- Find and expand snapshot blocks
+      for i, line in ipairs(lines) do
+        if line == ">>> snapshot" then
+          -- This is an unexpanded snapshot
+          local block_start = i - 1 + line_offset
+
+          -- Find the end of the snapshot block (next >>> or <<<)
+          local block_end = #lines
+          for j = i + 1, #lines do
+            if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+              block_end = j - 1 + line_offset
+              break
+            end
+          end
+
+          -- Expand the snapshot directly in the buffer
+          local new_line_count = snapshot.expand_snapshot_in_buffer(buffer_id, block_start, block_end + 1)
+
+          -- Adjust line offset for any additional lines added
+          line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+          -- Re-fetch buffer lines since they've changed
+          lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+        end
+      end
+
+      return
+    end
   end
+
+  -- At this point, no unexpanded blocks were found, proceed with chat
+  -- Continue with existing function from here
 
   -- If we're not in a chat buffer, create a new one first
   if buffer_type ~= "naichat" then
@@ -120,39 +162,6 @@ function M.chat(opts)
   -- At this point, we're guaranteed to be in a chat buffer
   -- Get all buffer content
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-
-  -- Process any snapshot blocks in the buffer
-  local snapshot = require('nai.fileutils.snapshot')
-  local line_offset = 0
-
-  -- Find and expand snapshot blocks
-  for i, line in ipairs(lines) do
-    if line:match("^>>> snapshot") and not line:match("%[%d%d%d%d%-%d%d%-%d%d") then
-      -- This is an unexpanded snapshot (no timestamp yet)
-      local block_start = i - 1 + line_offset
-
-      -- Find the end of the snapshot block (next >>> or <<<)
-      local block_end = #lines
-      for j = i + 1, #lines do
-        if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-          block_end = j - 1 + line_offset
-          break
-        end
-      end
-
-      -- Expand the snapshot directly in the buffer
-      local new_line_count = snapshot.expand_snapshot_in_buffer(buffer_id, block_start, block_end + 1)
-
-      -- Adjust line offset for any additional lines added
-      line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-      -- Re-fetch buffer lines since they've changed
-      lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-    end
-  end
-
-  local buffer_content = table.concat(lines, "\n")
-
   local buffer_content = table.concat(lines, "\n")
 
   -- Parse buffer content into messages

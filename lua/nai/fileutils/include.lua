@@ -119,4 +119,43 @@ function M.process_include_block(lines)
   return table.concat(result, "\n\n")
 end
 
+function M.read_file(filepath)
+  -- Add a maximum file size check (e.g., 500KB)
+  local max_size = 500 * 1024 -- 500KB
+
+  -- Check if file exists and is readable
+  if vim.fn.filereadable(filepath) ~= 1 then
+    return "File not found or not readable"
+  end
+
+  -- Check file size
+  local size = vim.fn.getfsize(filepath)
+  if size > max_size then
+    return table.concat(vim.fn.readfile(filepath, "", max_size), "\n") ..
+        "\n\n[File truncated...]"
+  end
+
+  -- Skip certain binary file types
+  local ext = vim.fn.fnamemodify(filepath, ":e"):lower()
+  local binary_exts = {
+    "jpg", "jpeg", "png", "gif", "bmp", "pdf", "zip", "tar",
+    "gz", "exe", "bin", "dll", "so", "dylib"
+  }
+
+  for _, bext in ipairs(binary_exts) do
+    if ext == bext then
+      return "Binary file, content not displayed"
+    end
+  end
+
+  -- Read file content
+  local success, lines = pcall(vim.fn.readfile, filepath)
+  if not success or #lines == 0 then
+    return "Empty file or cannot read content"
+  end
+
+  -- Return content without header
+  return table.concat(lines, "\n")
+end
+
 return M

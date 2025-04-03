@@ -77,9 +77,18 @@ vim.cmd([[
   syntax match naichatScraped "^>>> scraped\(\s\+\[.*\]\)\?"
   syntax match naichatScrapeError "^>>> scrape-error"
 
+  " Snapshot markers
+  syntax match naichatSnapshot "^>>> snapshot"
+  syntax match naichatSnapshotting "^>>> snapshotting"
+  syntax match naichatSnapshotted "^>>> snapshotted\(\s\+\[.*\]\)\?"
+
   " Color assignments
   highlight default link naichatScrape Special
   highlight default link naichatScraping Special
   highlight default link naichatScraped Special
   highlight default link naichatScrapeError Error
+
+  highlight default link naichatSnapshot Special
+  highlight default link naichatSnapshotting Special
+  highlight default link naichatSnapshotted Special
 ]])
