@@ -91,4 +91,17 @@ vim.cmd([[
   highlight default link naichatSnapshot Special
   highlight default link naichatSnapshotting Special
   highlight default link naichatSnapshotted Special
+
+  " YouTube-related markers
+  syntax match naichatYoutube "^>>> youtube"
+  syntax match naichatTranscribing "^>>> transcribing"
+  syntax match naichatTranscript "^>>> transcript\(\s\+\[.*\]\)\?"
+  syntax match naichatYoutubeError "^>>> youtube-error"
+
+  " Color assignments
+  highlight default link naichatYoutube Special
+  highlight default link naichatTranscribing Special
+  highlight default link naichatTranscript Special
+  highlight default link naichatYoutubeError Error
+
 ]])

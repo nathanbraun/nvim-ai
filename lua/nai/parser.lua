@@ -95,12 +95,15 @@ function M.parse_chat_buffer(content)
       end
       current_message = { role = "user" }
       current_type = "scrape"
-    elseif line:match("^<<< content") then
-      -- Content from scrape blocks is ignored in parsing
-      -- But we want to include it in the current scrape block
-      if current_type == "scrape" then
-        table.insert(text_buffer, line)
+    elseif line:match("^>>> youtube") then
+      -- Finish previous message if exists
+      if current_message then
+        current_message.content = table.concat(text_buffer, "\n")
+        table.insert(messages, current_message)
+        text_buffer = {}
       end
+      current_message = { role = "user" }
+      current_type = "youtube"
     elseif current_message then
       -- Skip the first empty line after a marker
       if #text_buffer == 0 and line == "" then
@@ -123,6 +126,9 @@ function M.parse_chat_buffer(content)
     elseif current_type == "web" then
       local web_module = require('nai.fileutils.web')
       current_message.content = web_module.process_web_block(text_buffer)
+    elseif current_type == "youtube" then
+      local youtube_module = require('nai.fileutils.youtube')
+      current_message.content = youtube_module.process_youtube_block(text_buffer)
     elseif current_type == "scrape" then
       -- Special handling for scrape blocks
       -- In API requesting mode, we want to include the content, not the command
@@ -194,6 +200,10 @@ end
 -- Format an include block for the buffer
 function M.format_include_block(content)
   return "\n>>> include\n\n" .. content
+end
+
+function M.format_youtube_block(url)
+  return "\n>>> youtube\n\n" .. url
 end
 
 -- Format a snapshot block for the buffer
