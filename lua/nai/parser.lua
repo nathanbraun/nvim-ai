@@ -68,6 +68,15 @@ function M.parse_chat_buffer(content)
       end
       current_message = { role = "user" }
       current_type = "include"
+    elseif line:match("^>>> snapshot") then
+      -- Finish previous message if exists
+      if current_message then
+        current_message.content = table.concat(text_buffer, "\n")
+        table.insert(messages, current_message)
+        text_buffer = {}
+      end
+      current_message = { role = "user" }
+      current_type = "snapshot"
     elseif current_message then
       -- Skip the first empty line after a marker
       if #text_buffer == 0 and line == "" then
@@ -84,6 +93,9 @@ function M.parse_chat_buffer(content)
     -- Special processing for include blocks
     if current_type == "include" then
       current_message.content = include_fileutils.process_include_block(text_buffer)
+    elseif current_type == "snapshot" then
+      local snapshot_module = require('nai.fileutils.snapshot')
+      current_message.content = snapshot_module.process_snapshot_block(text_buffer)
     else
       current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
     end
@@ -129,6 +141,12 @@ end
 -- Format an include block for the buffer
 function M.format_include_block(content)
   return "\n>>> include\n\n" .. content
+end
+
+-- Format a snapshot block for the buffer
+function M.format_snapshot(timestamp)
+  local timestamp_str = timestamp or os.date("%Y-%m-%d %H:%M:%S")
+  return "\n>>> snapshot [" .. timestamp_str .. "]\n\n"
 end
 
 -- Generate a YAML header with auto title

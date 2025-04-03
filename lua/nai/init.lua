@@ -98,6 +98,39 @@ function M.chat(opts)
   -- At this point, we're guaranteed to be in a chat buffer
   -- Get all buffer content
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+
+  -- Process any snapshot blocks in the buffer
+  local snapshot = require('nai.fileutils.snapshot')
+  local line_offset = 0
+
+  -- Find and expand snapshot blocks
+  for i, line in ipairs(lines) do
+    if line:match("^>>> snapshot") and not line:match("%[%d%d%d%d%-%d%d%-%d%d") then
+      -- This is an unexpanded snapshot (no timestamp yet)
+      local block_start = i - 1 + line_offset
+
+      -- Find the end of the snapshot block (next >>> or <<<)
+      local block_end = #lines
+      for j = i + 1, #lines do
+        if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+          block_end = j - 1 + line_offset
+          break
+        end
+      end
+
+      -- Expand the snapshot directly in the buffer
+      local new_line_count = snapshot.expand_snapshot_in_buffer(buffer_id, block_start, block_end + 1)
+
+      -- Adjust line offset for any additional lines added
+      line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+      -- Re-fetch buffer lines since they've changed
+      lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+    end
+  end
+
+  local buffer_content = table.concat(lines, "\n")
+
   local buffer_content = table.concat(lines, "\n")
 
   -- Parse buffer content into messages
@@ -175,7 +208,6 @@ function M.chat(opts)
         end
       end
 
-
       -- Format response and append to buffer
       local formatted_response = parser.format_assistant_message(modified_response)
       local lines_to_append = vim.split(formatted_response, "\n")
@@ -202,9 +234,17 @@ function M.chat(opts)
         fileutils.save_chat_buffer(buffer_id)
       end
 
-      -- Move cursor to end
+      -- Move cursor to end safely
       local final_line_count = vim.api.nvim_buf_line_count(buffer_id)
-      vim.api.nvim_win_set_cursor(0, { final_line_count, 0 })
+      local safe_pos = math.min(final_line_count, insertion_row + #lines_to_append)
+      -- Check if buffer is still valid before setting cursor
+      if vim.api.nvim_buf_is_valid(buffer_id) then
+        -- Only set cursor if the window is still showing this buffer
+        local current_buf = vim.api.nvim_get_current_buf()
+        if current_buf == buffer_id then
+          vim.api.nvim_win_set_cursor(0, { safe_pos, 0 })
+        end
+      end
 
       -- Notify completion
       vim.notify("AI response complete", vim.log.levels.INFO)
@@ -411,9 +451,15 @@ function M.new_chat_with_content(user_input)
       -- Save the file
       vim.cmd("write")
 
-      -- Move cursor to end
+      -- Move cursor to end safely
       local new_line_count = vim.api.nvim_buf_line_count(0)
-      vim.api.nvim_win_set_cursor(0, { new_line_count - 1, 0 })
+      local safe_pos = math.min(new_line_count, insertion_row + #lines_to_append + 2)
+
+      -- Check if we can safely set the cursor
+      local current_buf = vim.api.nvim_get_current_buf()
+      if vim.api.nvim_buf_is_valid(current_buf) then
+        vim.api.nvim_win_set_cursor(0, { safe_pos, a0 })
+      end
 
       -- Notify completion
       vim.notify("AI chat saved to " .. filename, vim.log.levels.INFO)

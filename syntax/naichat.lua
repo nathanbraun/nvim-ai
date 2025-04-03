@@ -7,7 +7,15 @@ vim.cmd([[
   syntax match naichatAssistant "<<< assistant"
   syntax match naichatSystem ">>> system"
   syntax match naichatInclude ">>> include"
+  syntax match naichatSnapshot ">>> snapshot \[.*\]"
+  syntax match naichatTimestamp "\[.\{10,19\}\]" contained containedin=naichatSnapshot
   highlight default link naichatInclude Special
+
+  " Snapshot block highlighting
+  syntax match naichatSnapshot ">>> snapshot \[.*\]"
+  syntax match naichatTimestamp "\[.\{10,19\}\]" contained containedin=naichatSnapshot
+  highlight default link naichatSnapshot Special
+  highlight default link naichatTimestamp Number
 
   " Add these new syntax rules:
   " Highlight file paths in include blocks
