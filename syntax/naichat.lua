@@ -73,14 +73,13 @@ vim.cmd([[
 
   " Special block markers
   syntax match naichatScrape "^>>> scrape"
-
-  " Content markers
-  syntax match naichatContent "^<<< content\(\s\+\[.*\]\)\?"
-
-  " Content regions
-  syntax region naichatScrapeText start=/^>>> scrape/ end=/^\(>>>\|<<<\)/ contains=naichatScrape,naichatUrl,naichatContent
+  syntax match naichatScraping "^>>> scraping"
+  syntax match naichatScraped "^>>> scraped\(\s\+\[.*\]\)\?"
+  syntax match naichatScrapeError "^>>> scrape-error"
 
   " Color assignments
   highlight default link naichatScrape Special
-  highlight default link naichatContent Identifier
+  highlight default link naichatScraping Special
+  highlight default link naichatScraped Special
+  highlight default link naichatScrapeError Error
 ]])

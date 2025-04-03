@@ -155,7 +155,7 @@ function M.expand_scrape_block(buffer_id, start_line, end_line)
       start_line, end_line,
       false,
       {
-        ">>> scrape",
+        ">>> scrape-error",
         "❌ Error: No URL provided for scraping",
         ""
       }
@@ -163,33 +163,32 @@ function M.expand_scrape_block(buffer_id, start_line, end_line)
     return (end_line - start_line)
   end
 
-  -- Create a nicer placeholder that matches nvim-ai style
-  local placeholder_lines = {
-    ">>> scrape",
-    url,
-    "",
-    "<<< content",
-    "",
-    "⏳ Fetching content..."
-  }
-
-  -- Replace the scrape block with the placeholder
+  -- Change marker to show it's in progress
   vim.api.nvim_buf_set_lines(
     buffer_id,
     start_line,
-    end_line,
+    start_line + 1,
     false,
-    placeholder_lines
+    { ">>> scraping" }
   )
 
-  -- Create the indicator data structure
+  -- Create a spinner animation at the end of the block
   local indicator = {
     buffer_id = buffer_id,
     start_row = start_line,
-    end_row = start_line + #placeholder_lines,
-    spinner_row = start_line + 5, -- The line with "Fetching content..."
+    end_row = end_line,
+    spinner_row = start_line + 2, -- Add spinner after URL
     timer = nil
   }
+
+  -- Insert spinner line
+  vim.api.nvim_buf_set_lines(
+    buffer_id,
+    start_line + 2,
+    start_line + 2,
+    false,
+    { "⏳ Fetching content..." }
+  )
 
   -- Start the animation
   local animation_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
@@ -261,15 +260,13 @@ function M.expand_scrape_block(buffer_id, start_line, end_line)
         return
       end
 
-      -- Format the result block (in same style as assistant replies)
+      -- Format the result block
       local content_lines = vim.split(content, "\n")
 
-      -- Build the result - keeping the scrape and URL lines
+      -- Build the result - changing scrape to scraped
       local result_lines = {
-        ">>> scrape",
+        ">>> scraped [" .. os.date("%Y-%m-%d %H:%M:%S") .. "]",
         url,
-        "",
-        "<<< content [" .. os.date("%Y-%m-%d %H:%M:%S") .. "]",
         "",
         "## " .. title,
         "_Source: " .. url .. "_",
@@ -285,7 +282,7 @@ function M.expand_scrape_block(buffer_id, start_line, end_line)
       vim.api.nvim_buf_set_lines(
         buffer_id,
         indicator.start_row,
-        indicator.end_row,
+        math.max(indicator.end_row, indicator.start_row + 3), -- Ensure we get all lines with spinner
         false,
         result_lines
       )
@@ -313,10 +310,8 @@ function M.expand_scrape_block(buffer_id, start_line, end_line)
 
       -- Format the error
       local error_lines = {
-        ">>> scrape",
+        ">>> scrape-error",
         url,
-        "",
-        "<<< content [ERROR]",
         "",
         "❌ Error fetching URL: " .. url,
         error_msg,
@@ -327,7 +322,7 @@ function M.expand_scrape_block(buffer_id, start_line, end_line)
       vim.api.nvim_buf_set_lines(
         buffer_id,
         indicator.start_row,
-        indicator.end_row,
+        math.max(indicator.end_row, indicator.start_row + 3),
         false,
         error_lines
       )
@@ -339,8 +334,8 @@ function M.expand_scrape_block(buffer_id, start_line, end_line)
     end
   )
 
-  -- Return the current number of lines in the placeholder
-  return #placeholder_lines
+  -- Return the changed number of lines in the placeholder
+  return 3 -- The marker line + url + spinner
 end
 
 -- Expand all scrape blocks in a buffer
@@ -386,7 +381,8 @@ function M.has_unexpanded_scrape_blocks(buffer_id)
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
 
   for _, line in ipairs(lines) do
-    if line:match("^>>> scrape$") then
+    -- Only match exact ">>> scrape" - not "scraping", "scraped" or "scrape-error"
+    if line == ">>> scrape" then
       return true
     end
   end
