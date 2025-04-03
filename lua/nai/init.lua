@@ -150,8 +150,34 @@ function M.chat(opts)
       -- Get the position where we need to replace the placeholder
       local insertion_row = utils.indicators.remove(indicator)
 
+      -- Extract title if present
+      local modified_response = response
+
+      -- Check if response starts with "Proposed Title:"
+      local title_match = response:match("^Proposed Title:%s*(.-)[\r\n]")
+      if title_match then
+        -- Remove the title line from the response
+        modified_response = response:gsub("^Proposed Title:%s*.-%s*[\r\n]+", "")
+
+        -- Update the YAML frontmatter if we found a title
+        if title_match and title_match:len() > 0 then
+          -- Get all buffer content
+          local buffer_lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+
+          -- Find and update the title line in the YAML header
+          for i, line in ipairs(buffer_lines) do
+            if line:match("^title:%s*Untitled") then
+              buffer_lines[i] = "title: " .. title_match
+              vim.api.nvim_buf_set_lines(buffer_id, 0, -1, false, buffer_lines)
+              break
+            end
+          end
+        end
+      end
+
+
       -- Format response and append to buffer
-      local formatted_response = parser.format_assistant_message(response)
+      local formatted_response = parser.format_assistant_message(modified_response)
       local lines_to_append = vim.split(formatted_response, "\n")
 
       -- Replace the placeholder with the actual content

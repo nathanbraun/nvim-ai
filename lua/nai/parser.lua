@@ -12,6 +12,7 @@ function M.parse_chat_buffer(content)
   local current_message = nil
   local current_type = nil
   local text_buffer = {}
+  local include_fileutils = require('nai.fileutils.include')
 
   for _, line in ipairs(lines) do
     -- Skip YAML header
@@ -58,6 +59,15 @@ function M.parse_chat_buffer(content)
       end
       current_message = { role = "assistant" }
       current_type = "assistant"
+    elseif line:match("^>>> include") then
+      -- Finish previous message if exists
+      if current_message then
+        current_message.content = table.concat(text_buffer, "\n")
+        table.insert(messages, current_message)
+        text_buffer = {}
+      end
+      current_message = { role = "user" }
+      current_type = "include"
     elseif current_message then
       -- Skip the first empty line after a marker
       if #text_buffer == 0 and line == "" then
@@ -71,7 +81,12 @@ function M.parse_chat_buffer(content)
 
   -- Add the last message if there is one
   if current_message then
-    current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+    -- Special processing for include blocks
+    if current_type == "include" then
+      current_message.content = include_fileutils.process_include_block(text_buffer)
+    else
+      current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+    end
     table.insert(messages, current_message)
   end
 
@@ -109,6 +124,11 @@ end
 -- Format a system message for the buffer
 function M.format_system_message(content)
   return "\n>>> system\n\n" .. content
+end
+
+-- Format an include block for the buffer
+function M.format_include_block(content)
+  return "\n>>> include\n\n" .. content
 end
 
 -- Generate a YAML header with auto title

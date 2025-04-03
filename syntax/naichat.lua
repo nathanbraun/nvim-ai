@@ -6,6 +6,17 @@ vim.cmd([[
   syntax match naichatUser ">>> user"
   syntax match naichatAssistant "<<< assistant"
   syntax match naichatSystem ">>> system"
+  syntax match naichatInclude ">>> include"
+  highlight default link naichatInclude Special
+
+  " Add these new syntax rules:
+  " Highlight file paths in include blocks
+  syntax match naichatFilePath "^==> .\+\..\+ <=="
+  highlight default link naichatFilePath Title
+
+  " Highlight the empty user prompt after include
+  syntax region naichatIncludeText start=/^>>> include\_s\+/ end=/^\(>>>\|<<<\)/ contains=naichatInclude,naichatFilePath
+  highlight default link naichatIncludeText Normal
 
   " YAML header
   syntax region naichatYamlHeader start=/\%^---/ end=/^---/ contains=naichatYamlKey,naichatYamlValue
