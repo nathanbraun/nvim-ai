@@ -44,6 +44,13 @@ function M.reload()
     end
   end
 
+  -- Reload syntax properly for naichat files
+  if vim.bo.filetype == "naichat" then
+    vim.cmd("syntax clear")
+    vim.cmd("runtime syntax/vimwiki.vim") -- Load VimWiki first
+    vim.cmd("runtime syntax/naichat.vim") -- Then our additions
+  end
+
   -- Reload the main module
   return require("nai")
 end

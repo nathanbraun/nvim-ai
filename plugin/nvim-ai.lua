@@ -94,5 +94,7 @@ vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
   pattern = "*.naichat",
   callback = function()
     vim.bo.filetype = "naichat"
+    vim.wo.conceallevel = 2
+    vim.wo.concealcursor = "nc" -- Hide concealed text in normal and command mode
   end,
 })

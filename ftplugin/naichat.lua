@@ -4,6 +4,10 @@
 -- Set basic buffer options
 vim.bo.swapfile = false
 
+-- Enable concealing for the buffer
+vim.wo.conceallevel = 2
+vim.wo.concealcursor = 'nc'
+
 -- Add additional mappings for convenience
 vim.api.nvim_buf_set_keymap(0, 'n', '<Leader>r', ':NAIChat<CR>',
   { noremap = true, silent = true, desc = 'Continue chat' })
