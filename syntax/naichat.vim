@@ -184,6 +184,27 @@ syntax region naichatCodeBlockNoLang
 highlight default link naichatCodeBlockDelimiter Comment
 highlight default link naichatCodeBlockNoLang Normal
 
+" Add header syntax (Markdown style)
+for s:i in range(1,6)
+  execute 'syntax match naichatHeader'.s:i.' /^#\{'.s:i.'}\s\+.*$/'
+endfor
+
+" Link header highlighting to VimWiki's header groups if available
+" or define our own if not
+if exists('*vimwiki#u#hi_typeface')
+  " If VimWiki is available, link to its header groups
+  for s:i in range(1,6)
+    execute 'hi def link naichatHeader'.s:i.' VimwikiHeader'.s:i
+  endfor
+else
+  " Define our own header highlighting if VimWiki is not available
+  for s:i in range(1,6)
+    " Different colors for different header levels
+    " You can adjust these colors to your preference
+    let s:fg_colors = ['#FF5F87', '#5FAFFF', '#AFFF5F', '#FF5F5F', '#5FAFD7', '#8787FF']
+    execute 'hi naichatHeader'.s:i.' term=bold cterm=bold gui=bold ctermfg='.s:i.' guifg='.s:fg_colors[s:i-1]
+  endfor
+endif
 
 
 " Set the conceallevel and cursor
