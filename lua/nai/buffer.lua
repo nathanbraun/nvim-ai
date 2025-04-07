@@ -104,23 +104,6 @@ function M.activate_buffer(bufnr)
   vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>m', ':NAINewMessage<CR>',
     { noremap = true, silent = true, desc = 'Add new user message' })
 
-  -- Apply syntax overlay if enabled
-  if config.options.active_filetypes.enable_overlay then
-    M.apply_syntax_overlay(bufnr)
-  end
-
-  -- Add an autocommand to update overlay when the buffer changes
-  local augroup = vim.api.nvim_create_augroup('NaiBufferOverlay_' .. bufnr, { clear = true })
-  vim.api.nvim_create_autocmd({ "BufWritePost", "TextChanged", "TextChangedI" }, {
-    group = augroup,
-    buffer = bufnr,
-    callback = function()
-      if config.options.active_filetypes.enable_overlay then
-        M.apply_syntax_overlay(bufnr)
-      end
-    end
-  })
-
   -- Add cleanup on buffer unload
   vim.api.nvim_create_autocmd("BufUnload", {
     group = augroup,
@@ -199,16 +182,6 @@ function M.setup_autocmds()
       end
     end
   })
-
-  -- Define highlight groups
-  vim.cmd([[
-    highlight default naichatUser ctermfg=blue guifg=#5EAFFF
-    highlight default naichatAssistant ctermfg=green guifg=#5FD75F
-    highlight default naichatSystem ctermfg=magenta guifg=#AF87FF
-    highlight default naichatSpecialBlock ctermfg=cyan guifg=#00AFFF
-    highlight default naichatErrorBlock ctermfg=red guifg=#FF5F5F
-    highlight default naichatContentStart ctermfg=yellow guifg=#FFFF5F
-  ]])
 end
 
 -- Command to manually activate current buffer
