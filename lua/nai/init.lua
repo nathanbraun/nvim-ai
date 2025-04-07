@@ -44,11 +44,9 @@ function M.reload()
     end
   end
 
-  -- Reload syntax properly for naichat files
-  if vim.bo.filetype == "naichat" then
-    vim.cmd("syntax clear")
-    vim.cmd("runtime syntax/vimwiki.vim") -- Load VimWiki first
-    vim.cmd("runtime syntax/naichat.vim") -- Then our additions
+  local current_buf = vim.api.nvim_get_current_buf()
+  if require('nai.buffer').activated_buffers[current_buf] then
+    require('nai.buffer').apply_syntax_overlay(current_buf)
   end
 
   -- Reload the main module
@@ -398,10 +396,21 @@ function M.new_chat()
   -- Generate a filename for the untitled chat
   local filename = fileutils.generate_filename("Untitled")
 
-  -- Create new buffer with filename
+  -- Create new buffer with filename (using .md extension instead of .naichat)
   vim.cmd("enew")
-  vim.api.nvim_buf_set_name(0, filename)
-  vim.bo.filetype = "naichat"
+  local buffer_id = vim.api.nvim_get_current_buf()
+
+  -- Make sure the extension is .md instead of .naichat
+  local md_filename = filename
+  if filename:match("%.naichat$") then
+    md_filename = filename:gsub("%.naichat$", ".md")
+  end
+
+  -- Set buffer name with both arguments (buffer_id and name)
+  vim.api.nvim_buf_set_name(buffer_id, md_filename)
+
+  -- Activate the buffer with our chat functionality
+  require('nai.buffer').activate_buffer(buffer_id)
 
   -- Generate header
   local header = parser.generate_header("Untitled")
@@ -415,7 +424,7 @@ function M.new_chat()
   table.insert(header_lines, "")         -- One blank line after user prompt
 
   -- Add all lines to the buffer
-  vim.api.nvim_buf_set_lines(0, 0, 0, false, header_lines)
+  vim.api.nvim_buf_set_lines(buffer_id, 0, 0, false, header_lines)
 
   -- Position cursor where user should start typing
   vim.api.nvim_win_set_cursor(0, { #header_lines, 0 })
@@ -427,6 +436,8 @@ function M.new_chat()
 
   -- Notify
   vim.notify("New AI chat file created", vim.log.levels.INFO)
+
+  return buffer_id
 end
 
 -- Create a new chat with initial user content

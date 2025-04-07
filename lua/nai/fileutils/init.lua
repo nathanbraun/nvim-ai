@@ -39,11 +39,12 @@ function M.generate_filename(title)
     clean_title = clean_title:sub(1, 40)
   end
 
-  -- Apply the filename format from config
+  -- Apply the filename format from config but use .md instead of .naichat
   local filename = config.options.chat_files.format
   filename = filename:gsub("{date}", date)
   filename = filename:gsub("{id}", id)
   filename = filename:gsub("{title}", clean_title)
+  filename = filename:gsub("%.naichat$", ".md") -- Replace .naichat with .md
 
   return vim.fn.expand(dir .. filename)
 end
