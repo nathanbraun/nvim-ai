@@ -45,23 +45,16 @@ function M.detect_chat_markers(bufnr)
 end
 
 -- Check if a buffer should be activated
-function M.should_activate(bufnr)
+function M.should_activate_by_pattern(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
-
-  -- Always activate for .naichat files (backward compatibility)
   local filename = vim.api.nvim_buf_get_name(bufnr)
-  if filename:match("%.naichat$") then
-    return true
-  end
 
-  -- Check pattern match
-  if M.should_activate_by_pattern(bufnr) then
-    return true
-  end
-
-  -- If autodetect is enabled, scan buffer content
-  if config.options.active_filetypes.autodetect then
-    return M.detect_chat_markers(bufnr)
+  -- Check against configured patterns
+  for _, pattern in ipairs(config.options.active_filetypes.patterns) do
+    -- Use simpler pattern matching that doesn't depend on glob
+    if vim.fn.match(filename, pattern:gsub("%*", ".*")) >= 0 then
+      return true
+    end
   end
 
   return false
@@ -71,6 +64,9 @@ end
 function M.activate_buffer(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
 
+  -- Debug info
+  local filename = vim.api.nvim_buf_get_name(bufnr)
+
   -- Skip if already activated
   if M.activated_buffers[bufnr] then
     return
@@ -78,9 +74,6 @@ function M.activate_buffer(bufnr)
 
   -- Mark buffer as activated
   M.activated_buffers[bufnr] = true
-
-  -- Apply syntax highlighting
-  M.apply_syntax_overlay(bufnr)
 
   -- Register buffer-local commands
   vim.api.nvim_buf_create_user_command(bufnr, 'NAIChat', function(opts)
@@ -107,7 +100,13 @@ function M.activate_buffer(bufnr)
   vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>m', ':NAINewMessage<CR>',
     { noremap = true, silent = true, desc = 'Add new user message' })
 
+  -- Explicitly apply syntax highlighting
+  if config.options.active_filetypes.enable_overlay then
+    M.apply_syntax_overlay(bufnr)
+  end
+
   -- Add cleanup on buffer unload
+  local augroup = vim.api.nvim_create_augroup('NaiBufferCleanup' .. bufnr, { clear = true })
   vim.api.nvim_create_autocmd("BufUnload", {
     group = augroup,
     buffer = bufnr,
@@ -116,7 +115,13 @@ function M.activate_buffer(bufnr)
     end
   })
 
-  vim.notify("NAI Chat activated for this buffer", vim.log.levels.INFO)
+  -- Schedule another application of syntax highlighting
+  -- This helps with race conditions where filetype is set after activation
+  vim.defer_fn(function()
+    if vim.api.nvim_buf_is_valid(bufnr) and M.activated_buffers[bufnr] then
+      M.apply_syntax_overlay(bufnr)
+    end
+  end, 100)
 end
 
 -- Create syntax overlay namespace if it doesn't exist
@@ -176,8 +181,43 @@ end
 -- Command to manually activate current buffer
 function M.create_activation_command()
   vim.api.nvim_create_user_command('NAIActivate', function()
-    M.activate_buffer()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local filename = vim.api.nvim_buf_get_name(bufnr)
+
+    -- Make sure the buffer isn't already activated
+    if M.activated_buffers[bufnr] then
+      return
+    end
+
+    -- Force activation regardless of checks
+    M.activated_buffers[bufnr] = true
+    M.apply_syntax_overlay(bufnr)
+
+    -- Set up buffer-local commands
+    vim.api.nvim_buf_create_user_command(bufnr, 'NAIChat', function(opts)
+      require('nai').chat(opts)
+    end, { range = true, nargs = '?', desc = 'AI chat in current buffer' })
+
+    vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>r', ':NAIChat<CR>',
+      { noremap = true, silent = true, desc = 'Continue chat' })
   end, { desc = 'Activate NAI Chat for current buffer' })
+end
+
+-- Add this function
+function M.should_activate(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  -- Check if the buffer should be activated based on file pattern
+  if M.should_activate_by_pattern(bufnr) then
+    return true
+  end
+
+  -- Check if the buffer contains chat markers
+  if config.options.active_filetypes.autodetect and M.detect_chat_markers(bufnr) then
+    return true
+  end
+
+  return false
 end
 
 return M
