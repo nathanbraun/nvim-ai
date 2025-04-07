@@ -79,6 +79,9 @@ function M.activate_buffer(bufnr)
   -- Mark buffer as activated
   M.activated_buffers[bufnr] = true
 
+  -- Apply syntax highlighting
+  M.apply_syntax_overlay(bufnr)
+
   -- Register buffer-local commands
   vim.api.nvim_buf_create_user_command(bufnr, 'NAIChat', function(opts)
     require('nai').chat(opts)
@@ -123,40 +126,15 @@ M.overlay_ns = vim.api.nvim_create_namespace('nai_overlay')
 function M.apply_syntax_overlay(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
 
-  -- Clear existing highlights
+  -- Clear any existing overlay
   vim.api.nvim_buf_clear_namespace(bufnr, M.overlay_ns, 0, -1)
 
-  -- Get buffer lines
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  local markers = config.options.active_filetypes.block_markers
+  -- Apply new syntax highlighting using our syntax module
+  local syntax = require('nai.syntax')
+  local ns_id = syntax.apply_to_buffer(bufnr)
 
-  -- Apply highlights to each line
-  for i, line in ipairs(lines) do
-    -- User marker
-    if line:match("^" .. vim.pesc(markers.user) .. "$") then
-      vim.api.nvim_buf_add_highlight(bufnr, M.overlay_ns, "naichatUser", i - 1, 0, -1)
-
-      -- Assistant marker
-    elseif line:match("^" .. vim.pesc(markers.assistant) .. "$") then
-      vim.api.nvim_buf_add_highlight(bufnr, M.overlay_ns, "naichatAssistant", i - 1, 0, -1)
-
-      -- System marker
-    elseif line:match("^" .. vim.pesc(markers.system) .. "$") then
-      vim.api.nvim_buf_add_highlight(bufnr, M.overlay_ns, "naichatSystem", i - 1, 0, -1)
-
-      -- Special blocks
-    elseif line:match("^>>> [a-z%-]+") then
-      if line:match("error") then
-        vim.api.nvim_buf_add_highlight(bufnr, M.overlay_ns, "naichatErrorBlock", i - 1, 0, -1)
-      else
-        vim.api.nvim_buf_add_highlight(bufnr, M.overlay_ns, "naichatSpecialBlock", i - 1, 0, -1)
-      end
-
-      -- Content start
-    elseif line:match("^<<< content") then
-      vim.api.nvim_buf_add_highlight(bufnr, M.overlay_ns, "naichatContentStart", i - 1, 0, -1)
-    end
-  end
+  -- Store the namespace ID for future reference
+  M.overlay_ns = ns_id
 end
 
 -- Deactivate a buffer
@@ -176,6 +154,17 @@ function M.setup_autocmds()
   vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
     group = augroup,
     pattern = "*",
+    callback = function(args)
+      if M.should_activate(args.buf) then
+        M.activate_buffer(args.buf)
+      end
+    end
+  })
+
+  -- Also apply highlighting when opening files that match patterns
+  vim.api.nvim_create_autocmd("FileType", {
+    group = augroup,
+    pattern = { "markdown", "text", "wiki" },
     callback = function(args)
       if M.should_activate(args.buf) then
         M.activate_buffer(args.buf)

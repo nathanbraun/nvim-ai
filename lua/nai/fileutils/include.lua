@@ -2,10 +2,9 @@ local M = {}
 local utils = require('nai.utils')
 
 function M.expand_paths(path_pattern)
-  local expanded_path = vim.fn.expand(path_pattern)
-
   -- If it doesn't contain wildcards, just return the expanded path
   if not path_pattern:match("[*?%[%]]") then
+    local expanded_path = vim.fn.expand(path_pattern)
     return { expanded_path }
   end
 
@@ -15,18 +14,28 @@ function M.expand_paths(path_pattern)
   -- For recursive patterns, use find command
   if recursive then
     -- Extract base directory (everything before **)
-    local base_dir_pattern = "^(.-)%*%*"
-    local base_dir = path_pattern:match(base_dir_pattern) or "."
-    base_dir = vim.fn.fnamemodify(base_dir, ":p:h") -- Get absolute path
+    local base_dir = path_pattern:match("^(.-)%*%*") or "."
+    base_dir = vim.fn.fnamemodify(vim.fn.expand(base_dir), ":p:h") -- Get absolute path
 
     -- Extract pattern after **
-    local after_pattern = path_pattern:match(".*%*%*(.*)")
-    local file_pattern = after_pattern or "*"
+    local after_pattern = path_pattern:match("%*%*(.*)")
+
+    -- If after_pattern starts with /, remove it (find doesn't need it)
+    if after_pattern:sub(1, 1) == "/" then
+      after_pattern = after_pattern:sub(2)
+    end
+
+    -- For *.lua pattern, convert to find's -name "*.lua"
+    local file_pattern = after_pattern
     if file_pattern == "" then file_pattern = "*" end
 
+    -- Convert glob pattern to find-compatible pattern
+    -- This is a simplified conversion - might need to be enhanced
+    local find_pattern = file_pattern:gsub("%*%*", "*")
+
     -- Build and execute find command
-    local cmd = string.format('find "%s" -type f -name "%s" 2>/dev/null',
-      base_dir, file_pattern)
+    local cmd = string.format('find "%s" -type f -path "*%s" 2>/dev/null',
+      base_dir, find_pattern)
 
     local output = vim.fn.system(cmd)
 
@@ -36,10 +45,14 @@ function M.expand_paths(path_pattern)
       table.insert(files, file)
     end
 
+    if #files == 0 then
+      print("No files found with command: " .. cmd)
+    end
+
     return files
   else
     -- For non-recursive, use standard glob
-    return vim.fn.glob(expanded_path, false, true)
+    return vim.fn.glob(path_pattern, false, true)
   end
 end
 

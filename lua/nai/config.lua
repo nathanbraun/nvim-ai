@@ -19,12 +19,19 @@ M.defaults = {
       temperature = 0.7,
       max_tokens = 1000,
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
+      models = {
+        "anthropic/claude-3.7-sonnet",
+        "google/gemini-2.0-flash-001",
+        "openai/gpt-4o",
+        "openai/gpt-4o-mini",
+        "perplexity/r1-1776",
+      },
     },
   },
   active_filetypes = {
     patterns = { "*.md", "*.markdown", "*.wiki", "*.naichat" }, -- File patterns to activate on
-    autodetect = true,                                        -- Detect chat blocks in any file
-    enable_overlay = true,                                    -- Enable syntax overlay
+    autodetect = true,                                          -- Detect chat blocks in any file
+    enable_overlay = true,                                      -- Enable syntax overlay
     block_markers = {
       user = ">>> user",
       assistant = "<<< assistant",
@@ -38,7 +45,7 @@ M.defaults = {
   },
   tools = {
     web = {
-      method = "dumpling",                                     -- "simple" for basic curl/html2text, "dumpling" for Dumpling AI
+      method = "simple",                                       -- "simple" for basic curl/html2text, "dumpling" for Dumpling AI
       dumpling = {
         endpoint = "https://app.dumplingai.com/api/v1/scrape", -- Dumpling browse endpoint
         format = "markdown",                                   -- Output format: markdown, html, or screenshot
@@ -53,7 +60,7 @@ M.defaults = {
   },
   chat_files = {
     directory = vim.fn.expand("~/naichat/"), -- Default save location
-    format = "{id}-ai.md",              -- Filename format
+    format = "{id}-ai.md",                   -- Filename format
     auto_save = false,                       -- Save after each interaction
     id_length = 4,                           -- Length of random ID
     use_timestamp = false,                   -- Use timestamp instead of random ID if true

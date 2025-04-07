@@ -89,6 +89,11 @@ end, {
   end
 })
 
+-- Add this to plugin/nvim-ai.lua, inside the plugin initialization section
+vim.api.nvim_create_user_command('NAIModel', function()
+  require('nai.tools.picker').select_model()
+end, { nargs = 0, desc = 'Select LLM model' })
+
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()
