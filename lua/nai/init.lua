@@ -71,67 +71,90 @@ function M.chat(opts)
   local parser = require('nai.parser')
   local fileutils = require('nai.fileutils')
   local buffer_id = vim.api.nvim_get_current_buf()
-  local buffer_type = vim.bo.filetype
+  local buffer_module = require('nai.buffer')
 
-  if buffer_type == "naichat" then
-    -- Check for unexpanded blocks
-    local scrape = require('nai.fileutils.scrape')
-    local snapshot = require('nai.fileutils.snapshot')
-
-    -- First, check for unexpanded scrape blocks
-    if scrape.has_unexpanded_scrape_blocks(buffer_id) then
-      -- Handle the case where we have unexpanded scrape blocks
-      vim.notify("Expanding scrape blocks. Press <Leader>r again after completion to chat.", vim.log.levels.INFO)
-
-      -- Only expand scrape blocks and return - don't continue with chat
-      scrape.expand_scrape_blocks_in_buffer(buffer_id)
-      return
+  -- Check if buffer is activated
+  if not buffer_module.activated_buffers[buffer_id] then
+    -- If not in an activated buffer, use the old behavior (create a new chat)
+    local text = ""
+    if opts.range > 0 then
+      text = utils.get_visual_selection()
     end
 
-    -- Check if there are any active scrape requests still in progress
-    if scrape.has_active_requests() then
-      vim.notify("Scrape requests are still in progress. Please wait for completion before chatting.",
-        vim.log.levels.WARN)
-      return
-    end
-
-    -- Check for unexpanded snapshot blocks
-    if snapshot.has_unexpanded_snapshot_blocks(buffer_id) then
-      -- Handle the case where we have unexpanded snapshot blocks
-      vim.notify("Expanding snapshot blocks. Press <Leader>r again to chat.", vim.log.levels.INFO)
-
-      -- Process lines in buffer to expand snapshots
-      local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-      local line_offset = 0
-
-      -- Find and expand snapshot blocks
-      for i, line in ipairs(lines) do
-        if line == ">>> snapshot" then
-          -- This is an unexpanded snapshot
-          local block_start = i - 1 + line_offset
-
-          -- Find the end of the snapshot block (next >>> or <<<)
-          local block_end = #lines
-          for j = i + 1, #lines do
-            if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-              block_end = j - 1 + line_offset
-              break
-            end
-          end
-
-          -- Expand the snapshot directly in the buffer
-          local new_line_count = snapshot.expand_snapshot_in_buffer(buffer_id, block_start, block_end + 1)
-
-          -- Adjust line offset for any additional lines added
-          line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-          -- Re-fetch buffer lines since they've changed
-          lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-        end
+    local prompt = opts.args or ""
+    local user_input = prompt
+    if text ~= "" then
+      if prompt ~= "" then
+        user_input = prompt .. ":\n" .. text
+      else
+        user_input = text
       end
-
-      return
     end
+
+    if user_input == "" then
+      return M.new_chat()
+    else
+      return M.new_chat_with_content(user_input)
+    end
+  end
+
+  -- Check for unexpanded blocks
+  local scrape = require('nai.fileutils.scrape')
+  local snapshot = require('nai.fileutils.snapshot')
+
+  -- First, check for unexpanded scrape blocks
+  if scrape.has_unexpanded_scrape_blocks(buffer_id) then
+    -- Handle the case where we have unexpanded scrape blocks
+    vim.notify("Expanding scrape blocks. Press <Leader>r again after completion to chat.", vim.log.levels.INFO)
+
+    -- Only expand scrape blocks and return - don't continue with chat
+    scrape.expand_scrape_blocks_in_buffer(buffer_id)
+    return
+  end
+
+  -- Check if there are any active scrape requests still in progress
+  if scrape.has_active_requests() then
+    vim.notify("Scrape requests are still in progress. Please wait for completion before chatting.",
+      vim.log.levels.WARN)
+    return
+  end
+
+  -- Check for unexpanded snapshot blocks
+  if snapshot.has_unexpanded_snapshot_blocks(buffer_id) then
+    -- Handle the case where we have unexpanded snapshot blocks
+    vim.notify("Expanding snapshot blocks. Press <Leader>r again to chat.", vim.log.levels.INFO)
+
+    -- Process lines in buffer to expand snapshots
+    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+    local line_offset = 0
+
+    -- Find and expand snapshot blocks
+    for i, line in ipairs(lines) do
+      if line == ">>> snapshot" then
+        -- This is an unexpanded snapshot
+        local block_start = i - 1 + line_offset
+
+        -- Find the end of the snapshot block (next >>> or <<<)
+        local block_end = #lines
+        for j = i + 1, #lines do
+          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+            block_end = j - 1 + line_offset
+            break
+          end
+        end
+
+        -- Expand the snapshot directly in the buffer
+        local new_line_count = snapshot.expand_snapshot_in_buffer(buffer_id, block_start, block_end + 1)
+
+        -- Adjust line offset for any additional lines added
+        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+        -- Re-fetch buffer lines since they've changed
+        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      end
+    end
+
+    return
   end
 
   -- Check for unexpanded YouTube blocks
@@ -174,38 +197,7 @@ function M.chat(opts)
   end
 
   -- At this point, no unexpanded blocks were found, proceed with chat
-  -- Continue with existing function from here
 
-  -- If we're not in a chat buffer, create a new one first
-  if buffer_type ~= "naichat" then
-    -- Get text from selection if available
-    local text = ""
-    if opts.range > 0 then
-      text = utils.get_visual_selection()
-    end
-
-    -- Get prompt from command args
-    local prompt = opts.args or ""
-
-    -- Combine text and prompt
-    local user_input = prompt
-    if text ~= "" then
-      if prompt ~= "" then
-        user_input = prompt .. ":\n" .. text
-      else
-        user_input = text
-      end
-    end
-
-    -- If no input, create an empty chat
-    if user_input == "" then
-      return M.new_chat()
-    else
-      return M.new_chat_with_content(user_input)
-    end
-  end
-
-  -- At this point, we're guaranteed to be in a chat buffer
   -- Get all buffer content
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
   local buffer_content = table.concat(lines, "\n")
@@ -213,31 +205,20 @@ function M.chat(opts)
   -- Parse buffer content into messages
   local messages = parser.parse_chat_buffer(buffer_content)
 
-  -- ADD THIS SECTION:
-  -- Check if the chat is "Untitled" and auto-title is enabled
-  local first_message = messages[1]
-  if first_message and first_message.role == "system" then
-    local title_match = vim.fn.match(first_message.content, "You are a general assistant.")
-    if title_match == 0 and config.options.chat_files.auto_title then -- It's general assistant
-      local is_untitled = false
-      -- Get the first few lines of the buffer to check for "title: Untitled"
-      local header_lines = vim.api.nvim_buf_get_lines(buffer_id, 0, 10, false) -- Get first 10 lines
-      for _, line in ipairs(header_lines) do
-        if line:match("^title:%s*Untitled") then
-          is_untitled = true
-          break
-        end
-      end
-      if is_untitled then
-        first_message.content = parser.get_system_prompt_with_title_request(is_untitled)
-      end
-    end
-  end
-
   -- Check if we have a user message at the end
   local last_message = messages[#messages]
   if not last_message or last_message.role ~= "user" then
-    vim.notify("No user message to respond to", vim.log.levels.WARN)
+    -- No user message, add one now
+    local user_template = parser.format_user_message("")
+    local user_lines = vim.split(user_template, "\n")
+    vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, user_lines)
+
+    -- Position cursor on the 3rd line of new user message (after the blank line)
+    local line_count = vim.api.nvim_buf_line_count(buffer_id)
+    vim.api.nvim_win_set_cursor(0, { line_count, 0 })
+
+    -- Exit early - user needs to add their message
+    vim.notify("Please add your message first, then run NAIChat again", vim.log.levels.INFO)
     return
   end
 

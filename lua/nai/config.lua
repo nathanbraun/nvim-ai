@@ -21,6 +21,21 @@ M.defaults = {
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
     },
   },
+  active_filetypes = {
+    patterns = { "*.md", "*.markdown", "*.wiki", "*.naichat" }, -- File patterns to activate on
+    autodetect = true,                                        -- Detect chat blocks in any file
+    enable_overlay = true,                                    -- Enable syntax overlay
+    block_markers = {
+      user = ">>> user",
+      assistant = "<<< assistant",
+      system = ">>> system",
+      web = ">>> web",
+      scrape = ">>> scrape",
+      youtube = ">>> youtube",
+      include = ">>> include",
+      snapshot = ">>> snapshot",
+    }
+  },
   tools = {
     web = {
       method = "dumpling",                                     -- "simple" for basic curl/html2text, "dumpling" for Dumpling AI
@@ -44,8 +59,7 @@ M.defaults = {
     use_timestamp = false,                   -- Use timestamp instead of random ID if true
     auto_title = true,                       -- Automatically generate title for untitled chats
   },
-  default_system_prompt =
-  "You are a general assistant.",
+  default_system_prompt = "You are a general assistant.",
 }
 
 -- Current configuration (will be populated by setup)
