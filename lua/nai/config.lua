@@ -38,9 +38,9 @@ M.defaults = {
     },
   },
   active_filetypes = {
-    patterns = { "*.md", "*.markdown", "*.wiki", "*.naichat" }, -- File patterns to activate on
-    autodetect = true,                                          -- Detect chat blocks in any file
-    enable_overlay = true,                                      -- Enable syntax overlay
+    patterns = { "*.md", "*.markdown", "*.wiki" }, -- File patterns to activate on
+    autodetect = true,                             -- Detect chat blocks in any file
+    enable_overlay = true,                         -- Enable syntax overlay
     block_markers = {
       user = ">>> user",
       assistant = "<<< assistant",
@@ -53,14 +53,13 @@ M.defaults = {
     }
   },
   tools = {
-    web = {
-      dumpling = {
-        endpoint = "https://app.dumplingai.com/api/v1/scrape", -- Dumpling browse endpoint
-        format = "markdown",                                   -- Output format: markdown, html, or screenshot
-        cleaned = true,                                        -- Whether to clean the output
-        render_js = true,                                      -- Whether to render JavaScript
-        max_content_length = 100000                            -- Max length to prevent excessively large responses
-      },
+    dumpling = {
+      base_endpoint = "https://app.dumplingai.com/api/v1/", -- Base endpoint for all Dumpling API calls
+      format = "markdown",                                  -- Output format: markdown, html, or screenshot
+      cleaned = true,                                       -- Whether to clean the output
+      render_js = true,                                     -- Whether to render JavaScript
+      max_content_length = 100000,                           -- Max length to prevent excessively large responses
+      include_timestamps = true,                            -- Whether to include timestamps in the output
     },
   },
   ui = {

@@ -10,6 +10,7 @@ end
 -- Fetch transcript from YouTube URL
 function M.fetch_transcript(video_url, options, callback, on_error)
   local api_key = M.get_api_key()
+  local config = require('nai.config')
 
   if not api_key then
     if on_error then
@@ -21,16 +22,36 @@ function M.fetch_transcript(video_url, options, callback, on_error)
     return
   end
 
+  -- Merge with default options from config
+  local dumpling_config = config.options.tools.dumpling or {}
+
+  -- Default options from config or hardcoded defaults
+  local default_options = {
+    include_timestamps = dumpling_config.include_timestamps ~= false, -- Default to true
+    timestamps_to_combine = dumpling_config.timestamps_to_combine or 5,
+    preferred_language = dumpling_config.preferred_language or "en"
+  }
+
+  -- Merge passed options with defaults
+  options = vim.tbl_deep_extend("force", default_options, options or {})
+
   -- Prepare request data
   local data = {
     videoUrl = video_url,
-    includeTimestamps = options.include_timestamps ~= false, -- Default to true
-    timestampsToCombine = options.timestamps_to_combine or 5,
-    preferredLanguage = options.preferred_language or "en"
+    includeTimestamps = options.include_timestamps,
+    timestampsToCombine = options.timestamps_to_combine,
+    preferredLanguage = options.preferred_language
   }
 
   local json_data = vim.json.encode(data)
-  local endpoint = "https://app.dumplingai.com/api/v1/get-youtube-transcript"
+
+  -- Use the base endpoint plus the specific endpoint for YouTube transcripts
+  local base_endpoint = dumpling_config.base_endpoint or "https://app.dumplingai.com/api/v1/"
+  local endpoint = base_endpoint .. "get-youtube-transcript"
+
+  -- Remove trailing slash if present in base_endpoint
+  endpoint = endpoint:gsub("//", "/"):gsub(":/", "://")
+
   local auth_header = "Authorization: Bearer " .. api_key
 
   -- Show a notification that we're fetching
@@ -160,12 +181,18 @@ function M.process_youtube_block(lines)
 
     -- Create a temporary script to make a synchronous call
     local temp_file = os.tmpname()
+    local dumpling_config = require('nai.config').options.tools.dumpling or {}
+    local base_endpoint = dumpling_config.base_endpoint or "https://app.dumplingai.com/api/v1/"
+    local endpoint = base_endpoint .. "get-youtube-transcript"
+    endpoint = endpoint:gsub("//", "/"):gsub(":/", "://")
+
     local script = string.format([[
-      curl -s -X POST "https://app.dumplingai.com/api/v1/get-youtube-transcript" \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer %s" \
-      -d '{"videoUrl":"%s","includeTimestamps":%s,"timestampsToCombine":%d,"preferredLanguage":"%s"}'
-    ]],
+  curl -s -X POST "%s" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer %s" \
+  -d '{"videoUrl":"%s","includeTimestamps":%s,"timestampsToCombine":%d,"preferredLanguage":"%s"}'
+]],
+      endpoint,
       M.get_api_key(),
       url,
       tostring(options.include_timestamps):lower(),

@@ -30,6 +30,7 @@ end
 -- Process the URL content through Dumpling API
 function M.fetch_url(url, callback, on_error)
   local api_key = M.get_api_key()
+  local config = require('nai.config')
 
   if not api_key then
     if on_error then
@@ -41,7 +42,15 @@ function M.fetch_url(url, callback, on_error)
     return
   end
 
+  -- Get complete dumpling configuration
   local dumpling_config = config.options.tools.dumpling or {}
+
+  -- Use the base endpoint plus the specific endpoint for scraping
+  local base_endpoint = dumpling_config.base_endpoint or "https://app.dumplingai.com/api/v1/"
+  local endpoint = base_endpoint .. "scrape"
+
+  -- Remove trailing slash if present in base_endpoint
+  endpoint = endpoint:gsub("//", "/"):gsub(":/", "://")
 
   local data = {
     url = url,
@@ -51,7 +60,6 @@ function M.fetch_url(url, callback, on_error)
   }
 
   local json_data = vim.json.encode(data)
-  local endpoint = dumpling_config.endpoint or "https://app.dumplingai.com/api/v1/scrape"
   local auth_header = "Authorization: Bearer " .. api_key
 
   -- Show a notification that we're fetching
