@@ -66,315 +66,318 @@ function M.switch_provider(provider)
 end
 
 function M.chat(opts)
-  local parser = require('nai.parser')
-  local fileutils = require('nai.fileutils')
-  local buffer_id = vim.api.nvim_get_current_buf()
-  local buffer_module = require('nai.buffer')
+  local profiler = require('nai.utils.profiler')
+  return profiler.measure("chat_command", function(opts)
+    local parser = require('nai.parser')
+    local fileutils = require('nai.fileutils')
+    local buffer_id = vim.api.nvim_get_current_buf()
+    local buffer_module = require('nai.buffer')
 
-  -- Force activation for this buffer if it contains user prompts
-  local contains_chat_markers = buffer_module.detect_chat_markers(buffer_id)
-  if contains_chat_markers and not buffer_module.activated_buffers[buffer_id] then
-    vim.notify("Found chat markers, activating buffer...", vim.log.levels.INFO)
-    buffer_module.activate_buffer(buffer_id)
-  end
-
-  -- Check if buffer is activated after our attempt
-  if not buffer_module.activated_buffers[buffer_id] then
-    vim.notify("Buffer not activated, creating new chat...", vim.log.levels.INFO)
-    -- If not in an activated buffer, use the old behavior (create a new chat)
-    local text = ""
-    if opts.range > 0 then
-      text = utils.get_visual_selection()
+    -- Force activation for this buffer if it contains user prompts
+    local contains_chat_markers = buffer_module.detect_chat_markers(buffer_id)
+    if contains_chat_markers and not buffer_module.activated_buffers[buffer_id] then
+      vim.notify("Found chat markers, activating buffer...", vim.log.levels.INFO)
+      buffer_module.activate_buffer(buffer_id)
     end
 
-    local prompt = opts.args or ""
-    local user_input = prompt
-    if text ~= "" then
-      if prompt ~= "" then
-        user_input = prompt .. ":\n" .. text
+    -- Check if buffer is activated after our attempt
+    if not buffer_module.activated_buffers[buffer_id] then
+      vim.notify("Buffer not activated, creating new chat...", vim.log.levels.INFO)
+      -- If not in an activated buffer, use the old behavior (create a new chat)
+      local text = ""
+      if opts.range > 0 then
+        text = utils.get_visual_selection()
+      end
+
+      local prompt = opts.args or ""
+      local user_input = prompt
+      if text ~= "" then
+        if prompt ~= "" then
+          user_input = prompt .. ":\n" .. text
+        else
+          user_input = text
+        end
+      end
+
+      if user_input == "" then
+        return M.new_chat()
       else
-        user_input = text
+        return M.new_chat_with_content(user_input)
       end
     end
 
-    if user_input == "" then
-      return M.new_chat()
-    else
-      return M.new_chat_with_content(user_input)
-    end
-  end
+    -- Check for unexpanded blocks
+    local scrape = require('nai.fileutils.scrape')
+    local snapshot = require('nai.fileutils.snapshot')
 
-  -- Check for unexpanded blocks
-  local scrape = require('nai.fileutils.scrape')
-  local snapshot = require('nai.fileutils.snapshot')
+    -- First, check for unexpanded scrape blocks
+    if scrape.has_unexpanded_scrape_blocks(buffer_id) then
+      -- Handle the case where we have unexpanded scrape blocks
+      vim.notify("Expanding scrape blocks. Press <Leader>r again after completion to chat.", vim.log.levels.INFO)
 
-  -- First, check for unexpanded scrape blocks
-  if scrape.has_unexpanded_scrape_blocks(buffer_id) then
-    -- Handle the case where we have unexpanded scrape blocks
-    vim.notify("Expanding scrape blocks. Press <Leader>r again after completion to chat.", vim.log.levels.INFO)
-
-    -- Only expand scrape blocks and return - don't continue with chat
-    scrape.expand_scrape_blocks_in_buffer(buffer_id)
-    return
-  end
-
-  -- Check if there are any active scrape requests still in progress
-  if scrape.has_active_requests() then
-    vim.notify("Scrape requests are still in progress. Please wait for completion before chatting.",
-      vim.log.levels.WARN)
-    return
-  end
-
-  -- Check for unexpanded snapshot blocks
-  if snapshot.has_unexpanded_snapshot_blocks(buffer_id) then
-    -- Handle the case where we have unexpanded snapshot blocks
-    vim.notify("Expanding snapshot blocks. Press <Leader>r again to chat.", vim.log.levels.INFO)
-
-    -- Process lines in buffer to expand snapshots
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-    local line_offset = 0
-
-    -- Find and expand snapshot blocks
-    for i, line in ipairs(lines) do
-      if line == ">>> snapshot" then
-        -- This is an unexpanded snapshot
-        local block_start = i - 1 + line_offset
-
-        -- Find the end of the snapshot block (next >>> or <<<)
-        local block_end = #lines
-        for j = i + 1, #lines do
-          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-            block_end = j - 1 + line_offset
-            break
-          end
-        end
-
-        -- Expand the snapshot directly in the buffer
-        local new_line_count = snapshot.expand_snapshot_in_buffer(buffer_id, block_start, block_end + 1)
-
-        -- Adjust line offset for any additional lines added
-        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-        -- Re-fetch buffer lines since they've changed
-        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-      end
+      -- Only expand scrape blocks and return - don't continue with chat
+      scrape.expand_scrape_blocks_in_buffer(buffer_id)
+      return
     end
 
-    return
-  end
-
-  -- Check for unexpanded YouTube blocks
-  local youtube = require('nai.fileutils.youtube')
-  if youtube.has_unexpanded_youtube_blocks(buffer_id) then
-    -- Handle the case where we have unexpanded YouTube blocks
-    vim.notify("Expanding YouTube transcript blocks. Press <Leader>r again to chat.", vim.log.levels.INFO)
-
-    -- Process lines in buffer to expand YouTube blocks
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-    local line_offset = 0
-
-    -- Find and expand YouTube blocks
-    for i, line in ipairs(lines) do
-      if line == ">>> youtube" then
-        -- This is an unexpanded YouTube block
-        local block_start = i - 1 + line_offset
-
-        -- Find the end of the YouTube block (next >>> or <<<)
-        local block_end = #lines
-        for j = i + 1, #lines do
-          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-            block_end = j - 1 + line_offset
-            break
-          end
-        end
-
-        -- Expand the YouTube block directly in the buffer
-        local new_line_count = youtube.expand_youtube_block(buffer_id, block_start, block_end + 1)
-
-        -- Adjust line offset for any additional lines added
-        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-        -- Re-fetch buffer lines since they've changed
-        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-      end
+    -- Check if there are any active scrape requests still in progress
+    if scrape.has_active_requests() then
+      vim.notify("Scrape requests are still in progress. Please wait for completion before chatting.",
+        vim.log.levels.WARN)
+      return
     end
 
-    return
-  end
+    -- Check for unexpanded snapshot blocks
+    if snapshot.has_unexpanded_snapshot_blocks(buffer_id) then
+      -- Handle the case where we have unexpanded snapshot blocks
+      vim.notify("Expanding snapshot blocks. Press <Leader>r again to chat.", vim.log.levels.INFO)
 
-  -- At this point, no unexpanded blocks were found, proceed with chat
+      -- Process lines in buffer to expand snapshots
+      local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      local line_offset = 0
 
-  -- Get all buffer content
-  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-  local buffer_content = table.concat(lines, "\n")
+      -- Find and expand snapshot blocks
+      for i, line in ipairs(lines) do
+        if line == ">>> snapshot" then
+          -- This is an unexpanded snapshot
+          local block_start = i - 1 + line_offset
 
-  -- Check if we need to enable auto-title
-  local needs_auto_title = false
-  if config.options.chat_files.auto_title then
-    -- Look for "title: Untitled" in the YAML header
-    for i, line in ipairs(lines) do
-      if line:match("^title:%s*Untitled") then
-        needs_auto_title = true
-        break
-      end
-      -- Exit the loop if we're past the YAML header
-      if line == "---" and i > 1 then
-        break
-      end
-    end
-  end
-
-  -- Parse buffer content into messages
-  local messages = parser.parse_chat_buffer(buffer_content)
-
-  -- Check if we have a user message at the end
-  local last_message = messages[#messages]
-  if not last_message or last_message.role ~= "user" then
-    -- No user message, add one now
-    local user_template = parser.format_user_message("")
-    local user_lines = vim.split(user_template, "\n")
-    vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, user_lines)
-
-    -- Position cursor on the 3rd line of new user message (after the blank line)
-    local line_count = vim.api.nvim_buf_line_count(buffer_id)
-    vim.api.nvim_win_set_cursor(0, { line_count, 0 })
-
-    -- Exit early - user needs to add their message
-    vim.notify("Please add your message first, then run NAIChat again", vim.log.levels.INFO)
-    return
-  end
-
-  -- Position cursor at the end of the buffer
-  local line_count = vim.api.nvim_buf_line_count(buffer_id)
-  vim.api.nvim_win_set_cursor(0, { line_count, 0 })
-
-  -- Create indicator at the end of buffer
-  local indicator = utils.indicators.create_assistant_placeholder(buffer_id, line_count)
-
-  -- Cancel any ongoing requests
-  if M.active_request then
-    M.cancel()
-  end
-
-  -- If we need auto-title, modify the system message
-  if needs_auto_title then
-    -- Find the system message
-    for i, msg in ipairs(messages) do
-      if msg.role == "system" then
-        -- Append the title request to the system message
-        msg.content = parser.get_system_prompt_with_title_request(true)
-        break
-      end
-    end
-  end
-
-  -- Call API
-  M.active_request = api.chat_request(
-    messages,
-    function(response)
-      -- Get the position where we need to replace the placeholder
-      local insertion_row = utils.indicators.remove(indicator)
-
-      -- Extract title if present
-      local modified_response = response
-
-      -- Check if response starts with "Proposed Title:"
-      local title_match = response:match("^Proposed Title:%s*(.-)[\r\n]")
-      if title_match then
-        -- Remove the title line from the response
-        modified_response = response:gsub("^Proposed Title:%s*.-%s*[\r\n]+", "")
-
-        -- Update the YAML frontmatter if we found a title
-        if title_match and title_match:len() > 0 then
-          -- Get all buffer content
-          local buffer_lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-
-          -- Find and update the title line in the YAML header
-          for i, line in ipairs(buffer_lines) do
-            if line:match("^title:%s*Untitled") then
-              buffer_lines[i] = "title: " .. title_match
-              vim.api.nvim_buf_set_lines(buffer_id, 0, -1, false, buffer_lines)
+          -- Find the end of the snapshot block (next >>> or <<<)
+          local block_end = #lines
+          for j = i + 1, #lines do
+            if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+              block_end = j - 1 + line_offset
               break
             end
           end
+
+          -- Expand the snapshot directly in the buffer
+          local new_line_count = snapshot.expand_snapshot_in_buffer(buffer_id, block_start, block_end + 1)
+
+          -- Adjust line offset for any additional lines added
+          line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+          -- Re-fetch buffer lines since they've changed
+          lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
         end
       end
 
-      -- Format response and append to buffer
-      local formatted_response = parser.format_assistant_message(modified_response)
-      local lines_to_append = vim.split(formatted_response, "\n")
-
-      -- Replace the placeholder with the actual content
-      local placeholder_height = indicator.end_row - indicator.start_row
-      vim.api.nvim_buf_set_lines(
-        buffer_id,
-        insertion_row,
-        insertion_row + placeholder_height,
-        false,
-        lines_to_append
-      )
-
-      -- Add a new user message template if not at the end
-      local new_line_count = vim.api.nvim_buf_line_count(buffer_id)
-      if new_line_count == insertion_row + #lines_to_append then
-        local new_user = parser.format_user_message("")
-        vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, vim.split(new_user, "\n"))
-      end
-
-      -- Auto-save if enabled
-      if config.options.chat_files.auto_save then
-        fileutils.save_chat_buffer(buffer_id)
-      end
-
-      -- Move cursor to end safely
-      local final_line_count = vim.api.nvim_buf_line_count(buffer_id)
-      local safe_pos = math.min(final_line_count, insertion_row + #lines_to_append)
-      -- Check if buffer is still valid before setting cursor
-      if vim.api.nvim_buf_is_valid(buffer_id) then
-        -- Only set cursor if the window is still showing this buffer
-        local current_buf = vim.api.nvim_get_current_buf()
-        if current_buf == buffer_id then
-          vim.api.nvim_win_set_cursor(0, { safe_pos, 0 })
-        end
-      end
-
-      -- Notify completion
-      vim.notify("AI response complete", vim.log.levels.INFO)
-      M.active_request = nil
-      M.active_indicator = nil
-    end,
-    function(error_msg)
-      -- Handle errors (same as before)
-      local insertion_row = utils.indicators.remove(indicator)
-
-      -- Create error message
-      local error_lines = {
-        "",
-        "<<< assistant",
-        "",
-        "❌ Error: " .. error_msg,
-        "",
-      }
-
-      -- Replace placeholder with error message
-      local placeholder_height = indicator.end_row - indicator.start_row
-      vim.api.nvim_buf_set_lines(
-        buffer_id,
-        insertion_row,
-        insertion_row + placeholder_height,
-        false,
-        error_lines
-      )
-
-      -- Show error notification
-      vim.notify(error_msg, vim.log.levels.ERROR)
-      M.active_request = nil
-      M.active_indicator = nil
+      return
     end
-  )
 
-  -- Store indicator for cancellation
-  M.active_indicator = indicator
+    -- Check for unexpanded YouTube blocks
+    local youtube = require('nai.fileutils.youtube')
+    if youtube.has_unexpanded_youtube_blocks(buffer_id) then
+      -- Handle the case where we have unexpanded YouTube blocks
+      vim.notify("Expanding YouTube transcript blocks. Press <Leader>r again to chat.", vim.log.levels.INFO)
+
+      -- Process lines in buffer to expand YouTube blocks
+      local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      local line_offset = 0
+
+      -- Find and expand YouTube blocks
+      for i, line in ipairs(lines) do
+        if line == ">>> youtube" then
+          -- This is an unexpanded YouTube block
+          local block_start = i - 1 + line_offset
+
+          -- Find the end of the YouTube block (next >>> or <<<)
+          local block_end = #lines
+          for j = i + 1, #lines do
+            if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+              block_end = j - 1 + line_offset
+              break
+            end
+          end
+
+          -- Expand the YouTube block directly in the buffer
+          local new_line_count = youtube.expand_youtube_block(buffer_id, block_start, block_end + 1)
+
+          -- Adjust line offset for any additional lines added
+          line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+          -- Re-fetch buffer lines since they've changed
+          lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+        end
+      end
+
+      return
+    end
+
+    -- At this point, no unexpanded blocks were found, proceed with chat
+
+    -- Get all buffer content
+    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+    local buffer_content = table.concat(lines, "\n")
+
+    -- Check if we need to enable auto-title
+    local needs_auto_title = false
+    if config.options.chat_files.auto_title then
+      -- Look for "title: Untitled" in the YAML header
+      for i, line in ipairs(lines) do
+        if line:match("^title:%s*Untitled") then
+          needs_auto_title = true
+          break
+        end
+        -- Exit the loop if we're past the YAML header
+        if line == "---" and i > 1 then
+          break
+        end
+      end
+    end
+
+    -- Parse buffer content into messages
+    local messages = parser.parse_chat_buffer(buffer_content)
+
+    -- Check if we have a user message at the end
+    local last_message = messages[#messages]
+    if not last_message or last_message.role ~= "user" then
+      -- No user message, add one now
+      local user_template = parser.format_user_message("")
+      local user_lines = vim.split(user_template, "\n")
+      vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, user_lines)
+
+      -- Position cursor on the 3rd line of new user message (after the blank line)
+      local line_count = vim.api.nvim_buf_line_count(buffer_id)
+      vim.api.nvim_win_set_cursor(0, { line_count, 0 })
+
+      -- Exit early - user needs to add their message
+      vim.notify("Please add your message first, then run NAIChat again", vim.log.levels.INFO)
+      return
+    end
+
+    -- Position cursor at the end of the buffer
+    local line_count = vim.api.nvim_buf_line_count(buffer_id)
+    vim.api.nvim_win_set_cursor(0, { line_count, 0 })
+
+    -- Create indicator at the end of buffer
+    local indicator = utils.indicators.create_assistant_placeholder(buffer_id, line_count)
+
+    -- Cancel any ongoing requests
+    if M.active_request then
+      M.cancel()
+    end
+
+    -- If we need auto-title, modify the system message
+    if needs_auto_title then
+      -- Find the system message
+      for i, msg in ipairs(messages) do
+        if msg.role == "system" then
+          -- Append the title request to the system message
+          msg.content = parser.get_system_prompt_with_title_request(true)
+          break
+        end
+      end
+    end
+
+    -- Call API
+    M.active_request = api.chat_request(
+      messages,
+      function(response)
+        -- Get the position where we need to replace the placeholder
+        local insertion_row = utils.indicators.remove(indicator)
+
+        -- Extract title if present
+        local modified_response = response
+
+        -- Check if response starts with "Proposed Title:"
+        local title_match = response:match("^Proposed Title:%s*(.-)[\r\n]")
+        if title_match then
+          -- Remove the title line from the response
+          modified_response = response:gsub("^Proposed Title:%s*.-%s*[\r\n]+", "")
+
+          -- Update the YAML frontmatter if we found a title
+          if title_match and title_match:len() > 0 then
+            -- Get all buffer content
+            local buffer_lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+
+            -- Find and update the title line in the YAML header
+            for i, line in ipairs(buffer_lines) do
+              if line:match("^title:%s*Untitled") then
+                buffer_lines[i] = "title: " .. title_match
+                vim.api.nvim_buf_set_lines(buffer_id, 0, -1, false, buffer_lines)
+                break
+              end
+            end
+          end
+        end
+
+        -- Format response and append to buffer
+        local formatted_response = parser.format_assistant_message(modified_response)
+        local lines_to_append = vim.split(formatted_response, "\n")
+
+        -- Replace the placeholder with the actual content
+        local placeholder_height = indicator.end_row - indicator.start_row
+        vim.api.nvim_buf_set_lines(
+          buffer_id,
+          insertion_row,
+          insertion_row + placeholder_height,
+          false,
+          lines_to_append
+        )
+
+        -- Add a new user message template if not at the end
+        local new_line_count = vim.api.nvim_buf_line_count(buffer_id)
+        if new_line_count == insertion_row + #lines_to_append then
+          local new_user = parser.format_user_message("")
+          vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, vim.split(new_user, "\n"))
+        end
+
+        -- Auto-save if enabled
+        if config.options.chat_files.auto_save then
+          fileutils.save_chat_buffer(buffer_id)
+        end
+
+        -- Move cursor to end safely
+        local final_line_count = vim.api.nvim_buf_line_count(buffer_id)
+        local safe_pos = math.min(final_line_count, insertion_row + #lines_to_append)
+        -- Check if buffer is still valid before setting cursor
+        if vim.api.nvim_buf_is_valid(buffer_id) then
+          -- Only set cursor if the window is still showing this buffer
+          local current_buf = vim.api.nvim_get_current_buf()
+          if current_buf == buffer_id then
+            vim.api.nvim_win_set_cursor(0, { safe_pos, 0 })
+          end
+        end
+
+        -- Notify completion
+        vim.notify("AI response complete", vim.log.levels.INFO)
+        M.active_request = nil
+        M.active_indicator = nil
+      end,
+      function(error_msg)
+        -- Handle errors (same as before)
+        local insertion_row = utils.indicators.remove(indicator)
+
+        -- Create error message
+        local error_lines = {
+          "",
+          "<<< assistant",
+          "",
+          "❌ Error: " .. error_msg,
+          "",
+        }
+
+        -- Replace placeholder with error message
+        local placeholder_height = indicator.end_row - indicator.start_row
+        vim.api.nvim_buf_set_lines(
+          buffer_id,
+          insertion_row,
+          insertion_row + placeholder_height,
+          false,
+          error_lines
+        )
+
+        -- Show error notification
+        vim.notify(error_msg, vim.log.levels.ERROR)
+        M.active_request = nil
+        M.active_indicator = nil
+      end
+    )
+
+    -- Store indicator for cancellation
+    M.active_indicator = indicator
+  end, opts)
 end
 
 function M.cancel()

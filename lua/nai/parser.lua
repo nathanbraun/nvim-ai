@@ -7,173 +7,176 @@ local config = require('nai.config')
 
 -- Parse chat buffer content into messages for API
 function M.parse_chat_buffer(content)
-  local lines = vim.split(content, "\n")
-  local messages = {}
-  local current_message = nil
-  local current_type = nil
-  local text_buffer = {}
-  local include_fileutils = require('nai.fileutils.include')
+  local profiler = require('nai.utils.profiler')
+  return profiler.measure("parse_chat_buffer", function(content)
+    local lines = vim.split(content, "\n")
+    local messages = {}
+    local current_message = nil
+    local current_type = nil
+    local text_buffer = {}
+    local include_fileutils = require('nai.fileutils.include')
 
-  for _, line in ipairs(lines) do
-    -- Skip YAML header
-    if line == "---" then
-      -- If we find a second '---', we're exiting the header
-      if current_type == "yaml_header" then
-        current_type = nil
-      else
-        current_type = "yaml_header"
-      end
-      goto continue
-    end
-
-    -- Skip YAML header content
-    if current_type == "yaml_header" then
-      goto continue
-    end
-
-    -- Process message markers
-    if line:match("^>>> system") then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "system" }
-      current_type = "system"
-    elseif line:match("^>>> user") then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "user"
-    elseif line:match("^<<< assistant") then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "assistant" }
-      current_type = "assistant"
-    elseif line:match("^>>> include") then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "include"
-    elseif line:match("^>>> snapshot") then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "snapshot"
-    elseif line:match("^>>> web") then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "web"
-    elseif line:match("^>>> scrape") then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "scrape"
-    elseif line:match("^>>> youtube") then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "youtube"
-    elseif current_message then
-      -- Skip the first empty line after a marker
-      if #text_buffer == 0 and line == "" then
+    for _, line in ipairs(lines) do
+      -- Skip YAML header
+      if line == "---" then
+        -- If we find a second '---', we're exiting the header
+        if current_type == "yaml_header" then
+          current_type = nil
+        else
+          current_type = "yaml_header"
+        end
         goto continue
       end
-      table.insert(text_buffer, line)
-    end
 
-    ::continue::
-  end
-
-  -- Add the last message if there is one
-  if current_message then
-    -- Special processing for include blocks
-    if current_type == "include" then
-      current_message.content = include_fileutils.process_include_block(text_buffer)
-    elseif current_type == "snapshot" then
-      local snapshot_module = require('nai.fileutils.snapshot')
-      current_message.content = snapshot_module.process_snapshot_block(text_buffer)
-    elseif current_type == "web" then
-      local web_module = require('nai.fileutils.web')
-      current_message.content = web_module.process_web_block(text_buffer)
-    elseif current_type == "youtube" then
-      local youtube_module = require('nai.fileutils.youtube')
-      current_message.content = youtube_module.process_youtube_block(text_buffer)
-    elseif current_type == "scrape" then
-      -- Special handling for scrape blocks
-      -- In API requesting mode, we want to include the content, not the command
-      local in_content_section = false
-      local content_lines = {}
-
-      for _, line in ipairs(text_buffer) do
-        if line:match("^<<< content%s+%[") then
-          in_content_section = true
-        elseif in_content_section then
-          table.insert(content_lines, line)
-        end
+      -- Skip YAML header content
+      if current_type == "yaml_header" then
+        goto continue
       end
 
-      if #content_lines > 0 then
-        -- If we have content, use that
-        current_message.content = table.concat(content_lines, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+      -- Process message markers
+      if line:match("^>>> system") then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
+        end
+        current_message = { role = "system" }
+        current_type = "system"
+      elseif line:match("^>>> user") then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
+        end
+        current_message = { role = "user" }
+        current_type = "user"
+      elseif line:match("^<<< assistant") then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
+        end
+        current_message = { role = "assistant" }
+        current_type = "assistant"
+      elseif line:match("^>>> include") then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
+        end
+        current_message = { role = "user" }
+        current_type = "include"
+      elseif line:match("^>>> snapshot") then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
+        end
+        current_message = { role = "user" }
+        current_type = "snapshot"
+      elseif line:match("^>>> web") then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
+        end
+        current_message = { role = "user" }
+        current_type = "web"
+      elseif line:match("^>>> scrape") then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
+        end
+        current_message = { role = "user" }
+        current_type = "scrape"
+      elseif line:match("^>>> youtube") then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
+        end
+        current_message = { role = "user" }
+        current_type = "youtube"
+      elseif current_message then
+        -- Skip the first empty line after a marker
+        if #text_buffer == 0 and line == "" then
+          goto continue
+        end
+        table.insert(text_buffer, line)
+      end
+
+      ::continue::
+    end
+
+    -- Add the last message if there is one
+    if current_message then
+      -- Special processing for include blocks
+      if current_type == "include" then
+        current_message.content = include_fileutils.process_include_block(text_buffer)
+      elseif current_type == "snapshot" then
+        local snapshot_module = require('nai.fileutils.snapshot')
+        current_message.content = snapshot_module.process_snapshot_block(text_buffer)
+      elseif current_type == "web" then
+        local web_module = require('nai.fileutils.web')
+        current_message.content = web_module.process_web_block(text_buffer)
+      elseif current_type == "youtube" then
+        local youtube_module = require('nai.fileutils.youtube')
+        current_message.content = youtube_module.process_youtube_block(text_buffer)
+      elseif current_type == "scrape" then
+        -- Special handling for scrape blocks
+        -- In API requesting mode, we want to include the content, not the command
+        local in_content_section = false
+        local content_lines = {}
+
+        for _, line in ipairs(text_buffer) do
+          if line:match("^<<< content%s+%[") then
+            in_content_section = true
+          elseif in_content_section then
+            table.insert(content_lines, line)
+          end
+        end
+
+        if #content_lines > 0 then
+          -- If we have content, use that
+          current_message.content = table.concat(content_lines, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+        else
+          -- Otherwise, use the raw text
+          current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+        end
       else
-        -- Otherwise, use the raw text
         current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
       end
-    else
-      current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+      table.insert(messages, current_message)
     end
-    table.insert(messages, current_message)
-  end
 
-  -- After parsing all messages, check if we have a system message
-  local has_system_message = false
-  for _, msg in ipairs(messages) do
-    if msg.role == "system" then
-      has_system_message = true
-      break
+    -- After parsing all messages, check if we have a system message
+    local has_system_message = false
+    for _, msg in ipairs(messages) do
+      if msg.role == "system" then
+        has_system_message = true
+        break
+      end
     end
-  end
 
-  -- If no system message was found, add a default one at the beginning
-  if not has_system_message then
-    table.insert(messages, 1, {
-      role = "system",
-      content = config.options.default_system_prompt
-    })
-  end
+    -- If no system message was found, add a default one at the beginning
+    if not has_system_message then
+      table.insert(messages, 1, {
+        role = "system",
+        content = config.options.default_system_prompt
+      })
+    end
 
-  return messages
+    return messages
+  end, content)
 end
 
 -- Format a new assistant message for the buffer

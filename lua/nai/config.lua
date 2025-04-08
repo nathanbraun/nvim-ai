@@ -11,13 +11,13 @@ M.defaults = {
     openai = {
       model = "gpt-4o",
       temperature = 0.7,
-      max_tokens = 1000,
+      max_tokens = 10000,
       endpoint = "https://api.openai.com/v1/chat/completions",
     },
     openrouter = {
       model = "google/gemini-2.0-flash-001",
       temperature = 0.7,
-      max_tokens = 1000,
+      max_tokens = 10000,
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
       models = {
         "anthropic/claude-3.7-sonnet",
