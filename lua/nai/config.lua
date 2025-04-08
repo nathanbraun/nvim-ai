@@ -7,6 +7,10 @@ M.defaults = {
     file_path = "~/.config/nvim-ai/credentials.json", -- Single file for all credentials
   },
   active_provider = "openrouter",                     -- "openai", "openrouter", etc.
+  mappings = {
+    enabled = true,                                   -- Whether to apply default key mappings
+    -- Default mappings will be used from the mappings module
+  },
   providers = {
     openai = {
       model = "gpt-4o",

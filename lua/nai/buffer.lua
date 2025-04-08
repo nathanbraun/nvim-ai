@@ -75,42 +75,9 @@ function M.activate_buffer(bufnr)
   -- Mark buffer as activated
   M.activated_buffers[bufnr] = true
 
-  -- Register buffer-local commands
-  vim.api.nvim_buf_create_user_command(bufnr, 'NAIChat', function(opts)
-    require('nai').chat(opts)
-  end, { range = true, nargs = '?', desc = 'AI chat in current buffer' })
-
-  vim.api.nvim_buf_create_user_command(bufnr, 'NAINewMessage', function()
-    local parser = require('nai.parser')
-    local user_template = parser.format_user_message("")
-    local user_lines = vim.split(user_template, "\n")
-
-    -- Add at the end of the buffer
-    vim.api.nvim_buf_set_lines(bufnr, -1, -1, false, user_lines)
-
-    -- Position cursor on the 3rd line of new user message
-    local line_count = vim.api.nvim_buf_line_count(bufnr)
-    vim.api.nvim_win_set_cursor(0, { line_count, 0 })
-  end, { desc = 'Add a new user message' })
-
-  -- Add key mappings (buffer-local)
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>c', ':NAIChat<CR>',
-    { noremap = true, silent = true, desc = 'Continue chat' })
-
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>apu', ':NAINewMessage<CR>',
-    { noremap = true, silent = true, desc = 'Add new user message' })
-
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>aps', ':NAIScrape<CR>',
-    { noremap = true, silent = true, desc = 'Add new scrape message' })
-
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>apw', ':NAIWeb<CR>',
-    { noremap = true, silent = true, desc = 'Add new web message' })
-
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>apy', ':NAIYoutube<CR>',
-    { noremap = true, silent = true, desc = 'Add new youtube message' })
-
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>am', ':NAIModel<CR>',
-    { noremap = true, silent = true, desc = 'Add new user message' })
+  if config.options.mappings.enabled then
+    require('nai.mappings').apply_to_buffer(bufnr)
+  end
 
   -- Explicitly apply syntax highlighting
   if config.options.active_filetypes.enable_overlay then

@@ -9,6 +9,7 @@ local utils = require('nai.utils')
 -- Setup function that should be called by the user
 function M.setup(opts)
   config.setup(opts)
+  require('nai.mappings').setup(opts)
 
   -- Additional setup if needed
   return M
