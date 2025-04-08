@@ -85,6 +85,10 @@ function M.activate_buffer(bufnr)
     M.apply_syntax_overlay(bufnr)
   end
 
+  if config.options.active_filetypes.enable_folding ~= false then
+    require('nai.folding').apply_to_buffer(bufnr)
+  end
+
   -- Add cleanup on buffer unload
   local augroup = vim.api.nvim_create_augroup('NaiBufferCleanup' .. bufnr, { clear = true })
   vim.api.nvim_create_autocmd("BufUnload", {
@@ -129,6 +133,9 @@ function M.deactivate_buffer(bufnr)
 
   -- Clear highlights
   vim.api.nvim_buf_clear_namespace(bufnr, M.overlay_ns, 0, -1)
+
+  -- Restore original folding
+  require('nai.folding').restore_original(bufnr)
 
   -- Restore original mappings
   require('nai.mappings').restore_original_mappings(bufnr)

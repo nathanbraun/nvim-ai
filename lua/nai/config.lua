@@ -41,6 +41,7 @@ M.defaults = {
     patterns = { "*.md", "*.markdown", "*.wiki" }, -- File patterns to activate on
     autodetect = true,                             -- Detect chat blocks in any file
     enable_overlay = true,                         -- Enable syntax overlay
+    enable_folding = true,                         -- Enable chat folding
   },
   tools = {
     dumpling = {
