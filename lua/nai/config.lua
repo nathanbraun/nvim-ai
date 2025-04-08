@@ -45,7 +45,6 @@ M.defaults = {
   },
   tools = {
     web = {
-      method = "simple",                                       -- "simple" for basic curl/html2text, "dumpling" for Dumpling AI
       dumpling = {
         endpoint = "https://app.dumplingai.com/api/v1/scrape", -- Dumpling browse endpoint
         format = "markdown",                                   -- Output format: markdown, html, or screenshot

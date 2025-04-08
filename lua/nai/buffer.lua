@@ -94,11 +94,20 @@ function M.activate_buffer(bufnr)
   end, { desc = 'Add a new user message' })
 
   -- Add key mappings (buffer-local)
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>ac', ':NAIChat<CR>',
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>c', ':NAIChat<CR>',
     { noremap = true, silent = true, desc = 'Continue chat' })
 
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>au', ':NAINewMessage<CR>',
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>apu', ':NAINewMessage<CR>',
     { noremap = true, silent = true, desc = 'Add new user message' })
+
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>aps', ':NAIScrape<CR>',
+    { noremap = true, silent = true, desc = 'Add new scrape message' })
+
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>apw', ':NAIWeb<CR>',
+    { noremap = true, silent = true, desc = 'Add new web message' })
+
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>apy', ':NAIYoutube<CR>',
+    { noremap = true, silent = true, desc = 'Add new youtube message' })
 
   vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>am', ':NAIModel<CR>',
     { noremap = true, silent = true, desc = 'Add new user message' })
@@ -201,8 +210,8 @@ function M.create_activation_command()
       require('nai').chat(opts)
     end, { range = true, nargs = '?', desc = 'AI chat in current buffer' })
 
-    vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>r', ':NAIChat<CR>',
-      { noremap = true, silent = true, desc = 'Continue chat' })
+    -- vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>r', ':NAIChat<CR>',
+    --   { noremap = true, silent = true, desc = 'Continue chat' })
   end, { desc = 'Activate NAI Chat for current buffer' })
 end
 

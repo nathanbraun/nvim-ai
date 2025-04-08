@@ -208,6 +208,22 @@ function M.chat(opts)
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
   local buffer_content = table.concat(lines, "\n")
 
+  -- Check if we need to enable auto-title
+  local needs_auto_title = false
+  if config.options.chat_files.auto_title then
+    -- Look for "title: Untitled" in the YAML header
+    for i, line in ipairs(lines) do
+      if line:match("^title:%s*Untitled") then
+        needs_auto_title = true
+        break
+      end
+      -- Exit the loop if we're past the YAML header
+      if line == "---" and i > 1 then
+        break
+      end
+    end
+  end
+
   -- Parse buffer content into messages
   local messages = parser.parse_chat_buffer(buffer_content)
 
@@ -238,6 +254,18 @@ function M.chat(opts)
   -- Cancel any ongoing requests
   if M.active_request then
     M.cancel()
+  end
+
+  -- If we need auto-title, modify the system message
+  if needs_auto_title then
+    -- Find the system message
+    for i, msg in ipairs(messages) do
+      if msg.role == "system" then
+        -- Append the title request to the system message
+        msg.content = parser.get_system_prompt_with_title_request(true)
+        break
+      end
+    end
   end
 
   -- Call API

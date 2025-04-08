@@ -12,10 +12,6 @@ vim.api.nvim_create_user_command('NAIChat', function(opts)
   require('nai').chat(opts)
 end, { range = true, nargs = '?', desc = 'AI chat' })
 
-vim.api.nvim_create_user_command('NAIProvider', function(opts)
-  require('nai').switch_provider(opts.args)
-end, { nargs = 1, desc = 'Switch AI provider (openai or openrouter)' })
-
 vim.api.nvim_create_user_command('NAICancel', function()
   require('nai').cancel()
 end, { desc = 'Cancel ongoing AI request' })
