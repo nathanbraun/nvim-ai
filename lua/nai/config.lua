@@ -60,8 +60,24 @@ M.defaults = {
     id_length = 4,                         -- Length of random ID
     use_timestamp = false,                 -- Use timestamp instead of random ID if true
     auto_title = true,                     -- Automatically generate title for untitled chats
+    header = {
+      enabled = true,                      -- Whether to include YAML header
+      template = [[---
+title: {title}
+date: {date}
+tags: [ai]
+---]],
+    },
   },
   default_system_prompt = "You are a general assistant.",
+  highlights = {
+    user = { fg = "#88AAFF", bold = true },            -- User message highlighting
+    assistant = { fg = "#AAFFAA", bold = true },       -- Assistant message highlighting
+    system = { fg = "#FFAA88", bold = true },          -- System message highlighting
+    special_block = { fg = "#AAAAFF", bold = true },   -- Special blocks (scrape, youtube, etc.)
+    error_block = { fg = "#FF8888", bold = true },     -- Error blocks
+    content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
+  },
 }
 
 -- Current configuration (will be populated by setup)

@@ -235,17 +235,31 @@ end
 
 -- Generate a YAML header with auto title
 function M.generate_header(title)
+  -- Get header configuration
+  local header_config = config.options.chat_files.header or {}
+
+  -- Check if headers are enabled (default to true if not specified)
+  if header_config.enabled == false then
+    return "" -- Return empty string if disabled
+  end
+
   -- Generate a date in YYYY-MM-DD format
   local date = os.date("%Y-%m-%d")
 
   -- If no title provided, use a placeholder
   title = title or "New Chat"
 
-  return string.format([[---
-title: %s
-date: %s
+  -- Get template from config or use default
+  local template = header_config.template or [[---
+title: {title}
+date: {date}
 tags: [ai]
----]], title, date)
+---]]
+
+  -- Replace variables in template
+  local header = template:gsub("{title}", title):gsub("{date}", date)
+
+  return header
 end
 
 -- Generate a system prompt that includes title instruction when needed

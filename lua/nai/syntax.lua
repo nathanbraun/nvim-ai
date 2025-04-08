@@ -3,15 +3,62 @@ local M = {}
 
 -- Define highlight groups if they don't already exist
 function M.define_highlight_groups()
-  -- User message highlighting
-  vim.cmd([[
-    highlight default naichatUser guifg=#88AAFF ctermfg=111 gui=bold cterm=bold
-    highlight default naichatAssistant guifg=#AAFFAA ctermfg=157 gui=bold cterm=bold
-    highlight default naichatSystem guifg=#FFAA88 ctermfg=216 gui=bold cterm=bold
-    highlight default naichatSpecialBlock guifg=#AAAAFF ctermfg=147 gui=bold cterm=bold
-    highlight default naichatErrorBlock guifg=#FF8888 ctermfg=210 gui=bold cterm=bold
-    highlight default naichatContentStart guifg=#AAAAAA ctermfg=145 gui=italic cterm=italic
-  ]])
+  local config = require('nai.config')
+  local hl_config = config.options.highlights
+
+  -- Helper function to create highlight command
+  local function create_highlight_cmd(name, opts)
+    local cmd = "highlight default " .. name
+
+    -- Add foreground color if specified
+    if opts.fg then
+      cmd = cmd .. " guifg=" .. opts.fg
+    end
+
+    -- Add background color if specified
+    if opts.bg then
+      cmd = cmd .. " guibg=" .. opts.bg
+    end
+
+    -- Add GUI options
+    local gui_opts = {}
+    if opts.bold then table.insert(gui_opts, "bold") end
+    if opts.italic then table.insert(gui_opts, "italic") end
+    if opts.underline then table.insert(gui_opts, "underline") end
+
+    if #gui_opts > 0 then
+      cmd = cmd .. " gui=" .. table.concat(gui_opts, ",")
+    end
+
+    -- Add terminal colors if specified
+    if opts.ctermfg then
+      cmd = cmd .. " ctermfg=" .. opts.ctermfg
+    end
+
+    if opts.ctermbg then
+      cmd = cmd .. " ctermbg=" .. opts.ctermbg
+    end
+
+    -- Add terminal options
+    local cterm_opts = {}
+    if opts.bold then table.insert(cterm_opts, "bold") end
+    if opts.italic then table.insert(cterm_opts, "italic") end
+    if opts.underline then table.insert(cterm_opts, "underline") end
+
+    if #cterm_opts > 0 then
+      cmd = cmd .. " cterm=" .. table.concat(cterm_opts, ",")
+    end
+
+    return cmd
+  end
+
+  -- Define highlights using config
+  vim.cmd(create_highlight_cmd("naichatUser", hl_config.user))
+  vim.cmd(create_highlight_cmd("naichatAssistant", hl_config.assistant))
+  vim.cmd(create_highlight_cmd("naichatSystem", hl_config.system))
+  vim.cmd(create_highlight_cmd("naichatSpecialBlock", hl_config.special_block))
+  vim.cmd(create_highlight_cmd("naichatErrorBlock", hl_config.error_block))
+  vim.cmd(create_highlight_cmd("naichatContentStart", hl_config.content_start))
 end
 
 -- Apply our syntax highlighting to a buffer while preserving existing syntax

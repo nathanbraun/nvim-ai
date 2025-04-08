@@ -213,6 +213,19 @@ vim.api.nvim_create_user_command('NAIModel', function()
   require('nai.tools.picker').select_model()
 end, { nargs = 0, desc = 'Select LLM model' })
 
+vim.api.nvim_create_user_command('NAIRefreshHighlights', function()
+  require('nai.syntax').define_highlight_groups()
+
+  -- Reapply syntax to all activated buffers
+  for bufnr, _ in pairs(require('nai.buffer').activated_buffers) do
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      require('nai.buffer').apply_syntax_overlay(bufnr)
+    end
+  end
+
+  vim.notify("NAI syntax highlighting refreshed", vim.log.levels.INFO)
+end, { desc = 'Refresh NAI syntax highlighting' })
+
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()
