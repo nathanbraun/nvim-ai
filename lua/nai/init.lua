@@ -17,25 +17,6 @@ end
 
 M.active_request = nil
 
-function M.cancel()
-  if M.active_request then
-    if vim.system and M.active_request.terminate then
-      M.active_request:terminate()
-    elseif not vim.system and M.active_request.close then
-      M.active_request:close()
-    end
-    M.active_request = nil
-
-    -- Remove the indicator if it exists
-    if M.active_indicator then
-      utils.indicators.remove(M.active_indicator)
-      M.active_indicator = nil
-    end
-
-    vim.notify("AI completion cancelled", vim.log.levels.INFO)
-  end
-end
-
 -- Development helper to reload the plugin
 function M.reload()
   -- Clear the module cache for the plugin
@@ -383,43 +364,36 @@ end
 
 function M.cancel()
   if M.active_request then
-    if vim.system and M.active_request.terminate then
-      M.active_request:terminate()
-    elseif not vim.system and M.active_request.close then
-      M.active_request:close()
-    end
+    -- Cancel the request
+    api.cancel_request(M.active_request)
     M.active_request = nil
 
     -- Handle indicator cleanup
     if M.active_indicator then
-      if M.active_indicator.legacy then
-        -- Handle legacy indicators (the simple virt_text ones)
-        utils.indicators.remove_legacy(M.active_indicator)
-      else
-        -- Get insertion point for replacing with cancellation message
-        local buffer_id = M.active_indicator.buffer_id
-        local insertion_row = utils.indicators.remove(M.active_indicator)
+      local buffer_id = M.active_indicator.buffer_id
 
-        -- Create cancelled message
-        local cancelled_lines = {
-          "",
-          "<<< assistant",
-          "",
-          "⚠️ Request cancelled",
-          "",
-        }
+      -- Stop the timer if it exists
+      if M.active_indicator.timer then
+        M.active_indicator.timer:stop()
+        M.active_indicator.timer:close()
+      end
 
-        -- Replace placeholder with cancelled message
-        local placeholder_height = M.active_indicator.end_row - M.active_indicator.start_row
-        if vim.api.nvim_buf_is_valid(buffer_id) then
-          vim.api.nvim_buf_set_lines(
-            buffer_id,
-            insertion_row,
-            insertion_row + placeholder_height,
-            false,
-            cancelled_lines
-          )
-        end
+      -- Check if buffer is valid
+      if vim.api.nvim_buf_is_valid(buffer_id) then
+        -- Get the end row of the indicator
+        local end_row = M.active_indicator.end_row
+
+        -- Add a new line right after the indicator
+        vim.api.nvim_buf_set_lines(
+          buffer_id,
+          end_row,
+          end_row,
+          false,
+          { "CANCELLED BY USER" }
+        )
+
+        -- Force redraw
+        vim.cmd("redraw")
       end
 
       M.active_indicator = nil

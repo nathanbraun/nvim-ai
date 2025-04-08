@@ -3,11 +3,15 @@
 
 local M = {}
 local config = require('nai.config')
+M.cancelled_requests = {}
 
 -- Handle chat API request
 function M.chat_request(messages, on_complete, on_error)
   local profiler = require('nai.utils.profiler')
   return profiler.measure("prepare_chat_request", function(messages, on_complete, on_error)
+    -- Generate a unique request ID
+    local request_id = tostring(os.time()) .. "_" .. tostring(math.random(10000))
+
     local provider = config.options.active_provider
     local provider_config = config.get_provider_config()
     local api_key = config.get_api_key(provider)
@@ -39,6 +43,12 @@ function M.chat_request(messages, on_complete, on_error)
       "-H", auth_header,
       "-d", json_data
     }, { text = true }, function(obj)
+      -- Check if this request was cancelled
+      if M.cancelled_requests[request_id] then
+        M.cancelled_requests[request_id] = nil
+        return
+      end
+
       if obj.code ~= 0 then
         vim.schedule(function()
           on_error("Request failed with code " .. obj.code)
@@ -81,8 +91,26 @@ function M.chat_request(messages, on_complete, on_error)
       end
     end)
 
+    -- Store the request ID with the handle for cancellation
+    handle.request_id = request_id
+
     return handle
   end, messages, on_complete, on_error)
+end
+
+function M.cancel_request(handle)
+  if handle and handle.request_id then
+    M.cancelled_requests[handle.request_id] = true
+  end
+
+  -- Attempt to terminate the process
+  if handle then
+    if vim.system and handle.terminate then
+      handle:terminate()
+    elseif not vim.system and handle.close then
+      handle:close()
+    end
+  end
 end
 
 return M

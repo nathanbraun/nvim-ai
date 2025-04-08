@@ -128,6 +128,9 @@ function M.deactivate_buffer(bufnr)
 
   -- Clear highlights
   vim.api.nvim_buf_clear_namespace(bufnr, M.overlay_ns, 0, -1)
+
+  -- Restore original mappings
+  require('nai.mappings').restore_original_mappings(bufnr)
 end
 
 -- Set up autocmd to check files when they're loaded

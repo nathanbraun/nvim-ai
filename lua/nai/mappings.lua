@@ -1,3 +1,5 @@
+local config = require('nai.config') -- Add this line to properly import the config module
+
 -- lua/nai/mappings.lua
 local M = {}
 
@@ -61,6 +63,25 @@ function M.apply_to_buffer(bufnr)
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.toggle_provider, ':NAIProvider<CR>',
     { noremap = true, silent = true, desc = 'Select provider' })
 
+  -- Add Ctrl+C mapping if enabled
+  if config.options.mappings.intercept_ctrl_c then
+    -- Save the original mapping for restoration
+    local original_ctrl_c = vim.fn.maparg("<C-c>", "n", false, true)
+    if original_ctrl_c and original_ctrl_c.rhs then
+      -- Store the original mapping in a buffer variable
+      vim.api.nvim_buf_set_var(bufnr, "nai_original_ctrl_c", original_ctrl_c)
+    end
+
+    -- Map Ctrl+C to cancel in normal mode
+    vim.api.nvim_buf_set_keymap(bufnr, 'n', '<C-c>', ':NAICancel<CR>',
+      { noremap = true, silent = true, desc = 'Cancel AI request' })
+
+    -- For insert mode, we need to be more careful - only intercept if an AI request is active
+    -- This function will check if there's an active request
+    vim.api.nvim_buf_set_keymap(bufnr, 'i', '<C-c>', [[<Cmd>lua require('nai.mappings').handle_ctrl_c()<CR>]],
+      { noremap = true, silent = true, desc = 'Cancel AI request or exit insert mode' })
+  end
+
   -- Try to set up which-key if available
   M.setup_which_key()
 end
@@ -93,6 +114,44 @@ function M.setup(opts)
         end
       end
     end
+  end
+end
+
+-- Add a new function to handle Ctrl+C in insert mode
+function M.handle_ctrl_c()
+  local nai = require('nai')
+
+  -- If there's an active request, cancel it
+  if nai.active_request then
+    nai.cancel()
+    return
+  end
+
+  -- Otherwise, behave like normal Ctrl+C (exit insert mode)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), 'n', true)
+end
+
+-- Add a function to restore original mappings
+function M.restore_original_mappings(bufnr)
+  -- Check if we have stored an original Ctrl+C mapping
+  local success, original_ctrl_c = pcall(vim.api.nvim_buf_get_var, bufnr, "nai_original_ctrl_c")
+
+  if success and original_ctrl_c then
+    -- Restore the original mapping
+    vim.api.nvim_buf_set_keymap(bufnr,
+      original_ctrl_c.mode,
+      original_ctrl_c.lhs,
+      original_ctrl_c.rhs,
+      {
+        noremap = original_ctrl_c.noremap == 1,
+        silent = original_ctrl_c.silent == 1,
+        expr = original_ctrl_c.expr == 1,
+        nowait = original_ctrl_c.nowait == 1
+      })
+  else
+    -- If no original mapping, just clear our mapping
+    vim.api.nvim_buf_del_keymap(bufnr, 'n', '<C-c>')
+    vim.api.nvim_buf_del_keymap(bufnr, 'i', '<C-c>')
   end
 end
 

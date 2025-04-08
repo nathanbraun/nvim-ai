@@ -9,6 +9,7 @@ M.defaults = {
   active_provider = "openrouter",                     -- "openai", "openrouter", etc.
   mappings = {
     enabled = true,                                   -- Whether to apply default key mappings
+    intercept_ctrl_c = true,                          -- New option to intercept Ctrl+C
     -- Default mappings will be used from the mappings module
   },
   providers = {

@@ -187,13 +187,3 @@ end, { nargs = 0, desc = 'Select LLM model' })
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()
-
--- -- Register the file type
--- vim.api.nvim_create_autocmd({ "BufNewFile", "BufRead" }, {
---   pattern = "*.naichat",
---   callback = function()
---     vim.bo.filetype = "naichat"
---     vim.wo.conceallevel = 2
---     vim.wo.concealcursor = "nc" -- Hide concealed text in normal and command mode
---   end,
--- })
