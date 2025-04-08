@@ -58,6 +58,9 @@ function M.apply_to_buffer(bufnr)
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.select_model, ':NAIModel<CR>',
     { noremap = true, silent = true, desc = 'Select model' })
 
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.toggle_provider, ':NAIProvider<CR>',
+    { noremap = true, silent = true, desc = 'Select provider' })
+
   -- Try to set up which-key if available
   M.setup_which_key()
 end

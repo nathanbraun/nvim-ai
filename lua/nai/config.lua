@@ -13,13 +13,17 @@ M.defaults = {
   },
   providers = {
     openai = {
+      name = "OpenAI",
+      description = "OpenAI API (GPT models)",
       model = "gpt-4o",
       temperature = 0.7,
       max_tokens = 10000,
       endpoint = "https://api.openai.com/v1/chat/completions",
     },
     openrouter = {
-      model = "google/gemini-2.0-flash-001",
+      name = "OpenRouter",
+      description = "OpenRouter API (Multiple providers)",
+      model = "anthropic/claude-3.7-sonnet",
       temperature = 0.7,
       max_tokens = 10000,
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
@@ -63,7 +67,7 @@ M.defaults = {
   },
   chat_files = {
     directory = vim.fn.expand("~/naichat/"), -- Default save location
-    format = "{id}-ai.md",                   -- Filename format
+    format = "{id}.wiki",                    -- Filename format
     auto_save = false,                       -- Save after each interaction
     id_length = 4,                           -- Length of random ID
     use_timestamp = false,                   -- Use timestamp instead of random ID if true
