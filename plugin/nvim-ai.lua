@@ -63,6 +63,35 @@ end, {
   end
 })
 
+vim.api.nvim_create_user_command('NAICrawl', function(opts)
+  local parser = require('nai.parser')
+  local url = opts.args
+
+  -- Insert a properly formatted crawl block at cursor position
+  local crawl_block = parser.format_crawl_block(url)
+  local lines = vim.split(crawl_block, "\n")
+
+  -- Insert at cursor position
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local row = cursor[1] - 1
+
+  vim.api.nvim_buf_set_lines(0, row, row, false, lines)
+
+  -- Position cursor at end of inserted block
+  vim.api.nvim_win_set_cursor(0, { row + #lines, 0 })
+end, {
+  nargs = "?",
+  desc = "Insert a website crawl block at cursor position",
+  complete = function(ArgLead, CmdLine, CursorPos)
+    -- Simple clipboard-based URL completion
+    local clipboard = vim.fn.getreg("+"):match("https?://[%w%p]+")
+    if clipboard and clipboard:find(ArgLead, 1, true) == 1 then
+      return { clipboard }
+    end
+    return {}
+  end
+})
+
 vim.api.nvim_create_user_command('NAIExpandScrape', function()
   local scrape = require('nai.fileutils.scrape')
   local buffer_id = vim.api.nvim_get_current_buf()

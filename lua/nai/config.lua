@@ -58,15 +58,12 @@ M.defaults = {
       format = "markdown",                                  -- Output format: markdown, html, or screenshot
       cleaned = true,                                       -- Whether to clean the output
       render_js = true,                                     -- Whether to render JavaScript
-      max_content_length = 100000,                           -- Max length to prevent excessively large responses
+      max_content_length = 100000,                          -- Max length to prevent excessively large responses
       include_timestamps = true,                            -- Whether to include timestamps in the output
     },
   },
-  ui = {
-    chat_position = "split", -- "split", "vsplit", or "tab"
-  },
   chat_files = {
-    directory = vim.fn.expand("~/naichat/"), -- Default save location
+    directory = vim.fn.expand("~/notes/"), -- Default save location
     format = "{id}.wiki",                    -- Filename format
     auto_save = false,                       -- Save after each interaction
     id_length = 4,                           -- Length of random ID

@@ -186,6 +186,53 @@ function M.chat(opts)
       return
     end
 
+    -- Check for unexpanded crawl blocks
+    local crawl = require('nai.fileutils.crawl')
+    if crawl.has_unexpanded_crawl_blocks(buffer_id) then
+      -- Handle the case where we have unexpanded crawl blocks
+      vim.notify("Expanding crawl blocks. Press <Leader>r again to chat.", vim.log.levels.INFO)
+
+      -- Process lines in buffer to expand crawl blocks
+      local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      local line_offset = 0
+
+      -- Find and expand crawl blocks
+      for i, line in ipairs(lines) do
+        if line == ">>> crawl" then
+          -- This is an unexpanded crawl block
+          local block_start = i - 1 + line_offset
+
+          -- Find the end of the crawl block (next >>> or <<<)
+          local block_end = #lines
+          for j = i + 1, #lines do
+            if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+              block_end = j - 1 + line_offset
+              break
+            end
+          end
+
+          -- Expand the crawl block directly in the buffer
+          local new_line_count = crawl.expand_crawl_block(buffer_id, block_start, block_end + 1)
+
+          -- Adjust line offset for any additional lines added
+          line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+          -- Re-fetch buffer lines since they've changed
+          lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+        end
+      end
+
+      return
+    end
+
+    -- Check if there are any active crawl requests still in progress
+    if crawl.has_active_requests() then
+      vim.notify("Crawl requests are still in progress. Please wait for completion before chatting.",
+        vim.log.levels.WARN)
+      return
+    end
+
+
     -- At this point, no unexpanded blocks were found, proceed with chat
 
     -- Get all buffer content

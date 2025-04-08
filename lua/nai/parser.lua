@@ -88,6 +88,15 @@ function M.parse_chat_buffer(content)
         end
         current_message = { role = "user" }
         current_type = "web"
+      elseif line:match("^>>> crawl") then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
+        end
+        current_message = { role = "user" }
+        current_type = "crawl"
       elseif line:match("^>>> scrape") then
         -- Finish previous message if exists
         if current_message then
@@ -131,6 +140,9 @@ function M.parse_chat_buffer(content)
       elseif current_type == "youtube" then
         local youtube_module = require('nai.fileutils.youtube')
         current_message.content = youtube_module.process_youtube_block(text_buffer)
+      elseif current_type == "crawl" then
+        local crawl_module = require('nai.fileutils.crawl')
+        current_message.content = crawl_module.process_crawl_block(text_buffer)
       elseif current_type == "scrape" then
         -- Special handling for scrape blocks
         -- In API requesting mode, we want to include the content, not the command
@@ -200,6 +212,11 @@ function M.format_system_message(content)
   return "\n>>> system\n\n" .. content
 end
 
+-- Format a crawl block for the buffer
+function M.format_crawl_block(url)
+  return "\n>>> crawl\n\n" .. url .. "\n\n-- limit: 5\n-- depth: 2\n-- format: markdown"
+end
+
 -- Format an include block for the buffer
 function M.format_include_block(content)
   return "\n>>> include\n\n" .. content
@@ -226,7 +243,7 @@ function M.generate_header(title)
   return string.format([[---
 title: %s
 date: %s
-tags: [naichat]
+tags: [ai]
 ---]], title, date)
 end
 

@@ -8,18 +8,19 @@ M.defaults = {
   -- Chat commands
   chat = {
     continue = "<Leader>c", -- Continue chat
-    new = "<Leader>an",     -- New chat
+    new = "<Leader>ai",     -- New chat
     cancel = "<Leader>ax",  -- Cancel request
   },
 
   -- Insert commands
   insert = {
-    user_message = "<Leader>aiu", -- Add user message
-    scrape = "<Leader>aid",       -- Add scrape block
-    web = "<Leader>aiw",          -- Add web block
-    youtube = "<Leader>aiy",      -- Add YouTube block
-    include = "<Leader>aii",      -- Add include block
-    snapshot = "<Leader>ais",     -- Add snapshot block
+    user_message = "<Leader>apu", -- Add user message
+    scrape = "<Leader>apd",       -- Add scrape block
+    web = "<Leader>apw",          -- Add web block
+    youtube = "<Leader>apy",      -- Add YouTube block
+    include = "<Leader>api",      -- Add include block
+    snapshot = "<Leader>aps",     -- Add snapshot block
+    crawl = "<Leader>apc",        -- Add snapshot block
   },
 
   -- Settings
@@ -55,6 +56,9 @@ function M.apply_to_buffer(bufnr)
     { noremap = true, silent = true, desc = 'Add include block' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.snapshot, ':NAISnapshot<CR>',
     { noremap = true, silent = true, desc = 'Add snapshot block' })
+
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.crawl, ':NAICrawl<CR>',
+    { noremap = true, silent = true, desc = 'Add crawl block' })
 
   -- Settings
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.select_model, ':NAIModel<CR>',
