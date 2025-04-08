@@ -1,5 +1,6 @@
 local M = {}
 local config = require('nai.config')
+local constants = require('nai.constants')
 
 -- Store activated buffers
 M.activated_buffers = {}
@@ -30,7 +31,7 @@ function M.detect_chat_markers(bufnr)
 
   -- Get buffer lines
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  local markers = config.options.active_filetypes.block_markers
+  local markers = constants.MARKERS
 
   -- Check for presence of any markers
   for _, line in ipairs(lines) do

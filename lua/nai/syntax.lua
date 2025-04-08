@@ -17,9 +17,10 @@ end
 -- Apply our syntax highlighting to a buffer while preserving existing syntax
 function M.apply_to_buffer(bufnr)
   local config = require('nai.config')
+  local constants = require('nai.constants')
 
   -- Get the markers from config
-  local markers = config.options.active_filetypes.block_markers
+  local markers = constants.MARKERS
 
   -- Ensure highlight groups exist
   M.define_highlight_groups()
@@ -30,18 +31,18 @@ function M.apply_to_buffer(bufnr)
   -- Function to apply highlighting to a single line
   local function highlight_line(line_nr, line)
     -- User marker
-    if line:match("^" .. vim.pesc(markers.user) .. "$") then
+    if line:match("^" .. vim.pesc(markers.USER) .. "$") then
       -- Get the full line length
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatUser", line_nr, 0, line_length)
 
       -- Assistant marker
-    elseif line:match("^" .. vim.pesc(markers.assistant) .. "$") then
+    elseif line:match("^" .. vim.pesc(markers.ASSISTANT) .. "$") then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatAssistant", line_nr, 0, line_length)
 
       -- System marker
-    elseif line:match("^" .. vim.pesc(markers.system) .. "$") then
+    elseif line:match("^" .. vim.pesc(markers.SYSTEM) .. "$") then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSystem", line_nr, 0, line_length)
 

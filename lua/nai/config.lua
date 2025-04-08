@@ -41,16 +41,6 @@ M.defaults = {
     patterns = { "*.md", "*.markdown", "*.wiki" }, -- File patterns to activate on
     autodetect = true,                             -- Detect chat blocks in any file
     enable_overlay = true,                         -- Enable syntax overlay
-    block_markers = {
-      user = ">>> user",
-      assistant = "<<< assistant",
-      system = ">>> system",
-      web = ">>> web",
-      scrape = ">>> scrape",
-      youtube = ">>> youtube",
-      include = ">>> include",
-      snapshot = ">>> snapshot",
-    }
   },
   tools = {
     dumpling = {
@@ -64,11 +54,11 @@ M.defaults = {
   },
   chat_files = {
     directory = vim.fn.expand("~/notes/"), -- Default save location
-    format = "{id}.wiki",                    -- Filename format
-    auto_save = false,                       -- Save after each interaction
-    id_length = 4,                           -- Length of random ID
-    use_timestamp = false,                   -- Use timestamp instead of random ID if true
-    auto_title = true,                       -- Automatically generate title for untitled chats
+    format = "{id}.wiki",                  -- Filename format
+    auto_save = false,                     -- Save after each interaction
+    id_length = 4,                         -- Length of random ID
+    use_timestamp = false,                 -- Use timestamp instead of random ID if true
+    auto_title = true,                     -- Automatically generate title for untitled chats
   },
   default_system_prompt = "You are a general assistant.",
 }

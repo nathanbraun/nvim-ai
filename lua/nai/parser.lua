@@ -15,6 +15,7 @@ function M.parse_chat_buffer(content)
     local current_type = nil
     local text_buffer = {}
     local include_fileutils = require('nai.fileutils.include')
+    local MARKERS = require('nai.constants').MARKERS
 
     for _, line in ipairs(lines) do
       -- Skip YAML header
@@ -34,7 +35,7 @@ function M.parse_chat_buffer(content)
       end
 
       -- Process message markers
-      if line:match("^>>> system") then
+      if line:match("^" .. vim.pesc(MARKERS.SYSTEM)) then
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
@@ -43,7 +44,7 @@ function M.parse_chat_buffer(content)
         end
         current_message = { role = "system" }
         current_type = "system"
-      elseif line:match("^>>> user") then
+      elseif line:match("^" .. vim.pesc(MARKERS.USER)) then
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
@@ -52,7 +53,7 @@ function M.parse_chat_buffer(content)
         end
         current_message = { role = "user" }
         current_type = "user"
-      elseif line:match("^<<< assistant") then
+      elseif line:match("^" .. vim.pesc(MARKERS.ASSISTANT)) then
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
@@ -61,7 +62,7 @@ function M.parse_chat_buffer(content)
         end
         current_message = { role = "assistant" }
         current_type = "assistant"
-      elseif line:match("^>>> include") then
+      elseif line:match("^" .. vim.pesc(MARKERS.INCLUDE)) then
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
@@ -70,7 +71,7 @@ function M.parse_chat_buffer(content)
         end
         current_message = { role = "user" }
         current_type = "include"
-      elseif line:match("^>>> snapshot") then
+      elseif line:match("^" .. vim.pesc(MARKERS.SNAPSHOT)) then
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
@@ -79,7 +80,7 @@ function M.parse_chat_buffer(content)
         end
         current_message = { role = "user" }
         current_type = "snapshot"
-      elseif line:match("^>>> web") then
+      elseif line:match("^" .. vim.pesc(MARKERS.WEB)) then
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
@@ -88,7 +89,7 @@ function M.parse_chat_buffer(content)
         end
         current_message = { role = "user" }
         current_type = "web"
-      elseif line:match("^>>> crawl") then
+      elseif line:match("^" .. vim.pesc(MARKERS.CRAWL)) then
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
@@ -97,7 +98,7 @@ function M.parse_chat_buffer(content)
         end
         current_message = { role = "user" }
         current_type = "crawl"
-      elseif line:match("^>>> scrape") then
+      elseif line:match("^" .. vim.pesc(MARKERS.SCRAPE)) then
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
@@ -106,7 +107,7 @@ function M.parse_chat_buffer(content)
         end
         current_message = { role = "user" }
         current_type = "scrape"
-      elseif line:match("^>>> youtube") then
+      elseif line:match("^" .. vim.pesc(MARKERS.YOUTUBE)) then
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
