@@ -78,6 +78,10 @@ tags: [ai]
     error_block = { fg = "#FF8888", bold = true },     -- Error blocks
     content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
   },
+  debug = {
+    enabled = false,
+    auto_title = false,
+  },
 }
 
 -- Current configuration (will be populated by setup)

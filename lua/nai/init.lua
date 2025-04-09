@@ -241,14 +241,24 @@ function M.chat(opts)
   local messages, chat_config = parser.parse_chat_buffer(buffer_content)
 
   local needs_auto_title = false
+
+  if config.options.debug.auto_title then
+    vim.notify("needs_auto_title" .. tostring(needs_auto_title), vim.log.levels.DEBUG)
+  end
+
   if config.options.chat_files.auto_title then
-    -- First, check if there's already a system message
+    -- Check if there's a user-provided system message (not the default one)
     local has_user_system_message = false
-    for i, msg in ipairs(messages) do
-      if msg.role == "system" and i == 1 then
+    for i, line in ipairs(lines) do
+      if line:match("^>>> system$") then
+        -- Found a user-provided system message marker
         has_user_system_message = true
         break
       end
+    end
+
+    if config.options.debug.auto_title then
+      vim.notify("has_user_system_message" .. tostring(has_user_system_message), vim.log.levels.DEBUG)
     end
 
     -- Only enable auto-title if there's no user-provided system message
@@ -264,7 +274,15 @@ function M.chat(opts)
           break
         end
       end
+      if config.options.debug.auto_title then
+        vim.notify("needs_auto_title" .. tostring(needs_auto_title), vim.log.levels.DEBUG)
+      end
     end
+  end
+
+  -- Then use throughout code:
+  if config.options.debug.auto_title then
+    vim.notify("needs_auto_title" .. tostring(needs_auto_title), vim.log.levels.DEBUG)
   end
 
   -- Check if we have a user message at the end
