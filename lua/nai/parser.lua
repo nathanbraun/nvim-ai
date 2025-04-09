@@ -12,7 +12,7 @@ function M.parse_chat_buffer(content)
   local current_message = nil
   local current_type = nil
   local text_buffer = {}
-  local include_fileutils = require('nai.fileutils.include')
+  local reference_fileutils = require('nai.fileutils.reference')
   local MARKERS = require('nai.constants').MARKERS
   local chat_config = {} -- Store conversation-specific config
 
@@ -70,7 +70,7 @@ function M.parse_chat_buffer(content)
       end
       current_message = { role = "assistant" }
       current_type = "assistant"
-    elseif line:match("^" .. vim.pesc(MARKERS.INCLUDE)) then
+    elseif line:match("^" .. vim.pesc(MARKERS.REFERENCE)) then
       -- Finish previous message if exists
       if current_message then
         current_message.content = table.concat(text_buffer, "\n")
@@ -78,7 +78,7 @@ function M.parse_chat_buffer(content)
         text_buffer = {}
       end
       current_message = { role = "user" }
-      current_type = "include"
+      current_type = "reference"
     elseif line:match("^" .. vim.pesc(MARKERS.SNAPSHOT)) then
       -- Finish previous message if exists
       if current_message then
@@ -160,9 +160,9 @@ function M.parse_chat_buffer(content)
 
   -- Add the last message if there is one
   if current_message then
-    -- Special processing for include blocks
-    if current_type == "include" then
-      current_message.content = include_fileutils.process_include_block(text_buffer)
+    -- Special processing for reference blocks
+    if current_type == "reference" then
+      current_message.content = reference_fileutils.process_reference_block(text_buffer)
     elseif current_type == "snapshot" then
       local snapshot_module = require('nai.fileutils.snapshot')
       current_message.content = snapshot_module.process_snapshot_block(text_buffer)
@@ -177,7 +177,7 @@ function M.parse_chat_buffer(content)
       current_message.content = crawl_module.process_crawl_block(text_buffer)
     elseif current_type == "scrape" then
       -- Special handling for scrape blocks
-      -- In API requesting mode, we want to include the content, not the command
+      -- In API requesting mode, we want to reference the content, not the command
       local in_content_section = false
       local content_lines = {}
 
@@ -191,13 +191,13 @@ function M.parse_chat_buffer(content)
 
       if #content_lines > 0 then
         -- If we have content, use that
-        current_message.content = table.concat(content_lines, "\n"):gsub("^%s*(.-)%s*$", "%1")   -- trim
+        current_message.content = table.concat(content_lines, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
       else
         -- Otherwise, use the raw text
-        current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1")   -- trim
+        current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
       end
     else
-      current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1")   -- trim
+      current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
     end
     table.insert(messages, current_message)
   end
@@ -248,9 +248,9 @@ function M.format_crawl_block(url)
   return "\n>>> crawl\n\n" .. url .. "\n\n-- limit: 5\n-- depth: 2\n-- format: markdown"
 end
 
--- Format an include block for the buffer
-function M.format_include_block(content)
-  return "\n>>> include\n\n" .. content
+-- Format a reference block for the buffer
+function M.format_reference_block(content)
+  return "\n>>> reference\n\n" .. content
 end
 
 function M.format_youtube_block(url)
@@ -282,7 +282,7 @@ function M.generate_header(title)
 
   -- Check if headers are enabled (default to true if not specified)
   if header_config.enabled == false then
-    return ""   -- Return empty string if disabled
+    return "" -- Return empty string if disabled
   end
 
   -- Generate a date in YYYY-MM-DD format
@@ -304,7 +304,7 @@ tags: [ai]
   return header
 end
 
--- Generate a system prompt that includes title instruction when needed
+-- Generate a system prompt that references title instruction when needed
 function M.get_system_prompt_with_title_request(is_untitled)
   local base_prompt = config.options.default_system_prompt
 

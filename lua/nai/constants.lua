@@ -10,7 +10,7 @@ M.MARKERS = {
   WEB = ">>> web",
   SCRAPE = ">>> scrape",
   YOUTUBE = ">>> youtube",
-  INCLUDE = ">>> include",
+  REFERENCE = ">>> reference",
   SNAPSHOT = ">>> snapshot",
   CRAWL = ">>> crawl",
 }

@@ -14,19 +14,19 @@ M.defaults = {
 
   -- Insert commands
   insert = {
-    user_message = "<Leader>apu", -- Add user message
-    scrape = "<Leader>apd",       -- Add scrape block
-    web = "<Leader>apw",          -- Add web block
-    youtube = "<Leader>apy",      -- Add YouTube block
-    include = "<Leader>api",      -- Add include block
-    snapshot = "<Leader>aps",     -- Add snapshot block
-    crawl = "<Leader>apc",        -- Add snapshot block
+    user_message = "<Leader>au", -- Add user message
+    scrape = "<Leader>ad",       -- Add scrape block
+    web = "<Leader>aw",          -- Add web block
+    youtube = "<Leader>ay",      -- Add YouTube block
+    reference = "<Leader>ar",    -- Add reference block
+    snapshot = "<Leader>as",     -- Add snapshot block
+    crawl = "<Leader>ac",        -- Add snapshot block
   },
 
   -- Settings
   settings = {
-    select_model = "<Leader>asm",    -- Select model
-    toggle_provider = "<Leader>asp", -- Toggle provider
+    select_model = "<Leader>am",    -- Select model
+    toggle_provider = "<Leader>ap", -- Toggle provider
   }
 }
 
@@ -52,8 +52,8 @@ function M.apply_to_buffer(bufnr)
     { noremap = true, silent = true, desc = 'Add web block' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.youtube, ':NAIYoutube<CR>',
     { noremap = true, silent = true, desc = 'Add YouTube block' })
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.include, ':NAIInclude<CR>',
-    { noremap = true, silent = true, desc = 'Add include block' })
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.reference, ':NAIReference<CR>',
+    { noremap = true, silent = true, desc = 'Add reference block' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.snapshot, ':NAISnapshot<CR>',
     { noremap = true, silent = true, desc = 'Add snapshot block' })
 

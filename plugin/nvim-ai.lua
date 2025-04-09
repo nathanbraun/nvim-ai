@@ -144,10 +144,10 @@ vim.api.nvim_create_user_command('NAIUser', function()
   vim.api.nvim_win_set_cursor(0, { line_count, 0 })
 end, { desc = 'Add a new user message' })
 
-vim.api.nvim_create_user_command('NAIInclude', function(opts)
+vim.api.nvim_create_user_command('NAIReference', function(opts)
   local parser = require('nai.parser')
-  local include_block = parser.format_include_block(opts.args or "")
-  local lines = vim.split(include_block, "\n")
+  local reference_block = parser.format_reference_block(opts.args or "")
+  local lines = vim.split(reference_block, "\n")
 
   -- Insert at cursor position
   local cursor = vim.api.nvim_win_get_cursor(0)
@@ -159,7 +159,7 @@ vim.api.nvim_create_user_command('NAIInclude', function(opts)
   vim.api.nvim_win_set_cursor(0, { row + #lines, 0 })
 end, {
   nargs = "?",
-  desc = "Insert an include block at cursor position"
+  desc = "Insert an reference block at cursor position"
 })
 
 vim.api.nvim_create_user_command('NAISnapshot', function()

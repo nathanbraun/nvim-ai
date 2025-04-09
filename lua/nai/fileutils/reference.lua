@@ -99,10 +99,10 @@ function M.read_file_with_header(filepath)
   end, filepath)
 end
 
--- Process include statement with multiple file paths
-function M.process_include_block(lines)
+-- Process reference statement with multiple file paths
+function M.process_reference_block(lines)
   local profiler = require('nai.utils.profiler')
-  return profiler.measure("process_include_block", function(lines)
+  return profiler.measure("process_reference_block", function(lines)
     local result = {}
     local file_paths = {}
     local additional_text = {}

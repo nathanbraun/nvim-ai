@@ -12,7 +12,7 @@ function M.expand_snapshot_in_buffer(buffer_id, start_line, end_line)
   -- Get the snapshot block lines
   local lines = vim.api.nvim_buf_get_lines(buffer_id, start_line, end_line, false)
 
-  -- Parse file paths (similar to include)
+  -- Parse file paths (similar to reference)
   local file_paths = {}
   local additional_text = {}
   local processing_files = true
