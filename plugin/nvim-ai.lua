@@ -7,17 +7,6 @@ if vim.g.loaded_nvim_ai then
 end
 vim.g.loaded_nvim_ai = true
 
--- Add profiling commands
-vim.api.nvim_create_user_command('NAIProfileToggle', function()
-  require('nai.utils.profiler').toggle()
-end, { desc = 'Toggle NAI performance profiling' })
-
-vim.api.nvim_create_user_command('NAIProfileSummary', function()
-  require('nai.utils.profiler').print_summary()
-end, { desc = 'Show NAI performance profiling summary' })
-
--- Create user commands
-
 vim.api.nvim_create_user_command('NAIProvider', function()
   require('nai.tools.picker').select_provider()
 end, { nargs = 0, desc = 'Select AI provider' })
