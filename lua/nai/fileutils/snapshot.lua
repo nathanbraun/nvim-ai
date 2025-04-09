@@ -53,11 +53,11 @@ function M.expand_snapshot_in_buffer(buffer_id, start_line, end_line)
 
   -- Expand file paths and add file contents
   for _, path_pattern in ipairs(file_paths) do
-    local expanded_paths = require('nai.fileutils.include').expand_paths(path_pattern)
+    local expanded_paths = require('nai.fileutils.reference').expand_paths(path_pattern)
     for _, path in ipairs(expanded_paths) do
       -- Read file content with header
       local file_header = "==> " .. path .. " <=="
-      local file_content = require('nai.fileutils.include').read_file(path)
+      local file_content = require('nai.fileutils.reference').read_file(path)
 
       -- Get file extension for syntax highlighting
       local ext = vim.fn.fnamemodify(path, ":e")
