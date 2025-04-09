@@ -226,6 +226,68 @@ vim.api.nvim_create_user_command('NAIRefreshHighlights', function()
   vim.notify("NAI syntax highlighting refreshed", vim.log.levels.INFO)
 end, { desc = 'Refresh NAI syntax highlighting' })
 
+vim.api.nvim_create_user_command('NAIConfig', function()
+  local parser = require('nai.parser')
+  local config = require('nai.config')
+
+  -- Get current provider config
+  local provider = config.options.active_provider
+  local provider_config = config.get_provider_config()
+
+  -- Create a config block with current settings
+  local config_options = {
+    provider = provider,
+    model = provider_config.model,
+    temperature = provider_config.temperature,
+    max_tokens = provider_config.max_tokens
+  }
+
+  local config_block = parser.format_config_block(config_options)
+  local lines = vim.split(config_block, "\n")
+
+  -- Get current buffer lines
+  local buffer_id = vim.api.nvim_get_current_buf()
+  local buffer_lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+
+  -- Determine insertion position
+  local insert_position = 0 -- Default to cursor position
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)
+
+  -- Option 1: Insert at cursor position
+  insert_position = cursor_pos[1] - 1 -- Convert to 0-indexed
+
+  -- Option 2: Try to find position after YAML header but before first message
+  local yaml_end = -1
+  local first_message = -1
+
+  for i, line in ipairs(buffer_lines) do
+    -- Find end of YAML header
+    if line == "---" and i > 1 then
+      yaml_end = i
+    end
+
+    -- Find first message marker
+    if line:match("^>>>") or line:match("^<<<") then
+      first_message = i - 1 -- Insert before this line
+      break
+    end
+  end
+
+  -- If we found a suitable position after YAML but before first message
+  if yaml_end > 0 and first_message > yaml_end then
+    insert_position = yaml_end -- Insert right after the YAML header
+  end
+
+  -- Insert the config block
+  vim.api.nvim_buf_set_lines(buffer_id, insert_position, insert_position, false, lines)
+
+  -- Position cursor at end of inserted block
+  vim.api.nvim_win_set_cursor(0, { insert_position + #lines, 0 })
+
+  -- Notify the user
+  vim.notify("Config block inserted with current settings", vim.log.levels.INFO)
+end, { desc = "Insert a config block at an appropriate position" })
+
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()

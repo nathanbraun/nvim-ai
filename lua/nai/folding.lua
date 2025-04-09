@@ -39,6 +39,8 @@ function M.get_fold_level(lnum)
     return ">1" -- Start a fold for assistant messages
   elseif line:match("^" .. vim.pesc(constants.MARKERS.SYSTEM) .. "$") then
     return ">1" -- Start a fold for system messages
+  elseif line:match("^" .. vim.pesc(constants.MARKERS.CONFIG) .. "$") then
+    return ">1" -- Start a fold for config messages
   end
 
   -- Check for special blocks (nested folding)

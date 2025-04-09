@@ -6,6 +6,7 @@ M.MARKERS = {
   USER = ">>> user",
   ASSISTANT = "<<< assistant",
   SYSTEM = ">>> system",
+  CONFIG = ">>> config",
   WEB = ">>> web",
   SCRAPE = ">>> scrape",
   YOUTUBE = ">>> youtube",
@@ -15,4 +16,3 @@ M.MARKERS = {
 }
 
 return M
-

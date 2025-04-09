@@ -92,6 +92,9 @@ function M.apply_to_buffer(bufnr)
     elseif line:match("^" .. vim.pesc(markers.SYSTEM) .. "$") then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSystem", line_nr, 0, line_length)
+    elseif line:match("^" .. vim.pesc(markers.CONFIG) .. "$") then
+      local line_length = #line
+      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
 
       -- Special blocks
     elseif line:match("^>>> [a-z%-]+") then
