@@ -240,8 +240,18 @@ function M.chat(opts)
   -- Parse buffer content into messages
   local messages, chat_config = parser.parse_chat_buffer(buffer_content, buffer_id)
 
-  -- Before sending to API, process any placeholders in messages
-  if config.options.expland_placeholders then
+  local should_expand_placeholders
+
+  -- Check if expand_placeholders is explicitly set in chat_config
+  if chat_config and chat_config.expand_placeholders ~= nil then
+    -- Use the chat-specific setting
+    should_expand_placeholders = chat_config.expand_placeholders
+  else
+    -- Fall back to global setting
+    should_expand_placeholders = config.options.expand_placeholders
+  end
+
+  if should_expand_placeholders then
     if messages then
       for _, msg in ipairs(messages) do
         if msg.content and type(msg.content) == "string" then

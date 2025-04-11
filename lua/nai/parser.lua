@@ -150,7 +150,7 @@ function M.parse_chat_buffer(content, buffer_id)
     elseif current_type == "config" then
       -- Process config lines
       if line ~= "" then -- Skip empty lines
-        local key, value = line:match("^%s*(%w+)%s*:%s*(.+)$")
+        local key, value = line:match("^%s*([%w_]+)%s*:%s*(.+)$")
         if key and value then
           -- Trim whitespace
           value = value:gsub("^%s*(.-)%s*$", "%1")
@@ -160,6 +160,10 @@ function M.parse_chat_buffer(content, buffer_id)
             value = tonumber(value)
           elseif key == "max_tokens" then
             value = tonumber(value)
+          elseif key == "expand_placeholders" then
+            -- Convert string boolean to actual boolean
+            value = value:lower() == "true"
+            vim.notify("Setting expand_placeholders to: " .. tostring(value), vim.log.levels.DEBUG)
           end
 
           chat_config[key] = value
@@ -325,6 +329,10 @@ function M.format_config_block(config_options)
 
   -- Add each option
   for key, value in pairs(config_options or {}) do
+    -- For boolean values, ensure they're formatted properly
+    if type(value) == "boolean" then
+      value = value and "true" or "false"
+    end
     table.insert(lines, key .. ": " .. tostring(value))
   end
 

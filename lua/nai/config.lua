@@ -70,7 +70,7 @@ tags: [ai]
     },
   },
   default_system_prompt = "You are a general assistant.",
-  expland_placeholders = true,
+  expand_placeholders = false,
   highlights = {
     user = { fg = "#88AAFF", bold = true },            -- User message highlighting
     assistant = { fg = "#AAFFAA", bold = true },       -- Assistant message highlighting
@@ -87,7 +87,8 @@ tags: [ai]
       user_prefix = "",
     },
     ["daily-review"] = {
-      system = [[Your job is to evaluate some markdown text containing notes for a daily review and making sure it includes everything it's supposed to.
+      system =
+      [[Your job is to evaluate some markdown text containing notes for a daily review and making sure it includes everything it's supposed to.
 
 Rules:
 - Only look at the sections under `# 2. NOTES` and `# 3. REVIEW` -- you can

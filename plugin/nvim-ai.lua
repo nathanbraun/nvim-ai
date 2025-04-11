@@ -228,7 +228,8 @@ vim.api.nvim_create_user_command('NAIConfig', function()
     provider = provider,
     model = provider_config.model,
     temperature = provider_config.temperature,
-    max_tokens = provider_config.max_tokens
+    max_tokens = provider_config.max_tokens,
+    expand_placeholders = config.options.expand_placeholders -- Include the expand_placeholders option
   }
 
   local config_block = parser.format_config_block(config_options)
