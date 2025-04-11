@@ -1,7 +1,70 @@
 -- lua/nai/tests/init.lua
 local M = {}
-local config = require('nai.config')
-local error_utils = require('nai.utils.error')
+local framework = require('nai.tests.framework')
+
+-- Import test modules
+local parser_tests = require('nai.tests.parser_tests')
+local config_tests = require('nai.tests.config_tests')
+local integration_tests = require('nai.tests.integration_tests')
+local fileutils_tests = require('nai.tests.fileutils_tests') -- Add this line
+
+function M.run_all()
+  -- Reset results
+  framework.reset_results()
+
+  vim.notify("Running nvim-ai tests...", vim.log.levels.INFO)
+
+  -- Run parser tests
+  parser_tests.test_parse_chat_buffer()
+  parser_tests.test_message_formatting()
+  parser_tests.test_placeholder_replacement()
+
+  -- Run config tests
+  config_tests.test_config_loading()
+  config_tests.test_api_key_management()
+
+  -- Run integration tests
+  integration_tests.test_chat_flow()
+  integration_tests.test_error_handling()
+
+  -- Run fileutils tests
+  fileutils_tests.test_expand_paths()       -- Add this line
+  fileutils_tests.test_invalid_paths()      -- Add this line
+  fileutils_tests.test_snapshot_expansion() -- Add this line
+
+  -- Display results
+  framework.display_results()
+
+  return string.format("Tests completed: %d passed, %d failed",
+    framework.results.passed,
+    framework.results.failed)
+end
+
+-- Add a command to run specific test groups
+function M.run_group(group)
+  framework.reset_results()
+
+  if group == "parser" then
+    parser_tests.test_parse_chat_buffer()
+    parser_tests.test_message_formatting()
+    parser_tests.test_placeholder_replacement()
+  elseif group == "config" then
+    config_tests.test_config_loading()
+    config_tests.test_api_key_management()
+  elseif group == "integration" then
+    integration_tests.test_chat_flow()
+    integration_tests.test_error_handling()
+  elseif group == "fileutils" then -- Add this block
+    fileutils_tests.test_expand_paths()
+    fileutils_tests.test_invalid_paths()
+    fileutils_tests.test_snapshot_expansion()
+  else
+    vim.notify("Unknown test group: " .. group, vim.log.levels.ERROR)
+    return
+  end
+
+  framework.display_results()
+end
 
 -- Test API Error Handling
 function M.test_api_error()
@@ -72,21 +135,6 @@ function M.test_dependency_check()
   vim.notify("Non-existent executable check: " .. tostring(result2), vim.log.levels.INFO)
 
   return "Dependency check tests completed"
-end
-
--- Main Test Runner
-function M.run_all()
-  vim.notify("Starting nvim-ai error handling tests", vim.log.levels.INFO)
-
-  -- Run the tests
-  M.test_dependency_check()
-  M.test_buffer_validation()
-  M.test_file_errors()
-
-  -- API test should be run separately since it's asynchronous
-  vim.notify("Run M.test_api_error() separately for API testing", vim.log.levels.INFO)
-
-  return "Basic tests completed"
 end
 
 return M

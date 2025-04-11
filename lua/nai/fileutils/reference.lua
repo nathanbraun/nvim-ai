@@ -4,6 +4,9 @@ local error_utils = require('nai.utils.error')
 local path = require('nai.utils.path')
 
 function M.expand_paths(path_pattern)
+  -- Set a reasonable maximum file limit to prevent accidental massive expansions
+  local MAX_FILES = _G.TEST_MAX_FILES or 100
+
   -- If it doesn't contain wildcards, just return the expanded path
   if not path_pattern:match("[*?%[%]]") then
     local expanded_path = path.expand(path_pattern)
@@ -12,18 +15,39 @@ function M.expand_paths(path_pattern)
 
   -- Use vim's built-in glob for non-recursive patterns (more cross-platform)
   if not path_pattern:match("**") then
-    return vim.fn.glob(path_pattern, false, true)
+    -- This is the key part - we need to ensure we're only getting matching files
+    local files = vim.fn.glob(path_pattern, false, true)
+    if #files > MAX_FILES then
+      vim.notify(string.format("Warning: Pattern '%s' matched %d files, limiting to %d. Use a more specific pattern.",
+        path_pattern, #files, MAX_FILES), vim.log.levels.WARN)
+      return vim.list_slice(files, 1, MAX_FILES)
+    end
+    return files
   end
 
   -- For recursive patterns, use platform-specific approach
   local base_dir = path_pattern:match("^(.-)%*%*") or "."
   base_dir = vim.fn.fnamemodify(path.expand(base_dir), ":p:h") -- Get absolute path
 
+  -- Safety check: prevent searching from root or very broad directories
+  if base_dir == "/" or base_dir == "\\" or base_dir == "C:\\" or #base_dir <= 3 then
+    vim.notify(
+    string.format(
+      "Safety warning: Pattern '%s' would search from root or very broad directory. Please use a more specific pattern.",
+      path_pattern), vim.log.levels.ERROR)
+    return {}
+  end
+
   -- Extract pattern after **
   local after_pattern = path_pattern:match("%*%*(.*)")
 
+  -- Handle the case where after_pattern is nil (pattern ends with **)
+  if not after_pattern then
+    after_pattern = ""
+  end
+
   -- Remove leading separator if present
-  if after_pattern:sub(1, 1) == "/" or after_pattern:sub(1, 1) == "\\" then
+  if after_pattern ~= "" and (after_pattern:sub(1, 1) == "/" or after_pattern:sub(1, 1) == "\\") then
     after_pattern = after_pattern:sub(2)
   end
 
@@ -32,6 +56,14 @@ function M.expand_paths(path_pattern)
 
   -- Try to use vim's built-in globpath first (most cross-platform)
   local glob_result = vim.fn.globpath(base_dir, "**/" .. file_pattern, false, true)
+
+  -- Check if we have too many results
+  if #glob_result > MAX_FILES then
+    vim.notify(string.format("Warning: Pattern '%s' matched %d files, limiting to %d. Use a more specific pattern.",
+      path_pattern, #glob_result, MAX_FILES), vim.log.levels.WARN)
+    return vim.list_slice(glob_result, 1, MAX_FILES)
+  end
+
   if #glob_result > 0 then
     return glob_result
   end
@@ -39,35 +71,63 @@ function M.expand_paths(path_pattern)
   -- Fallback to platform-specific commands if vim's globpath didn't work
   local files = {}
 
-  if path.is_windows then
-    -- Use a simpler PowerShell approach that's more reliable
-    local ps_cmd = string.format(
-      'powershell -NoProfile -Command "Get-ChildItem -Path \"%s\" -Recurse -File | Where-Object { $_.FullName -like \"*%s\" } | ForEach-Object { $_.FullName }"',
-      base_dir:gsub("/", "\\"),
-      file_pattern:gsub("/", "\\")
-    )
+  -- Add error handling around platform-specific commands
+  local success, result = pcall(function()
+    if path.is_windows then
+      -- Improved PowerShell command to ensure we only get matching files
+      local ps_cmd = string.format(
+        'powershell -NoProfile -Command "Get-ChildItem -Path \"%s\" -Recurse -File | Where-Object { $_.FullName -like \"*%s\" } | Select-Object -First %d | ForEach-Object { $_.FullName }"',
+        base_dir:gsub("/", "\\"),
+        file_pattern:gsub("/", "\\"),
+        MAX_FILES
+      )
 
-    local output = vim.fn.system(ps_cmd)
+      local output = vim.fn.system(ps_cmd)
 
-    -- Process output into a table of files
-    for file in string.gmatch(output, "[^\r\n]+") do
-      if file ~= "" then
-        table.insert(files, file)
+      -- Process output into a table of files
+      for file in string.gmatch(output, "[^\r\n]+") do
+        if file ~= "" then
+          table.insert(files, file)
+        end
+      end
+    else
+      -- Unix find command with better pattern matching
+      -- Use a more specific find command that properly matches the pattern
+      local cmd
+      if file_pattern == "*" then
+        -- If the pattern is just "*", match all files
+        cmd = string.format('find "%s" -type f -print | head -n %d 2>/dev/null',
+          base_dir, MAX_FILES)
+      else
+        -- Otherwise, use -name for more precise matching
+        cmd = string.format('find "%s" -type f -name "%s" -print | head -n %d 2>/dev/null',
+          base_dir, file_pattern, MAX_FILES)
+      end
+
+      local output = vim.fn.system(cmd)
+
+      -- Process output into a table of files
+      for file in string.gmatch(output, "[^\n]+") do
+        if file ~= "" then
+          table.insert(files, file)
+        end
       end
     end
-  else
-    -- Unix find command
-    local cmd = string.format('find "%s" -type f -path "*%s" 2>/dev/null',
-      base_dir, file_pattern)
 
-    local output = vim.fn.system(cmd)
-
-    -- Process output into a table of files
-    for file in string.gmatch(output, "[^\n]+") do
-      if file ~= "" then
-        table.insert(files, file)
-      end
+    -- Check if we might have hit the limit
+    if #files >= MAX_FILES then
+      vim.notify(
+      string.format(
+        "Warning: Pattern '%s' may match more than %d files. Results have been limited. Use a more specific pattern.",
+        path_pattern, MAX_FILES), vim.log.levels.WARN)
     end
+
+    return files
+  end)
+
+  if not success then
+    vim.notify("Error expanding path pattern: " .. path_pattern .. "\n" .. result, vim.log.levels.WARN)
+    return {}
   end
 
   if #files == 0 then

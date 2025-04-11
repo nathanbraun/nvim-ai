@@ -297,7 +297,11 @@ end
 
 function M.save_credential(provider, api_key)
   -- Ensure directory exists
-  ensure_config_dir()
+  local success = ensure_config_dir()
+  if not success then
+    vim.notify("Failed to create config directory", vim.log.levels.ERROR)
+    return false
+  end
 
   -- Read existing credentials
   local credentials = read_credentials()
@@ -313,10 +317,15 @@ function M.save_credential(provider, api_key)
   if file then
     file:write(json_str)
     file:close()
-    vim.notify("Saved API key for " .. provider, vim.log.levels.INFO)
+
+    -- Set permissions to be readable only by the owner
+    if vim.fn.has('unix') == 1 then
+      vim.fn.system("chmod 600 " .. vim.fn.shellescape(config_file))
+    end
+
     return true
   else
-    vim.notify("Failed to save API key", vim.log.levels.ERROR)
+    vim.notify("Failed to save API key: could not write to " .. config_file, vim.log.levels.ERROR)
     return false
   end
 end

@@ -50,6 +50,20 @@ function M.setup(opts)
   -- Check platform compatibility
   check_platform_compatibility()
 
+  -- Check if API key is configured for the active provider
+  local provider = config.options.active_provider
+  local api_key = config.get_api_key(provider)
+
+  if not api_key then
+    vim.defer_fn(function()
+      vim.notify(
+        "No API key found for " .. provider .. ".\n" ..
+        "Please set your API key with :NAISetKey " .. provider,
+        vim.log.levels.WARN
+      )
+    end, 1000) -- Delay to ensure it's seen after startup
+  end
+
   -- Additional setup if needed
   return M
 end
@@ -682,7 +696,7 @@ function M.new_chat_with_content(user_input)
       -- Check if we can safely set the cursor
       local current_buf = vim.api.nvim_get_current_buf()
       if vim.api.nvim_buf_is_valid(current_buf) then
-        vim.api.nvim_win_set_cursor(0, { safe_pos, a0 })
+        vim.api.nvim_win_set_cursor(0, { safe_pos, 0 })
       end
 
       -- Notify completion

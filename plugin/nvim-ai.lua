@@ -278,6 +278,247 @@ vim.api.nvim_create_user_command('NAIConfig', function()
   vim.notify("Config block inserted with current settings", vim.log.levels.INFO)
 end, { desc = "Insert a config block at an appropriate position" })
 
+vim.api.nvim_create_user_command('NAISetKey', function(opts)
+  local args = opts.args
+  local provider, key
+
+  -- Parse arguments: provider and key
+  if args and args:match("%S+%s+%S+") then
+    provider, key = args:match("(%S+)%s+(.+)")
+  elseif args and args:match("%S+") then
+    provider = args:match("(%S+)")
+    -- If only provider is given, prompt for key
+    key = vim.fn.inputsecret("Enter API key for " .. provider .. ": ")
+  else
+    -- Interactive mode - ask for both provider and key
+    provider = vim.fn.input({
+      prompt = "Provider (openai, openrouter, dumpling): ",
+      completion = function(_, _, _)
+        return { "openai", "openrouter", "dumpling" }
+      end
+    })
+
+    if provider == "" then
+      vim.notify("Operation cancelled", vim.log.levels.INFO)
+      return
+    end
+
+    key = vim.fn.inputsecret("Enter API key for " .. provider .. ": ")
+  end
+
+  if key == "" then
+    vim.notify("No API key provided, operation cancelled", vim.log.levels.INFO)
+    return
+  end
+
+  -- Validate provider
+  local valid_providers = { "openai", "openrouter", "dumpling" }
+  local is_valid = false
+  for _, valid_provider in ipairs(valid_providers) do
+    if provider == valid_provider then
+      is_valid = true
+      break
+    end
+  end
+
+  if not is_valid then
+    vim.notify("Invalid provider: " .. provider .. ". Valid options: " .. table.concat(valid_providers, ", "),
+      vim.log.levels.ERROR)
+    return
+  end
+
+  -- Save the API key
+  local success = require('nai.config').save_credential(provider, key)
+
+  if success then
+    vim.notify("API key for " .. provider .. " saved successfully", vim.log.levels.INFO)
+  end
+end, {
+  nargs = "*",
+  desc = "Set API key for a provider (usage: NAISetKey [provider] [key])",
+  complete = function(ArgLead, CmdLine, CursorPos)
+    -- Provide completion for providers
+    local providers = { "openai", "openrouter", "dumpling" }
+    if CmdLine:match("^%s*NAISetKey%s+%S+%s+") then
+      -- If provider is already specified, don't provide completions for the key
+      return {}
+    end
+
+    -- Filter providers based on ArgLead
+    local filtered = {}
+    for _, provider in ipairs(providers) do
+      if provider:find(ArgLead, 1, true) == 1 then
+        table.insert(filtered, provider)
+      end
+    end
+    return filtered
+  end
+})
+
+-- Command to check which API keys are configured
+vim.api.nvim_create_user_command('NAICheckKeys', function()
+  local config = require('nai.config')
+  local providers = { "openai", "openrouter", "dumpling" }
+  local results = {}
+
+  for _, provider in ipairs(providers) do
+    local key = config.get_api_key(provider)
+    if provider ~= "dumpling" then
+      -- For regular providers
+      if key then
+        table.insert(results, provider .. ": ✓ Configured")
+      else
+        table.insert(results, provider .. ": ✗ Not configured")
+      end
+    else
+      -- For dumpling
+      key = config.get_dumpling_api_key()
+      if key then
+        table.insert(results, "dumpling: ✓ Configured")
+      else
+        table.insert(results, "dumpling: ✗ Not configured")
+      end
+    end
+  end
+
+  -- Create a temporary buffer to display results
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+    "nvim-ai API Key Status:",
+    "=====================",
+    ""
+  })
+  vim.api.nvim_buf_set_lines(buf, 3, 3, false, results)
+
+  -- Add instructions
+  vim.api.nvim_buf_set_lines(buf, 3 + #results, 3 + #results, false, {
+    "",
+    "To set an API key, use: :NAISetKey [provider]",
+    "Active provider: " .. config.options.active_provider,
+    "",
+    "Press q to close this window"
+  })
+
+  -- Open the buffer in a floating window
+  local width = 60
+  local height = 10 + #results
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor((vim.o.columns - width) / 2),
+    style = "minimal",
+    border = "rounded",
+    title = "API Key Status",
+    title_pos = "center"
+  })
+
+  -- Set buffer options
+  vim.api.nvim_buf_set_option(buf, "modifiable", false)
+  vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
+
+  -- Add keymapping to close the window
+  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', ':close<CR>', { noremap = true, silent = true })
+
+  -- Highlight the active provider
+  local ns_id = vim.api.nvim_create_namespace('nai_key_status')
+  for i, line in ipairs(results) do
+    if line:match("^" .. config.options.active_provider) then
+      vim.api.nvim_buf_add_highlight(buf, ns_id, "Title", 2 + i, 0, -1)
+    end
+  end
+
+  -- Highlight configured vs not configured
+  for i, line in ipairs(results) do
+    if line:match("✓") then
+      vim.api.nvim_buf_add_highlight(buf, ns_id, "DiagnosticOk", 2 + i, line:find("✓"), line:find("✓") + 3)
+    elseif line:match("✗") then
+      vim.api.nvim_buf_add_highlight(buf, ns_id, "DiagnosticError", 2 + i, line:find("✗"), line:find("✗") + 3)
+    end
+  end
+end, { desc = "Check which API keys are configured" })
+
+-- Add a command to quickly switch between providers
+vim.api.nvim_create_user_command('NAISwitchProvider', function(opts)
+  local provider = opts.args
+
+  if not provider or provider == "" then
+    -- If no provider specified, show current and prompt for new one
+    local config = require('nai.config')
+    local current = config.options.active_provider
+
+    provider = vim.fn.input({
+      prompt = "Current provider: " .. current .. "\nSwitch to (openai, openrouter): ",
+      completion = function(_, _, _)
+        return { "openai", "openrouter" }
+      end
+    })
+
+    if provider == "" then
+      vim.notify("Operation cancelled", vim.log.levels.INFO)
+      return
+    end
+  end
+
+  -- Validate provider
+  if provider ~= "openai" and provider ~= "openrouter" then
+    vim.notify("Invalid provider: " .. provider .. ". Valid options: openai, openrouter", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Switch provider
+  local config = require('nai.config')
+  config.options.active_provider = provider
+
+  -- Check if API key exists for this provider
+  local key = config.get_api_key(provider)
+  if not key then
+    vim.notify("Warning: No API key found for " .. provider .. ". Use :NAISetKey " .. provider .. " to set one.",
+      vim.log.levels.WARN)
+  else
+    vim.notify("Switched to " .. provider .. " provider", vim.log.levels.INFO)
+  end
+end, {
+  nargs = "?",
+  desc = "Switch between AI providers",
+  complete = function(ArgLead, CmdLine, CursorPos)
+    local providers = { "openai", "openrouter" }
+    local filtered = {}
+    for _, provider in ipairs(providers) do
+      if provider:find(ArgLead, 1, true) == 1 then
+        table.insert(filtered, provider)
+      end
+    end
+    return filtered
+  end
+})
+
+-- Test command
+vim.api.nvim_create_user_command('NAITest', function(opts)
+  local group = opts.args
+  local tests = require('nai.tests')
+
+  if group and group ~= "" then
+    tests.run_group(group)
+  else
+    tests.run_all()
+  end
+end, {
+  nargs = "?",
+  desc = "Run nvim-ai tests (optional: parser, config, integration, fileutils)", -- Update description
+  complete = function(ArgLead, CmdLine, CursorPos)
+    local groups = { "parser", "config", "integration", "fileutils" }            -- Add fileutils
+    local filtered = {}
+    for _, group in ipairs(groups) do
+      if group:find(ArgLead, 1, true) == 1 then
+        table.insert(filtered, group)
+      end
+    end
+    return filtered
+  end
+})
+
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()

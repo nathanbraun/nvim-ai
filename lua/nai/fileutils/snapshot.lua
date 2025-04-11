@@ -52,12 +52,38 @@ function M.expand_snapshot_in_buffer(buffer_id, start_line, end_line)
   table.insert(result, "") -- Empty line after file paths
 
   -- Expand file paths and add file contents
+  local reference_module = require('nai.fileutils.reference')
   for _, path_pattern in ipairs(file_paths) do
-    local expanded_paths = require('nai.fileutils.reference').expand_paths(path_pattern)
+    -- Wrap path expansion in pcall to catch any errors
+    local success, expanded_paths = pcall(reference_module.expand_paths, path_pattern)
+
+    if not success then
+      -- Log the error and continue with other paths
+      table.insert(result, "==> Error expanding path: " .. path_pattern .. " <==")
+      table.insert(result, "Error: " .. tostring(expanded_paths))
+      table.insert(result, "")
+      goto continue
+    end
+
+    if #expanded_paths == 0 then
+      -- No files found for this pattern
+      table.insert(result, "==> No files found for: " .. path_pattern .. " <==")
+      table.insert(result, "")
+      goto continue
+    end
+
     for _, path in ipairs(expanded_paths) do
-      -- Read file content with header
+      -- Wrap file reading in pcall to catch any errors
       local file_header = "==> " .. path .. " <=="
-      local file_content = require('nai.fileutils.reference').read_file(path)
+      local success, file_content = pcall(reference_module.read_file, path)
+
+      if not success then
+        -- Log the error and continue with other files
+        table.insert(result, file_header)
+        table.insert(result, "Error reading file: " .. tostring(file_content))
+        table.insert(result, "")
+        goto continue_file
+      end
 
       -- Get file extension for syntax highlighting
       local ext = vim.fn.fnamemodify(path, ":e")
@@ -107,7 +133,11 @@ function M.expand_snapshot_in_buffer(buffer_id, start_line, end_line)
       -- Close the code block and add spacing
       table.insert(result, "```")
       table.insert(result, "") -- Empty line between files
+
+      ::continue_file::
     end
+
+    ::continue::
   end
 
   -- Add any additional text that was after the file paths
