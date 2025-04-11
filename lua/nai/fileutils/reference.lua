@@ -7,38 +7,50 @@ function M.expand_paths(path_pattern)
   -- Set a reasonable maximum file limit to prevent accidental massive expansions
   local MAX_FILES = _G.TEST_MAX_FILES or 100
 
+  -- Debug info
+  vim.notify("DEBUG: Original path_pattern: " .. path_pattern, vim.log.levels.INFO)
+
   -- If it doesn't contain wildcards, just return the expanded path
   if not path_pattern:match("[*?%[%]]") then
     local expanded_path = path.expand(path_pattern)
     return { expanded_path }
   end
 
-  -- Use vim's built-in glob for non-recursive patterns (more cross-platform)
+  -- Simple case: non-recursive wildcards (no **)
   if not path_pattern:match("**") then
-    -- This is the key part - we need to ensure we're only getting matching files
+    -- Just use vim's glob directly - it's reliable for simple patterns
     local files = vim.fn.glob(path_pattern, false, true)
+
     if #files > MAX_FILES then
       vim.notify(string.format("Warning: Pattern '%s' matched %d files, limiting to %d. Use a more specific pattern.",
         path_pattern, #files, MAX_FILES), vim.log.levels.WARN)
       return vim.list_slice(files, 1, MAX_FILES)
     end
+
     return files
   end
 
-  -- For recursive patterns, use platform-specific approach
-  local base_dir = path_pattern:match("^(.-)%*%*") or "."
-  base_dir = vim.fn.fnamemodify(path.expand(base_dir), ":p:h") -- Get absolute path
+  -- For recursive patterns, we need to be more careful
+  -- Extract the base directory (everything before **)
+  local base_pattern = path_pattern:match("^(.-)%*%*")
+  if not base_pattern then
+    -- If there's no match (shouldn't happen since we checked for ** above)
+    return vim.fn.glob(path_pattern, false, true)
+  end
+
+  -- Properly expand the base directory
+  local base_dir = vim.fn.fnamemodify(path.expand(base_pattern), ":p:h")
 
   -- Safety check: prevent searching from root or very broad directories
   if base_dir == "/" or base_dir == "\\" or base_dir == "C:\\" or #base_dir <= 3 then
     vim.notify(
-    string.format(
-      "Safety warning: Pattern '%s' would search from root or very broad directory. Please use a more specific pattern.",
-      path_pattern), vim.log.levels.ERROR)
+      string.format(
+        "Safety warning: Pattern '%s' would search from root or very broad directory. Please use a more specific pattern.",
+        path_pattern), vim.log.levels.ERROR)
     return {}
   end
 
-  -- Extract pattern after **
+  -- Extract the pattern after **
   local after_pattern = path_pattern:match("%*%*(.*)")
 
   -- Handle the case where after_pattern is nil (pattern ends with **)
@@ -54,7 +66,7 @@ function M.expand_paths(path_pattern)
   -- Default pattern if none specified
   local file_pattern = after_pattern ~= "" and after_pattern or "*"
 
-  -- Try to use vim's built-in globpath first (most cross-platform)
+  -- Use vim's globpath for recursive search
   local glob_result = vim.fn.globpath(base_dir, "**/" .. file_pattern, false, true)
 
   -- Check if we have too many results
@@ -117,9 +129,9 @@ function M.expand_paths(path_pattern)
     -- Check if we might have hit the limit
     if #files >= MAX_FILES then
       vim.notify(
-      string.format(
-        "Warning: Pattern '%s' may match more than %d files. Results have been limited. Use a more specific pattern.",
-        path_pattern, MAX_FILES), vim.log.levels.WARN)
+        string.format(
+          "Warning: Pattern '%s' may match more than %d files. Results have been limited. Use a more specific pattern.",
+          path_pattern, MAX_FILES), vim.log.levels.WARN)
     end
 
     return files

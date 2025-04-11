@@ -31,6 +31,7 @@ function M.run_all()
   fileutils_tests.test_expand_paths()       -- Add this line
   fileutils_tests.test_invalid_paths()      -- Add this line
   fileutils_tests.test_snapshot_expansion() -- Add this line
+  fileutils_tests.test_path_expansion_wildcards() -- Add this line
 
   -- Display results
   framework.display_results()
@@ -58,6 +59,7 @@ function M.run_group(group)
     fileutils_tests.test_expand_paths()
     fileutils_tests.test_invalid_paths()
     fileutils_tests.test_snapshot_expansion()
+    fileutils_tests.test_path_expansion_wildcards() -- Add this line
   else
     vim.notify("Unknown test group: " .. group, vim.log.levels.ERROR)
     return
