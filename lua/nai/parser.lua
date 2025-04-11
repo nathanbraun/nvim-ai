@@ -124,6 +124,23 @@ function M.parse_chat_buffer(content, buffer_id)
       end
       current_message = { role = "user" }
       current_type = "youtube"
+    elseif line:match("^" .. vim.pesc(MARKERS.ALIAS)) then
+      -- Extract the alias name
+      local alias_name = line:match("^" .. vim.pesc(MARKERS.ALIAS) .. "%s*(.+)$")
+
+      -- Finish previous message if exists
+      if current_message then
+        current_message.content = table.concat(text_buffer, "\n")
+        table.insert(messages, current_message)
+        text_buffer = {}
+      end
+
+      -- Start a new user message for the content under the alias
+      current_message = {
+        role = "user",
+        _alias = alias_name -- Store the alias name for later processing
+      }
+      current_type = "alias"
     elseif current_message then
       -- Skip the first empty line after a marker
       if #text_buffer == 0 and line == "" then
@@ -201,10 +218,49 @@ function M.parse_chat_buffer(content, buffer_id)
     end
     table.insert(messages, current_message)
   end
+  -- Process any alias messages
+  local processed_messages = {}
+  local i = 1
+  while i <= #messages do
+    local msg = messages[i]
+
+    if msg.role == "user" and msg._alias then
+      local alias_name = msg._alias
+      local alias_config = config.options.aliases[alias_name]
+
+      if alias_config then
+        -- Insert the system message from the alias config
+        table.insert(processed_messages, {
+          role = "system",
+          content = alias_config.system
+        })
+
+        -- Add the user message (optionally with prefix)
+        local user_content = msg.content
+        if alias_config.user_prefix and alias_config.user_prefix ~= "" then
+          user_content = alias_config.user_prefix .. "\n\n" .. user_content
+        end
+
+        table.insert(processed_messages, {
+          role = "user",
+          content = user_content
+        })
+      else
+        -- If alias not found, just add the original message
+        table.insert(processed_messages, msg)
+      end
+    else
+      -- For non-alias messages, just add them as-is
+      table.insert(processed_messages, msg)
+    end
+
+    i = i + 1
+  end
+
 
   -- After parsing all messages, check if we have a system message
   local has_system_message = false
-  for _, msg in ipairs(messages) do
+  for _, msg in ipairs(processed_messages) do
     if msg.role == "system" then
       has_system_message = true
       break
@@ -213,13 +269,14 @@ function M.parse_chat_buffer(content, buffer_id)
 
   -- If no system message was found, add a default one at the beginning
   if not has_system_message then
-    table.insert(messages, 1, {
+    table.insert(processed_messages, 1, {
       role = "system",
       content = config.options.default_system_prompt
     })
   end
 
-  return messages, chat_config
+
+  return processed_messages, chat_config
 end
 
 -- Format a new assistant message for the buffer

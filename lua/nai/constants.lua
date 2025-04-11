@@ -13,6 +13,7 @@ M.MARKERS = {
   REFERENCE = ">>> reference",
   SNAPSHOT = ">>> snapshot",
   CRAWL = ">>> crawl",
+  ALIAS = ">>> alias:",
 }
 
 return M
