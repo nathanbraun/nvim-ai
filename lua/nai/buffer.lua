@@ -6,21 +6,6 @@ local error_utils = require('nai.utils.error')
 -- Store activated buffers
 M.activated_buffers = {}
 
--- Check if a buffer should be activated based on filename
-function M.should_activate_by_pattern(bufnr)
-  bufnr = bufnr or vim.api.nvim_get_current_buf()
-  local filename = vim.api.nvim_buf_get_name(bufnr)
-
-  -- Check against configured patterns
-  for _, pattern in ipairs(config.options.active_filetypes.patterns) do
-    if vim.fn.glob(pattern) ~= "" and vim.fn.match(filename, vim.fn.glob2regpat(pattern)) >= 0 then
-      return true
-    end
-  end
-
-  return false
-end
-
 -- Check if buffer contains chat markers
 function M.detect_chat_markers(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
