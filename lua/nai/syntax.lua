@@ -59,6 +59,15 @@ function M.define_highlight_groups()
   vim.cmd(create_highlight_cmd("naichatSpecialBlock", hl_config.special_block))
   vim.cmd(create_highlight_cmd("naichatErrorBlock", hl_config.error_block))
   vim.cmd(create_highlight_cmd("naichatContentStart", hl_config.content_start))
+
+  -- highlight group for placeholders
+  vim.cmd(create_highlight_cmd("naichatPlaceholder", {
+    fg = hl_config.placeholder and hl_config.placeholder.fg or "#FFCC66",
+    bg = hl_config.placeholder and hl_config.placeholder.bg or "",
+    bold = hl_config.placeholder and hl_config.placeholder.bold or true,
+    italic = hl_config.placeholder and hl_config.placeholder.italic or false,
+    underline = hl_config.placeholder and hl_config.placeholder.underline or false,
+  }))
 end
 
 -- Apply our syntax highlighting to a buffer while preserving existing syntax
@@ -109,6 +118,19 @@ function M.apply_to_buffer(bufnr)
     elseif line:match("^<<< content") then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatContentStart", line_nr, 0, line_length)
+    end
+    -- Add placeholder highlighting
+    local placeholder_patterns = {
+      "%%FILE_CONTENTS%%",
+      "${FILE_CONTENTS}",
+      "$FILE_CONTENTS"
+    }
+
+    for _, pattern in ipairs(placeholder_patterns) do
+      local start_idx, end_idx = line:find(vim.pesc(pattern))
+      if start_idx then
+        vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatPlaceholder", line_nr, start_idx - 1, end_idx)
+      end
     end
   end
 

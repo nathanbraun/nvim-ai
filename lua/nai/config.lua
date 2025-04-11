@@ -70,6 +70,7 @@ tags: [ai]
     },
   },
   default_system_prompt = "You are a general assistant.",
+  expland_placeholders = false,
   highlights = {
     user = { fg = "#88AAFF", bold = true },            -- User message highlighting
     assistant = { fg = "#AAFFAA", bold = true },       -- Assistant message highlighting
@@ -77,6 +78,7 @@ tags: [ai]
     special_block = { fg = "#AAAAFF", bold = true },   -- Special blocks (scrape, youtube, etc.)
     error_block = { fg = "#FF8888", bold = true },     -- Error blocks
     content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
+    placeholder = { fg = "#FFCC66", bold = true },     -- Golden yellow for placeholders
   },
   debug = {
     enabled = false,

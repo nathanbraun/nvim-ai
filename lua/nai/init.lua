@@ -238,7 +238,18 @@ function M.chat(opts)
   local buffer_content = table.concat(lines, "\n")
 
   -- Parse buffer content into messages
-  local messages, chat_config = parser.parse_chat_buffer(buffer_content)
+  local messages, chat_config = parser.parse_chat_buffer(buffer_content, buffer_id)
+
+  -- Before sending to API, process any placeholders in messages
+  if config.options.expland_placeholders then
+    if messages then
+      for _, msg in ipairs(messages) do
+        if msg.content and type(msg.content) == "string" then
+          msg.content = parser.replace_placeholders(msg.content, buffer_id)
+        end
+      end
+    end
+  end
 
   local needs_auto_title = false
 

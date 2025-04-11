@@ -6,7 +6,7 @@ local M = {}
 local config = require('nai.config')
 
 -- Parse chat buffer content into messages for API
-function M.parse_chat_buffer(content)
+function M.parse_chat_buffer(content, buffer_id)
   local lines = vim.split(content, "\n")
   local messages = {}
   local current_message = nil
@@ -315,6 +315,36 @@ function M.get_system_prompt_with_title_request(is_untitled)
   else
     return base_prompt
   end
+end
+
+function M.replace_placeholders(content, buffer_id)
+  -- Check for various file content placeholder formats
+  local placeholders = {
+    "%%FILE_CONTENTS%%",
+    "${FILE_CONTENTS}",
+    "$FILE_CONTENTS"
+  }
+
+  for _, placeholder in ipairs(placeholders) do
+    if content:match(vim.pesc(placeholder)) then
+      -- Get the current buffer content up to the first chat marker
+      local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      local file_content = {}
+
+      -- Find the first chat marker
+      for i, line in ipairs(lines) do
+        if line:match("^>>>") or line:match("^<<<") then
+          break
+        end
+        table.insert(file_content, line)
+      end
+
+      -- Replace the placeholder with the file content
+      content = content:gsub(vim.pesc(placeholder), table.concat(file_content, "\n"))
+    end
+  end
+
+  return content
 end
 
 return M
