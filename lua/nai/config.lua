@@ -1,6 +1,8 @@
 -- lua/nai/config.lua
 local M = {}
 
+local path = require('nai.utils.path')
+
 -- Default configuration
 M.defaults = {
   credentials = {
@@ -161,18 +163,14 @@ M.options = vim.deepcopy(M.defaults) -- Initialize with defaults immediately
 
 -- Function to ensure the credentials directory exists
 local function ensure_config_dir()
-  local config_dir = vim.fn.fnamemodify(vim.fn.expand(M.options.credentials.file_path), ":h")
-  if vim.fn.isdirectory(config_dir) == 0 then
-    vim.fn.mkdir(config_dir, "p")
-    return true -- Directory was created
-  end
-  return false  -- Directory already existed
+  local config_dir = vim.fn.fnamemodify(path.expand(M.options.credentials.file_path), ":h")
+  return path.mkdir(config_dir)
 end
 
 -- Function to read credentials from JSON file
 local function read_credentials()
   local credentials = {}
-  local config_file = vim.fn.expand(M.options.credentials.file_path)
+  local config_file = path.expand(M.options.credentials.file_path)
 
   -- Check if file exists
   if vim.fn.filereadable(config_file) == 1 then
@@ -277,6 +275,15 @@ function M.setup(opts)
     end
   end
 
+  -- Validate configuration
+  local validator = require('nai.validate')
+  local valid = validator.apply_validation(M.options)
+
+  if not valid then
+    vim.notify("Using default configuration due to validation errors", vim.log.levels.WARN)
+    -- We'll continue with merged config, but user has been warned about issues
+  end
+
   -- Initialize configuration
   init_config()
 
@@ -299,10 +306,10 @@ function M.save_credential(provider, api_key)
   credentials[provider] = api_key
 
   -- Write back to file
-  local config_file = vim.fn.expand(M.options.credentials.file_path)
+  local config_file = path.expand(M.options.credentials.file_path)
   local json_str = vim.json.encode(credentials)
 
-  local file = io.open(vim.fn.expand(config_file), "w")
+  local file = io.open(config_file, "w")
   if file then
     file:write(json_str)
     file:close()

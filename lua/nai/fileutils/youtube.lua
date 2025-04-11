@@ -180,7 +180,8 @@ function M.process_youtube_block(lines)
     local transcript_language = "unknown"
 
     -- Create a temporary script to make a synchronous call
-    local temp_file = os.tmpname()
+    local path = require('nai.utils.path')
+    local temp_file = path.tmpname()
     local dumpling_config = require('nai.config').options.tools.dumpling or {}
     local base_endpoint = dumpling_config.base_endpoint or "https://app.dumplingai.com/api/v1/"
     local endpoint = base_endpoint .. "get-youtube-transcript"

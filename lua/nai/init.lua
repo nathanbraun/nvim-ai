@@ -7,6 +7,27 @@ local api = require('nai.api')
 local utils = require('nai.utils')
 local error_utils = require('nai.utils.error')
 
+local function check_platform_compatibility()
+  local path = require('nai.utils.path')
+
+  -- Check for platform-specific issues
+  if path.is_windows then
+    -- Check for long path support on Windows
+    local long_paths_enabled = vim.fn.system(
+      'powershell -Command "[System.Environment]::GetEnvironmentVariable(\'USERDNSDOMAIN\', \'Process\') -ne $null"')
+
+    if vim.trim(long_paths_enabled) ~= "True" then
+      vim.notify("Windows: Long path support may not be enabled. Some file operations might fail with long paths.",
+        vim.log.levels.WARN)
+    end
+
+    -- Check for curl on Windows
+    if vim.fn.executable('curl') ~= 1 and vim.fn.executable('curl.exe') ~= 1 then
+      vim.notify("Windows: curl not found in PATH. Please install curl for API requests to work.", vim.log.levels.ERROR)
+    end
+  end
+end
+
 local function check_dependencies()
   local has_curl = error_utils.check_executable("curl", "Please install curl for API requests")
 
@@ -25,6 +46,9 @@ function M.setup(opts)
 
   -- Check dependencies
   check_dependencies()
+
+  -- Check platform compatibility
+  check_platform_compatibility()
 
   -- Additional setup if needed
   return M

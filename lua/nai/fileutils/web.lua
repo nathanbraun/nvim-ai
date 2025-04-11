@@ -23,7 +23,8 @@ function M.fetch_url(url)
     md_content = vim.fn.system('echo ' .. vim.fn.shellescape(html_content) .. ' | html2text -b 0')
   elseif lynx_available then
     -- Create a temporary file for the HTML content
-    local temp_file = os.tmpname()
+    local path = require('nai.utils.path')
+    local temp_file = path.tmpname()
     local file = io.open(temp_file, "w")
     file:write(html_content)
     file:close()

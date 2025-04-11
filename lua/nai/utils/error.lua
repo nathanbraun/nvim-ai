@@ -79,7 +79,19 @@ end
 
 -- Check for required executables
 function M.check_executable(name, suggestion)
-  if vim.fn.executable(name) ~= 1 then
+  local path = require('nai.utils.path')
+
+  -- Check if executable exists, handling platform differences
+  local executable_exists
+
+  if path.is_windows then
+    -- On Windows, check for both name and name.exe
+    executable_exists = vim.fn.executable(name) == 1 or vim.fn.executable(name .. '.exe') == 1
+  else
+    executable_exists = vim.fn.executable(name) == 1
+  end
+
+  if not executable_exists then
     local msg = "Required executable '" .. name .. "' not found"
     if suggestion then
       msg = msg .. ". " .. suggestion

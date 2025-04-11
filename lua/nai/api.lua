@@ -35,21 +35,16 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     max_tokens = chat_config and chat_config.max_tokens or provider_config.max_tokens,
   }
 
-
   local json_data = vim.json.encode(data)
   local endpoint_url = provider_config.endpoint
-
   local auth_header = "Authorization: Bearer " .. api_key
 
-  local handle = vim.system({
-    "curl",
-    "-s",
-    "-X", "POST",
-    endpoint_url,
-    "-H", "Content-Type: application/json",
-    "-H", auth_header,
-    "-d", json_data
-  }, { text = true }, function(obj)
+  -- Detect platform
+  local path = require('nai.utils.path')
+  local is_windows = path.is_windows
+
+  -- Function to handle the API response
+  local function process_response(obj)
     -- Check if this request was cancelled
     if M.cancelled_requests[request_id] then
       M.cancelled_requests[request_id] = nil
@@ -104,10 +99,56 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
         on_error("No valid content in API response")
       end)
     end
-  end)
+  end
+
+  local handle
+
+  -- On Windows with large payloads, use a temporary file approach
+  if is_windows and #json_data > 8000 then -- Windows has command line length limits
+    local temp_file = path.tmpname()
+    local file = io.open(temp_file, "w")
+
+    if file then
+      file:write(json_data)
+      file:close()
+
+      handle = vim.system({
+        "curl",
+        "-s",
+        "-X", "POST",
+        endpoint_url,
+        "-H", "Content-Type: application/json",
+        "-H", auth_header,
+        "-d", "@" .. temp_file
+      }, { text = true }, function(obj)
+        -- Clean up temp file
+        os.remove(temp_file)
+        process_response(obj)
+      end)
+    else
+      -- Fall back to direct approach if temp file creation fails
+      vim.schedule(function()
+        on_error("Failed to create temporary file for API request")
+      end)
+      return
+    end
+  else
+    -- Standard approach for Unix or smaller payloads on Windows
+    handle = vim.system({
+      "curl",
+      "-s",
+      "-X", "POST",
+      endpoint_url,
+      "-H", "Content-Type: application/json",
+      "-H", auth_header,
+      "-d", json_data
+    }, { text = true }, process_response)
+  end
 
   -- Store the request ID with the handle for cancellation
-  handle.request_id = request_id
+  if handle then
+    handle.request_id = request_id
+  end
 
   return handle
 end
