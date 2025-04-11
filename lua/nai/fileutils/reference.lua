@@ -1,5 +1,6 @@
 local M = {}
 local utils = require('nai.utils')
+local error_utils = require('nai.utils.error')
 
 function M.expand_paths(path_pattern)
   -- If it doesn't contain wildcards, just return the expanded path
@@ -133,17 +134,19 @@ function M.process_reference_block(lines)
 end
 
 function M.read_file(filepath)
-  -- Add a maximum file size check (e.g., 500KB)
-  local max_size = 500 * 1024 -- 500KB
-
   -- Check if file exists and is readable
   if vim.fn.filereadable(filepath) ~= 1 then
-    return "File not found or not readable"
+    return error_utils.log("File not found or not readable: " .. filepath, error_utils.LEVELS.WARNING)
   end
 
   -- Check file size
+  local max_size = 500 * 1024 -- 500KB
   local size = vim.fn.getfsize(filepath)
   if size > max_size then
+    error_utils.log("File exceeds size limit, truncating: " .. filepath, error_utils.LEVELS.WARNING, {
+      size = size,
+      max_size = max_size
+    })
     return table.concat(vim.fn.readfile(filepath, "", max_size), "\n") ..
         "\n\n[File truncated...]"
   end
@@ -157,14 +160,14 @@ function M.read_file(filepath)
 
   for _, bext in ipairs(binary_exts) do
     if ext == bext then
-      return "Binary file, content not displayed"
+      return error_utils.log("Binary file, content not displayed: " .. filepath, error_utils.LEVELS.INFO)
     end
   end
 
   -- Read file content
   local success, lines = pcall(vim.fn.readfile, filepath)
   if not success or #lines == 0 then
-    return "Empty file or cannot read content"
+    return error_utils.log("Empty file or cannot read content: " .. filepath, error_utils.LEVELS.WARNING)
   end
 
   -- Return content without header

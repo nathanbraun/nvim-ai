@@ -1,6 +1,7 @@
 local M = {}
 local config = require('nai.config')
 local constants = require('nai.constants')
+local error_utils = require('nai.utils.error')
 
 -- Store activated buffers
 M.activated_buffers = {}
@@ -65,6 +66,11 @@ end
 function M.activate_buffer(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
 
+  -- Validate buffer
+  if not error_utils.validate_buffer(bufnr, "activate") then
+    return
+  end
+
   -- Debug info
   local filename = vim.api.nvim_buf_get_name(bufnr)
 
@@ -128,11 +134,16 @@ end
 
 -- Deactivate a buffer
 function M.deactivate_buffer(bufnr)
+  -- Validate buffer (but don't return since we want to clean up anyway)
+  error_utils.validate_buffer(bufnr, "deactivate")
+
   -- Remove from activated buffers
   M.activated_buffers[bufnr] = nil
 
-  -- Clear highlights
-  vim.api.nvim_buf_clear_namespace(bufnr, M.overlay_ns, 0, -1)
+  -- Clear highlights only if buffer is valid
+  if vim.api.nvim_buf_is_valid(bufnr) then
+    vim.api.nvim_buf_clear_namespace(bufnr, M.overlay_ns, 0, -1)
+  end
 
   -- Restore original folding
   require('nai.folding').restore_original(bufnr)

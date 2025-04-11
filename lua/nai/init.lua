@@ -5,11 +5,26 @@ local M = {}
 local config = require('nai.config')
 local api = require('nai.api')
 local utils = require('nai.utils')
+local error_utils = require('nai.utils.error')
+
+local function check_dependencies()
+  local has_curl = error_utils.check_executable("curl", "Please install curl for API requests")
+
+  -- These are optional but good to check
+  error_utils.check_executable("html2text", "Install for better web content formatting")
+
+  if not has_curl then
+    error_utils.log("nvim-ai may not function correctly without required dependencies", error_utils.LEVELS.WARNING)
+  end
+end
 
 -- Setup function that should be called by the user
 function M.setup(opts)
   config.setup(opts)
   require('nai.mappings').setup(opts)
+
+  -- Check dependencies
+  check_dependencies()
 
   -- Additional setup if needed
   return M
@@ -683,6 +698,10 @@ function M.new_chat_with_content(user_input)
 
   -- Store indicator for cancellation
   M.active_indicator = indicator
+end
+
+function M.run_tests()
+  return require('nai.tests').run_all()
 end
 
 return M

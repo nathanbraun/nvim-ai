@@ -3,6 +3,8 @@
 
 local M = {}
 local config = require('nai.config')
+local error_utils = require('nai.utils.error')
+
 M.cancelled_requests = {}
 
 -- Handle chat API request
@@ -56,7 +58,10 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
 
     if obj.code ~= 0 then
       vim.schedule(function()
-        on_error("Request failed with code " .. obj.code)
+        on_error(error_utils.log("Request failed with code " .. obj.code, error_utils.LEVELS.ERROR, {
+          provider = provider,
+          endpoint = endpoint_url
+        }))
       end)
       return
     end
@@ -64,7 +69,9 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     local response = obj.stdout
     if not response or response == "" then
       vim.schedule(function()
-        on_error("Empty response from API")
+        on_error(error_utils.log("Empty response from API", error_utils.LEVELS.ERROR, {
+          provider = provider
+        }))
       end)
       return
     end
@@ -72,14 +79,17 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     local success, parsed = pcall(vim.json.decode, response)
     if not success then
       vim.schedule(function()
-        on_error("Failed to parse API response: " .. parsed)
+        on_error(error_utils.log("Failed to parse API response", error_utils.LEVELS.ERROR, {
+          provider = provider,
+          response_preview = string.sub(response, 1, 100)
+        }))
       end)
       return
     end
 
     if parsed.error then
       vim.schedule(function()
-        on_error("API Error: " .. (parsed.error.message or "Unknown error"))
+        on_error(error_utils.handle_api_error(response, provider))
       end)
       return
     end
