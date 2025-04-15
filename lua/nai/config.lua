@@ -103,6 +103,11 @@ tags: [ai]
       user_prefix = "Generate tests for:",
     },
   },
+  format_response = {
+    enabled = true,             -- Whether to format the assistant's response
+    exclude_code_blocks = true, -- Don't format inside code blocks
+    wrap_width = 80             -- Width to wrap text at
+  },
   debug = {
     enabled = false,
     auto_title = false,

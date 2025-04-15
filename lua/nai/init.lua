@@ -310,6 +310,14 @@ function M.chat(opts)
         end
       end
 
+      -- Apply formatting if enabled
+      if config.options.format_response and config.options.format_response.enabled then
+        modified_response = utils.format_with_gq(
+          modified_response,
+          config.options.format_response.wrap_width
+        )
+      end
+
       -- Format response and append to buffer
       local formatted_response = parser.format_assistant_message(modified_response)
       local lines_to_append = vim.split(formatted_response, "\n")
