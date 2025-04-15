@@ -6,7 +6,7 @@ local framework = require('nai.tests.framework')
 local parser_tests = require('nai.tests.parser_tests')
 local config_tests = require('nai.tests.config_tests')
 local integration_tests = require('nai.tests.integration_tests')
-local fileutils_tests = require('nai.tests.fileutils_tests') -- Add this line
+local fileutils_tests = require('nai.tests.fileutils_tests')
 
 function M.run_all()
   -- Reset results
@@ -18,6 +18,7 @@ function M.run_all()
   parser_tests.test_parse_chat_buffer()
   parser_tests.test_message_formatting()
   parser_tests.test_placeholder_replacement()
+  parser_tests.test_alias_config_handling()
 
   -- Run config tests
   config_tests.test_config_loading()
@@ -28,10 +29,10 @@ function M.run_all()
   integration_tests.test_error_handling()
 
   -- Run fileutils tests
-  fileutils_tests.test_expand_paths()       -- Add this line
-  fileutils_tests.test_invalid_paths()      -- Add this line
-  fileutils_tests.test_snapshot_expansion() -- Add this line
-  fileutils_tests.test_path_expansion_wildcards() -- Add this line
+  fileutils_tests.test_expand_paths()
+  fileutils_tests.test_invalid_paths()
+  fileutils_tests.test_snapshot_expansion()
+  fileutils_tests.test_path_expansion_wildcards()
 
   -- Display results
   framework.display_results()
@@ -49,17 +50,18 @@ function M.run_group(group)
     parser_tests.test_parse_chat_buffer()
     parser_tests.test_message_formatting()
     parser_tests.test_placeholder_replacement()
+    parser_tests.test_alias_config_handling()
   elseif group == "config" then
     config_tests.test_config_loading()
     config_tests.test_api_key_management()
   elseif group == "integration" then
     integration_tests.test_chat_flow()
     integration_tests.test_error_handling()
-  elseif group == "fileutils" then -- Add this block
+  elseif group == "fileutils" then
     fileutils_tests.test_expand_paths()
     fileutils_tests.test_invalid_paths()
     fileutils_tests.test_snapshot_expansion()
-    fileutils_tests.test_path_expansion_wildcards() -- Add this line
+    fileutils_tests.test_path_expansion_wildcards()
   else
     vim.notify("Unknown test group: " .. group, vim.log.levels.ERROR)
     return

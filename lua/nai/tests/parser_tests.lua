@@ -2,6 +2,7 @@
 local M = {}
 local framework = require('nai.tests.framework')
 local parser = require('nai.parser')
+local config = require('nai.config') -- Add this line
 
 -- Test parsing of chat buffer
 function M.test_parse_chat_buffer()
@@ -80,6 +81,56 @@ function M.test_placeholder_replacement()
     vim.api.nvim_buf_delete(bufnr, { force = true })
 
     return success, err
+  end)
+end
+
+function M.test_alias_config_handling()
+  return framework.run_test("Parser: Alias config handling", function()
+    -- Create a temporary config with an alias that has a config
+    local original_config = vim.deepcopy(config.options)
+
+    -- Set up a test alias with config
+    config.options.aliases = {
+      test_alias = {
+        system = "Test system prompt",
+        user_prefix = "Test prefix:",
+        config = {
+          temperature = 0.1,
+          model = "test-model"
+        }
+      }
+    }
+
+    -- Create a mock buffer content with an alias
+    local buffer_content = [[
+>>> alias:test_alias
+
+Test content
+]]
+
+    -- Parse the buffer
+    local messages, chat_config = parser.parse_chat_buffer(buffer_content, 0)
+
+    -- Restore original config
+    config.options = original_config
+
+    -- Check if messages were properly processed
+    local success, err = framework.assert_type(messages, "table", "Messages should be a table")
+    if not success then return false, err end
+
+    -- There should be at least two messages (system and user) from the alias
+    success, err = framework.assert_type(chat_config, "table", "Chat config should be a table")
+    if not success then return false, err end
+
+    -- Check if chat_config contains the settings from the alias
+    success, err = framework.assert_equals(chat_config.temperature, 0.1,
+      "Temperature from alias config should be applied")
+    if not success then return false, err end
+
+    success, err = framework.assert_equals(chat_config.model, "test-model", "Model from alias config should be applied")
+    if not success then return false, err end
+
+    return true
   end)
 end
 
