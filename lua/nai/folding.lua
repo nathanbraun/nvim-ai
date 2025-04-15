@@ -118,7 +118,8 @@ function M.apply_to_buffer(bufnr)
         vim.wo[winid].foldmethod = "expr"
         vim.wo[winid].foldexpr = "v:lua.require('nai.folding').get_fold_level(v:lnum)"
         vim.wo[winid].foldenable = true
-        vim.wo[winid].foldlevel = 0 -- Start with all folds closed
+        -- vim.wo[winid].foldlevel = 0 -- Start with all folds closed
+        vim.wo[winid].foldlevel = 99 -- Start with all folds open
       end
     end
   })
@@ -158,7 +159,7 @@ function M.apply_to_buffer(bufnr)
     vim.wo[winid].foldmethod = "expr"
     vim.wo[winid].foldexpr = "v:lua.require('nai.folding').get_fold_level(v:lnum)"
     vim.wo[winid].foldenable = true
-    vim.wo[winid].foldlevel = 0
+    vim.wo[winid].foldlevel = 99
   end
 end
 

@@ -249,6 +249,13 @@ function M.parse_chat_buffer(content, buffer_id)
           role = "user",
           content = user_content
         })
+
+        if alias_config.config then
+          -- Merge alias config with chat_config (alias takes precedence)
+          for key, value in pairs(alias_config.config) do
+            chat_config[key] = value
+          end
+        end
       else
         -- If alias not found, just add the original message
         table.insert(processed_messages, msg)

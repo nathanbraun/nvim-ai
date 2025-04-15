@@ -85,66 +85,17 @@ tags: [ai]
   aliases = {
     translate = {
       system =
-      "Translate the following text to Spanish",
+      "You are an interpretor. Translate any further text/user messages you recieve to Spanish. If the text is a question, don't answer it, just translate the question to Spanish.",
       user_prefix = "",
-    },
-    ["daily-review"] = {
-      system =
-      [[Your job is to evaluate some markdown text containing notes for a daily review and making sure it includes everything it's supposed to.
-
-Rules:
-- Only look at the sections under `# 2. NOTES` and `# 3. REVIEW` -- you can
-  ignore everything under `# 1. PLAN.`
-- Under 3, make sure the following sections are filled out (extra sections are
-  OK) with the following:
-
-  - PROJECTS
-    - projects worked on
-    - make sure number of pomos is listed for each project
-  - BLOCK DONE
-    - block tasks done this day
-    - can be 'na' or 'none' but shouldn't be empty
-  - then under TODO there should be three sub sections
-    - CAN WAIT
-      - tasks/notes that can wait till next weekly review
-      - can be 'na' or 'none' but shouldn't be empty
-    - SHOULDN'T WAIT
-      - tasks/notes that should not wait till next weekly review
-      - can be 'na' or 'none' but shouldn't be empty
-    - NEW BLOCK
-      - new small block toask items
-      - can be 'na' or 'none' but shouldn't be empty
-      - items that are also under BLOCK DONE are fine, that just means they were added and completed the same day
-  - GRATITUDE
-    - three things I'm grateful for
-
-- Then make sure 2. NOTES has:
-  - INTERSTITIAL
-    - notes as bullet points in the format hh:mm, with notes underneath, like
-      this:
-
-```
-- 08:58
-  - weekly review
-```
-
-Instructions:
-- If all of these sections are present, the plan meets the requirements. In this case respond, "Plan meets requirements" and nothing else.
-- If any are missing, the plan does not meet requirements, no matter what else is there. In this case, respond "Plan does not meet requirements.", then concisely detail what's missing.
-- Note it's not your job to evaluate the specific content of each section unless specified above.]],
-      user_prefix = [[The file is here:
-        $FILE_CONTENTS
-        ]]
+      config = {
+        model = "openai/gpt-4o-mini",
+        temperature = 0.1,
+      }
     },
     refactor = {
       system =
       "You are a coding expert. Refactor the provided code to improve readability, efficiency, and adherence to best practices. Explain your key improvements.",
       user_prefix = "Refactor the following code:",
-    },
-    explain = {
-      system =
-      "You are a coding teacher. Explain the following code in detail, including its purpose, how it works, and any notable patterns or techniques used.",
-      user_prefix = "Explain this code:",
     },
     test = {
       system =
