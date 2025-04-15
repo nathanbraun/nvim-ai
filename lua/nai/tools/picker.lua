@@ -72,13 +72,18 @@ function M.select_model()
         local selection = action_state.get_selected_entry()
         actions.close(prompt_bufnr)
 
-        -- Set the selected model
+        -- Set the selected provider
         if selection then
-          local model_name = selection.value
-          config.options.providers[provider].model = model_name
+          local provider_id = selection.value
+          config.options.active_provider = provider_id
+
+          -- Update state
+          require('nai.state').set_current_provider(provider_id)
+          require('nai.events').emit('provider:change', provider_id)
 
           -- Notify user
-          vim.notify("Model changed to " .. model_name, vim.log.levels.INFO)
+          local provider_name = config.options.providers[provider_id].name or provider_id
+          vim.notify("Provider changed to " .. provider_name, vim.log.levels.INFO)
         end
       end)
       return true

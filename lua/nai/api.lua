@@ -5,8 +5,6 @@ local M = {}
 local config = require('nai.config')
 local error_utils = require('nai.utils.error')
 
-M.cancelled_requests = {}
-
 -- Handle chat API request
 function M.chat_request(messages, on_complete, on_error, chat_config)
   -- Generate a unique request ID
@@ -35,6 +33,24 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     max_tokens = chat_config and chat_config.max_tokens or provider_config.max_tokens,
   }
 
+  -- Register this request in our state
+  local state = require('nai.state')
+  local events = require('nai.events')
+
+  state.register_request(request_id, {
+    id = request_id,
+    type = 'chat',
+    status = 'pending',
+    start_time = os.time(),
+    provider = provider,
+    model = data.model,
+    messages = messages,
+    config = chat_config
+  })
+
+  -- Emit event
+  events.emit('request:start', request_id, provider, data.model)
+
   local json_data = vim.json.encode(data)
   local endpoint_url = provider_config.endpoint
   local auth_header = "Authorization: Bearer " .. api_key
@@ -46,8 +62,9 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
   -- Function to handle the API response
   local function process_response(obj)
     -- Check if this request was cancelled
-    if M.cancelled_requests[request_id] then
-      M.cancelled_requests[request_id] = nil
+    local state = require('nai.state')
+    if not state.get_active_requests()[request_id] then
+      -- Request was cancelled or removed
       return
     end
 
@@ -91,12 +108,36 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
 
     if parsed and parsed.choices and #parsed.choices > 0 then
       local content = parsed.choices[1].message.content
+
+      -- Update state
+      state.update_request(request_id, {
+        status = 'completed',
+        end_time = os.time(),
+        response = content
+      })
+
+      -- Emit event
+      events.emit('request:complete', request_id, content)
+
       vim.schedule(function()
         on_complete(content)
+        -- Clear request from state after callback completes
+        state.clear_request(request_id)
       end)
     else
+      -- On error, update state and emit event
+      state.update_request(request_id, {
+        status = 'error',
+        end_time = os.time(),
+        error = "No valid content in API response"
+      })
+
+      events.emit('request:error', request_id, "No valid content in API response")
+
       vim.schedule(function()
         on_error("No valid content in API response")
+        -- Clear request from state after callback completes
+        state.clear_request(request_id)
       end)
     end
   end
@@ -150,12 +191,38 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     handle.request_id = request_id
   end
 
-  return handle
+  return {
+    handle = request_id,
+    terminate = function()
+      if handle then
+        if vim.system and handle.terminate then
+          handle:terminate()
+        elseif not vim.system and handle.close then
+          handle:close()
+        end
+      end
+    end
+  }
 end
 
 function M.cancel_request(handle)
   if handle and handle.request_id then
-    M.cancelled_requests[handle.request_id] = true
+    local state = require('nai.state')
+    local events = require('nai.events')
+
+    -- Update state
+    state.update_request(handle.request_id, {
+      status = 'cancelled',
+      end_time = os.time()
+    })
+
+    -- Emit event
+    events.emit('request:cancel', handle.request_id)
+
+    -- Clear request after a short delay (to allow event handlers to access it)
+    vim.defer_fn(function()
+      state.clear_request(handle.request_id)
+    end, 100)
   end
 
   -- Attempt to terminate the process

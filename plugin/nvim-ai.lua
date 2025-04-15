@@ -524,6 +524,66 @@ end, {
   end
 })
 
+vim.api.nvim_create_user_command('NAIDebug', function()
+  local state = require('nai.state')
+  local debug_info = state.debug()
+
+  -- Create a buffer to display debug info
+  local buf = vim.api.nvim_create_buf(false, true)
+
+  -- Format debug info
+  local lines = {
+    "nvim-ai Debug Information",
+    "=======================",
+    "",
+    "Active Requests: " .. debug_info.active_requests,
+    "Active Indicators: " .. debug_info.active_indicators,
+    "Activated Buffers: " .. debug_info.activated_buffers,
+    "Current Provider: " .. (debug_info.current_provider or "none"),
+    "Current Model: " .. (debug_info.current_model or "none"),
+    "Processing: " .. (debug_info.is_processing and "Yes" or "No"),
+    "",
+    "Active Request Details:"
+  }
+
+  -- Add details for each active request
+  for id, request in pairs(state.active_requests) do
+    table.insert(lines, "")
+    table.insert(lines, "Request ID: " .. id)
+    table.insert(lines, "  Status: " .. (request.status or "unknown"))
+    table.insert(lines, "  Provider: " .. (request.provider or "unknown"))
+    table.insert(lines, "  Model: " .. (request.model or "unknown"))
+    table.insert(lines, "  Started: " .. os.date("%Y-%m-%d %H:%M:%S", request.start_time))
+    if request.end_time then
+      table.insert(lines, "  Ended: " .. os.date("%Y-%m-%d %H:%M:%S", request.end_time))
+    end
+  end
+
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+  -- Open in a float
+  local width = 80
+  local height = #lines
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor((vim.o.columns - width) / 2),
+    style = "minimal",
+    border = "rounded",
+    title = "nvim-ai Debug",
+    title_pos = "center"
+  })
+
+  -- Set buffer options
+  vim.api.nvim_buf_set_option(buf, "modifiable", false)
+  vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
+
+  -- Add keymapping to close the window
+  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', ':close<CR>', { noremap = true, silent = true })
+end, { desc = "Show nvim-ai debug information" })
+
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()

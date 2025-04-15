@@ -3,9 +3,6 @@ local config = require('nai.config')
 local constants = require('nai.constants')
 local error_utils = require('nai.utils.error')
 
--- Store activated buffers
-M.activated_buffers = {}
-
 -- Check if buffer contains chat markers
 function M.detect_chat_markers(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
@@ -59,13 +56,19 @@ function M.activate_buffer(bufnr)
   -- Debug info
   local filename = vim.api.nvim_buf_get_name(bufnr)
 
+  local state = require('nai.state')
+  local events = require('nai.events')
+
   -- Skip if already activated
-  if M.activated_buffers[bufnr] then
+  if state.is_buffer_activated(bufnr) then
     return
   end
 
   -- Mark buffer as activated
-  M.activated_buffers[bufnr] = true
+  state.activate_buffer(bufnr)
+
+  -- Emit event
+  events.emit('buffer:activate', bufnr, filename)
 
   if config.options.mappings.enabled then
     require('nai.mappings').apply_to_buffer(bufnr)
@@ -93,9 +96,9 @@ function M.activate_buffer(bufnr)
   -- Schedule another application of syntax highlighting
   -- This helps with race conditions where filetype is set after activation
   vim.defer_fn(function()
-    if vim.api.nvim_buf_is_valid(bufnr) and M.activated_buffers[bufnr] then
-      M.apply_syntax_overlay(bufnr)
-    end
+    -- if vim.api.nvim_buf_is_valid(bufnr) and M.activated_buffers[bufnr] then
+    --   M.apply_syntax_overlay(bufnr)
+    -- end
   end, 100)
 end
 
@@ -122,8 +125,14 @@ function M.deactivate_buffer(bufnr)
   -- Validate buffer (but don't return since we want to clean up anyway)
   error_utils.validate_buffer(bufnr, "deactivate")
 
+  local state = require('nai.state')
+  local events = require('nai.events')
+
   -- Remove from activated buffers
-  M.activated_buffers[bufnr] = nil
+  state.deactivate_buffer(bufnr)
+
+  -- Emit event
+  events.emit('buffer:deactivate', bufnr)
 
   -- Clear highlights only if buffer is valid
   if vim.api.nvim_buf_is_valid(bufnr) then
@@ -189,7 +198,6 @@ function M.create_activation_command()
   end, { desc = 'Activate NAI Chat for current buffer' })
 end
 
--- Add this function
 function M.should_activate(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
 

@@ -56,14 +56,14 @@ M.defaults = {
     },
   },
   chat_files = {
-    directory = vim.fn.expand("~/notes/"), -- Default save location
-    format = "{id}.wiki",                  -- Filename format
-    auto_save = false,                     -- Save after each interaction
-    id_length = 4,                         -- Length of random ID
-    use_timestamp = false,                 -- Use timestamp instead of random ID if true
-    auto_title = true,                     -- Automatically generate title for untitled chats
+    directory = vim.fn.expand("~/nvim-ai-notes"), -- Default save location
+    format = "{id}.md",                           -- Filename format
+    auto_save = false,                            -- Save after each interaction
+    id_length = 4,                                -- Length of random ID
+    use_timestamp = false,                        -- Use timestamp instead of random ID if true
+    auto_title = true,                            -- Automatically generate title for untitled chats
     header = {
-      enabled = true,                      -- Whether to include YAML header
+      enabled = true,                             -- Whether to include YAML header
       template = [[---
 title: {title}
 date: {date}
@@ -237,6 +237,9 @@ function M.setup(opts)
 
   -- Initialize configuration
   init_config()
+
+  -- Initialize state with config
+  require('nai.state').init(M.options)
 
   return M.options
 end

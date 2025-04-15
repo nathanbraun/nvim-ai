@@ -68,8 +68,6 @@ function M.setup(opts)
   return M
 end
 
-M.active_request = nil
-
 -- Development helper to reload the plugin
 function M.reload()
   -- Clear the module cache for the plugin
@@ -246,6 +244,11 @@ function M.chat(opts)
   -- Create indicator at the end of buffer
   local indicator = utils.indicators.create_assistant_placeholder(buffer_id, line_count)
 
+  -- Register the indicator in state
+  local state = require('nai.state')
+  local indicator_id = "indicator_" .. buffer_id .. "_" .. line_count
+  state.register_indicator(indicator_id, indicator)
+
   -- Update the indicator with the model from chat_config if available
   if chat_config and chat_config.model then
     utils.indicators.update_stats(indicator, {
@@ -254,7 +257,7 @@ function M.chat(opts)
   end
 
   -- Cancel any ongoing requests
-  if M.active_request then
+  if state.has_active_requests() then
     M.cancel()
   end
 
@@ -271,11 +274,14 @@ function M.chat(opts)
   end
 
   -- Call API
-  M.active_request = api.chat_request(
+  local request_handle = api.chat_request(
     messages,
     function(response)
       -- Get the position where we need to replace the placeholder
       local insertion_row = utils.indicators.remove(indicator)
+
+      -- Clear indicator from state
+      state.clear_indicator(indicator_id)
 
       -- Extract title if present
       local modified_response = response
@@ -342,12 +348,13 @@ function M.chat(opts)
 
       -- Notify completion
       vim.notify("AI response complete", vim.log.levels.INFO)
-      M.active_request = nil
-      M.active_indicator = nil
     end,
     function(error_msg)
       -- Handle errors (same as before)
       local insertion_row = utils.indicators.remove(indicator)
+
+      -- Clear indicator from state
+      state.clear_indicator(indicator_id)
 
       -- Create error message
       local error_lines = {
@@ -370,55 +377,55 @@ function M.chat(opts)
 
       -- Show error notification
       vim.notify(error_msg, vim.log.levels.ERROR)
-      M.active_request = nil
-      M.active_indicator = nil
     end,
     chat_config
   )
 
-  -- Store indicator for cancellation
-  M.active_indicator = indicator
+  return request_handle
 end
 
 function M.cancel()
-  if M.active_request then
+  local state = require('nai.state')
+
+  -- Get all active requests from state
+  local active_requests = state.get_active_requests()
+
+  for request_id, request_data in pairs(active_requests) do
     -- Cancel the request
-    api.cancel_request(M.active_request)
-    M.active_request = nil
+    api.cancel_request({ request_id = request_id })
+  end
 
-    -- Handle indicator cleanup
-    if M.active_indicator then
-      local buffer_id = M.active_indicator.buffer_id
-
-      -- Stop the timer if it exists
-      if M.active_indicator.timer then
-        M.active_indicator.timer:stop()
-        M.active_indicator.timer:close()
-      end
-
-      -- Check if buffer is valid
-      if vim.api.nvim_buf_is_valid(buffer_id) then
-        -- Get the end row of the indicator
-        local end_row = M.active_indicator.end_row
-
-        -- Add a new line right after the indicator
-        vim.api.nvim_buf_set_lines(
-          buffer_id,
-          end_row,
-          end_row,
-          false,
-          { "CANCELLED BY USER" }
-        )
-
-        -- Force redraw
-        vim.cmd("redraw")
-      end
-
-      M.active_indicator = nil
+  -- Handle indicators
+  for indicator_id, indicator in pairs(state.active_indicators) do
+    -- Stop the timer if it exists
+    if indicator.timer then
+      indicator.timer:stop()
+      indicator.timer:close()
     end
 
-    vim.notify("AI completion cancelled", vim.log.levels.INFO)
+    -- Check if buffer is valid
+    if vim.api.nvim_buf_is_valid(indicator.buffer_id) then
+      -- Get the end row of the indicator
+      local end_row = indicator.end_row
+
+      -- Add a new line right after the indicator
+      vim.api.nvim_buf_set_lines(
+        indicator.buffer_id,
+        end_row,
+        end_row,
+        false,
+        { "CANCELLED BY USER" }
+      )
+
+      -- Force redraw
+      vim.cmd("redraw")
+    end
+
+    -- Clear indicator from state
+    state.clear_indicator(indicator_id)
   end
+
+  vim.notify("AI completion cancelled", vim.log.levels.INFO)
 end
 
 function M.new_chat()
