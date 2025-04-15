@@ -211,7 +211,8 @@ vim.api.nvim_create_user_command('NAIRefreshHighlights', function()
   require('nai.syntax').define_highlight_groups()
 
   -- Reapply syntax to all activated buffers
-  for bufnr, _ in pairs(require('nai.buffer').activated_buffers) do
+  local state = require('nai.state')
+  for bufnr, _ in pairs(state.activated_buffers) do
     if vim.api.nvim_buf_is_valid(bufnr) then
       require('nai.buffer').apply_syntax_overlay(bufnr)
     end

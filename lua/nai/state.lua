@@ -113,4 +113,8 @@ function M.debug()
   }
 end
 
+function M.get_activated_buffers()
+  return M.activated_buffers
+end
+
 return M

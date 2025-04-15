@@ -77,8 +77,9 @@ function M.reload()
     end
   end
 
+  local state = require('nai.state') -- Add this line
   local current_buf = vim.api.nvim_get_current_buf()
-  if require('nai.buffer').activated_buffers[current_buf] then
+  if state.is_buffer_activated(buffer_id) then
     require('nai.buffer').apply_syntax_overlay(current_buf)
   end
 
@@ -103,16 +104,17 @@ function M.chat(opts)
   local fileutils = require('nai.fileutils')
   local buffer_id = vim.api.nvim_get_current_buf()
   local buffer_module = require('nai.buffer')
+  local state = require('nai.state') -- Add this line
 
   -- Force activation for this buffer if it contains user prompts
   local contains_chat_markers = buffer_module.detect_chat_markers(buffer_id)
-  if contains_chat_markers and not buffer_module.activated_buffers[buffer_id] then
+  if contains_chat_markers and not state.is_buffer_activated(buffer_id) then
     vim.notify("Found chat markers, activating buffer...", vim.log.levels.INFO)
     buffer_module.activate_buffer(buffer_id)
   end
 
   -- Check if buffer is activated after our attempt
-  if not buffer_module.activated_buffers[buffer_id] then
+  if not state.is_buffer_activated(buffer_id) then
     vim.notify("Buffer not activated, creating new chat...", vim.log.levels.INFO)
     -- If not in an activated buffer, use the old behavior (create a new chat)
     local text = ""
@@ -613,7 +615,8 @@ function M.expand_blocks(buffer_id)
   local buffer_module = require('nai.buffer')
 
   -- Check if buffer is activated
-  if not buffer_module.activated_buffers[buffer_id] then
+  local state = require('nai.state') -- Add this line
+  if not state.is_buffer_activated(buffer_id) then
     vim.notify("Buffer not activated for nvim-ai", vim.log.levels.INFO)
     return false
   end

@@ -95,10 +95,11 @@ function M.activate_buffer(bufnr)
 
   -- Schedule another application of syntax highlighting
   -- This helps with race conditions where filetype is set after activation
+  local state = require('nai.state') -- Add this line
   vim.defer_fn(function()
-    -- if vim.api.nvim_buf_is_valid(bufnr) and M.activated_buffers[bufnr] then
-    --   M.apply_syntax_overlay(bufnr)
-    -- end
+    if vim.api.nvim_buf_is_valid(bufnr) and state.is_buffer_activated(bufnr) then
+      M.apply_syntax_overlay(bufnr)
+    end
   end, 100)
 end
 
@@ -178,14 +179,15 @@ function M.create_activation_command()
   vim.api.nvim_create_user_command('NAIActivate', function()
     local bufnr = vim.api.nvim_get_current_buf()
     local filename = vim.api.nvim_buf_get_name(bufnr)
+    local state = require('nai.state')
 
     -- Make sure the buffer isn't already activated
-    if M.activated_buffers[bufnr] then
+    if state.is_buffer_activated(bufnr) then
       return
     end
 
     -- Force activation regardless of checks
-    M.activated_buffers[bufnr] = true
+    state.activate_buffer(bufnr)
     M.apply_syntax_overlay(bufnr)
 
     -- Set up buffer-local commands
