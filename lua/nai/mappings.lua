@@ -12,6 +12,10 @@ M.defaults = {
     cancel = "<Leader>ax",  -- Cancel request
   },
 
+  expand = {
+    blocks = "<Leader>ae", -- Expand blocks
+  },
+
   -- Insert commands
   insert = {
     user_message = "<Leader>au", -- Add user message
@@ -42,6 +46,10 @@ function M.apply_to_buffer(bufnr)
     { noremap = true, silent = true, desc = 'New chat' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.chat.cancel, ':NAICancel<CR>',
     { noremap = true, silent = true, desc = 'Cancel request' })
+
+  -- expand commands
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.expand.blocks, ':NAIExpand<CR>',
+    { noremap = true, silent = true, desc = 'Expand special blocks' })
 
   -- Insert commands
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.user_message, ':NAIUser<CR>',
@@ -85,24 +93,6 @@ function M.apply_to_buffer(bufnr)
     vim.api.nvim_buf_set_keymap(bufnr, 'i', '<C-c>', [[<Cmd>lua require('nai.mappings').handle_ctrl_c()<CR>]],
       { noremap = true, silent = true, desc = 'Cancel AI request or exit insert mode' })
   end
-
-  -- Try to set up which-key if available
-  M.setup_which_key()
-end
-
--- Setup which-key integration if available
-function M.setup_which_key()
-  local ok, wk = pcall(require, "which-key")
-  if not ok then
-    return
-  end
-
-  wk.register({
-    ["<Leader>a"] = { name = "+AI" },
-    ["<Leader>ac"] = { name = "+Chat" },
-    ["<Leader>ai"] = { name = "+Insert" },
-    ["<Leader>as"] = { name = "+Settings" },
-  })
 end
 
 -- Setup function to merge user config

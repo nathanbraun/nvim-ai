@@ -139,150 +139,13 @@ function M.chat(opts)
     end
   end
 
-  -- Check for unexpanded blocks
-  local scrape = require('nai.fileutils.scrape')
-  local snapshot = require('nai.fileutils.snapshot')
+  -- Try to expand blocks first
+  local expanded = M.expand_blocks(buffer_id)
 
-  -- First, check for unexpanded scrape blocks
-  if scrape.has_unexpanded_scrape_blocks(buffer_id) then
-    -- Handle the case where we have unexpanded scrape blocks
-    vim.notify("Expanding scrape blocks. Press again to chat.", vim.log.levels.INFO)
-
-    -- Only expand scrape blocks and return - don't continue with chat
-    scrape.expand_scrape_blocks_in_buffer(buffer_id)
+  -- If blocks were expanded or are being processed, don't continue with chat
+  if expanded then
     return
   end
-
-  -- Check if there are any active scrape requests still in progress
-  if scrape.has_active_requests() then
-    vim.notify("Scrape requests are still in progress. Please wait for completion before chatting.",
-      vim.log.levels.WARN)
-    return
-  end
-
-  -- Check for unexpanded snapshot blocks
-  if snapshot.has_unexpanded_snapshot_blocks(buffer_id) then
-    -- Handle the case where we have unexpanded snapshot blocks
-    vim.notify("Expanding snapshot blocks. Press again to chat.", vim.log.levels.INFO)
-
-    -- Process lines in buffer to expand snapshots
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-    local line_offset = 0
-
-    -- Find and expand snapshot blocks
-    for i, line in ipairs(lines) do
-      if line == ">>> snapshot" then
-        -- This is an unexpanded snapshot
-        local block_start = i - 1 + line_offset
-
-        -- Find the end of the snapshot block (next >>> or <<<)
-        local block_end = #lines
-        for j = i + 1, #lines do
-          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-            block_end = j - 1 + line_offset
-            break
-          end
-        end
-
-        -- Expand the snapshot directly in the buffer
-        local new_line_count = snapshot.expand_snapshot_in_buffer(buffer_id, block_start, block_end + 1)
-
-        -- Adjust line offset for any additional lines added
-        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-        -- Re-fetch buffer lines since they've changed
-        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-      end
-    end
-
-    return
-  end
-
-  -- Check for unexpanded YouTube blocks
-  local youtube = require('nai.fileutils.youtube')
-  if youtube.has_unexpanded_youtube_blocks(buffer_id) then
-    -- Handle the case where we have unexpanded YouTube blocks
-    vim.notify("Expanding YouTube transcript blocks. Press again to chat.", vim.log.levels.INFO)
-
-    -- Process lines in buffer to expand YouTube blocks
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-    local line_offset = 0
-
-    -- Find and expand YouTube blocks
-    for i, line in ipairs(lines) do
-      if line == ">>> youtube" then
-        -- This is an unexpanded YouTube block
-        local block_start = i - 1 + line_offset
-
-        -- Find the end of the YouTube block (next >>> or <<<)
-        local block_end = #lines
-        for j = i + 1, #lines do
-          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-            block_end = j - 1 + line_offset
-            break
-          end
-        end
-
-        -- Expand the YouTube block directly in the buffer
-        local new_line_count = youtube.expand_youtube_block(buffer_id, block_start, block_end + 1)
-
-        -- Adjust line offset for any additional lines added
-        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-        -- Re-fetch buffer lines since they've changed
-        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-      end
-    end
-
-    return
-  end
-
-  -- Check for unexpanded crawl blocks
-  local crawl = require('nai.fileutils.crawl')
-  if crawl.has_unexpanded_crawl_blocks(buffer_id) then
-    -- Handle the case where we have unexpanded crawl blocks
-    vim.notify("Expanding crawl blocks. Press again to chat.", vim.log.levels.INFO)
-
-    -- Process lines in buffer to expand crawl blocks
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-    local line_offset = 0
-
-    -- Find and expand crawl blocks
-    for i, line in ipairs(lines) do
-      if line == ">>> crawl" then
-        -- This is an unexpanded crawl block
-        local block_start = i - 1 + line_offset
-
-        -- Find the end of the crawl block (next >>> or <<<)
-        local block_end = #lines
-        for j = i + 1, #lines do
-          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-            block_end = j - 1 + line_offset
-            break
-          end
-        end
-
-        -- Expand the crawl block directly in the buffer
-        local new_line_count = crawl.expand_crawl_block(buffer_id, block_start, block_end + 1)
-
-        -- Adjust line offset for any additional lines added
-        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-        -- Re-fetch buffer lines since they've changed
-        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-      end
-    end
-
-    return
-  end
-
-  -- Check if there are any active crawl requests still in progress
-  if crawl.has_active_requests() then
-    vim.notify("Crawl requests are still in progress. Please wait for completion before chatting.",
-      vim.log.levels.WARN)
-    return
-  end
-
 
   -- At this point, no unexpanded blocks were found, proceed with chat
 
@@ -736,6 +599,164 @@ function M.new_chat_with_content(user_input)
 
   -- Store indicator for cancellation
   M.active_indicator = indicator
+end
+
+function M.expand_blocks(buffer_id)
+  buffer_id = buffer_id or vim.api.nvim_get_current_buf()
+  local buffer_module = require('nai.buffer')
+
+  -- Check if buffer is activated
+  if not buffer_module.activated_buffers[buffer_id] then
+    vim.notify("Buffer not activated for nvim-ai", vim.log.levels.INFO)
+    return false
+  end
+
+  -- Track if any blocks were expanded
+  local expanded_something = false
+
+  -- Check for unexpanded scrape blocks
+  local scrape = require('nai.fileutils.scrape')
+  if scrape.has_unexpanded_scrape_blocks(buffer_id) then
+    vim.notify("Expanding scrape blocks", vim.log.levels.INFO)
+    scrape.expand_scrape_blocks_in_buffer(buffer_id)
+    expanded_something = true
+  end
+
+  -- Check if there are any active scrape requests still in progress
+  if scrape.has_active_requests() then
+    vim.notify("Scrape requests are still in progress", vim.log.levels.INFO)
+    return true -- Return true to indicate we're handling something, but not fully expanded yet
+  end
+
+  -- Check for unexpanded snapshot blocks
+  local snapshot = require('nai.fileutils.snapshot')
+  if snapshot.has_unexpanded_snapshot_blocks(buffer_id) then
+    -- Process lines in buffer to expand snapshots
+    vim.notify("Expanding snapshot blocks", vim.log.levels.INFO)
+
+    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+    local line_offset = 0
+
+    -- Find and expand snapshot blocks
+    for i, line in ipairs(lines) do
+      if line == ">>> snapshot" then
+        -- This is an unexpanded snapshot
+        local block_start = i - 1 + line_offset
+
+        -- Find the end of the snapshot block (next >>> or <<<)
+        local block_end = #lines
+        for j = i + 1, #lines do
+          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+            block_end = j - 1 + line_offset
+            break
+          end
+        end
+
+        -- Expand the snapshot directly in the buffer
+        local new_line_count = snapshot.expand_snapshot_in_buffer(buffer_id, block_start, block_end + 1)
+
+        -- Adjust line offset for any additional lines added
+        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+        -- Re-fetch buffer lines since they've changed
+        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      end
+    end
+
+    expanded_something = true
+  end
+
+  -- Check for unexpanded YouTube blocks
+  local youtube = require('nai.fileutils.youtube')
+  if youtube.has_unexpanded_youtube_blocks(buffer_id) then
+    vim.notify("Expanding YouTube transcript blocks", vim.log.levels.INFO)
+
+    -- Process lines in buffer to expand YouTube blocks
+    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+    local line_offset = 0
+
+    -- Find and expand YouTube blocks
+    for i, line in ipairs(lines) do
+      if line == ">>> youtube" then
+        -- This is an unexpanded YouTube block
+        local block_start = i - 1 + line_offset
+
+        -- Find the end of the YouTube block (next >>> or <<<)
+        local block_end = #lines
+        for j = i + 1, #lines do
+          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+            block_end = j - 1 + line_offset
+            break
+          end
+        end
+
+        -- Expand the YouTube block directly in the buffer
+        local new_line_count = youtube.expand_youtube_block(buffer_id, block_start, block_end + 1)
+
+        -- Adjust line offset for any additional lines added
+        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+        -- Re-fetch buffer lines since they've changed
+        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      end
+    end
+
+    expanded_something = true
+  end
+
+  -- Check for unexpanded crawl blocks
+  local crawl = require('nai.fileutils.crawl')
+  if crawl.has_unexpanded_crawl_blocks(buffer_id) then
+    vim.notify("Expanding crawl blocks", vim.log.levels.INFO)
+
+    -- Process lines in buffer to expand crawl blocks
+    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+    local line_offset = 0
+
+    -- Find and expand crawl blocks
+    for i, line in ipairs(lines) do
+      if line == ">>> crawl" then
+        -- This is an unexpanded crawl block
+        local block_start = i - 1 + line_offset
+
+        -- Find the end of the crawl block (next >>> or <<<)
+        local block_end = #lines
+        for j = i + 1, #lines do
+          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+            block_end = j - 1 + line_offset
+            break
+          end
+        end
+
+        -- Expand the crawl block directly in the buffer
+        local new_line_count = crawl.expand_crawl_block(buffer_id, block_start, block_end + 1)
+
+        -- Adjust line offset for any additional lines added
+        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+        -- Re-fetch buffer lines since they've changed
+        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      end
+    end
+
+    expanded_something = true
+  end
+
+  -- Check if there are any active crawl requests still in progress
+  if crawl.has_active_requests() then
+    vim.notify("Crawl requests are still in progress", vim.log.levels.INFO)
+    return true -- Return true to indicate we're handling something, but not fully expanded yet
+  end
+
+  return expanded_something
+end
+
+function M.expand_blocks_command()
+  local expanded = M.expand_blocks()
+
+  if not expanded then
+    vim.notify("No expandable blocks found", vim.log.levels.INFO)
+  end
 end
 
 function M.run_tests()

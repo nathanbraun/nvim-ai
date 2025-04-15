@@ -11,6 +11,11 @@ vim.api.nvim_create_user_command('NAIProvider', function()
   require('nai.tools.picker').select_provider()
 end, { nargs = 0, desc = 'Select AI provider' })
 
+vim.api.nvim_create_user_command('NAIExpand', function()
+  require('nai').expand_blocks_command()
+end, { desc = 'Expand all special blocks without continuing chat' })
+
+
 vim.api.nvim_create_user_command('NAIChat', function(opts)
   require('nai').chat(opts)
 end, { range = true, nargs = '?', desc = 'AI chat' })
