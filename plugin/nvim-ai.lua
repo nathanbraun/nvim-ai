@@ -297,12 +297,10 @@ vim.api.nvim_create_user_command('NAISetKey', function(opts)
     key = vim.fn.inputsecret("Enter API key for " .. provider .. ": ")
   else
     -- Interactive mode - ask for both provider and key
-    provider = vim.fn.input({
-      prompt = "Provider (openai, openrouter, dumpling): ",
-      completion = function(_, _, _)
-        return { "openai", "openrouter", "dumpling" }
-      end
-    })
+    local providers = { "openai", "openrouter", "dumpling", "ollama" }
+
+    -- Use simple input instead of input with completion
+    provider = vim.fn.input("Provider (openai, openrouter, dumpling, ollama): ")
 
     if provider == "" then
       vim.notify("Operation cancelled", vim.log.levels.INFO)
@@ -318,7 +316,7 @@ vim.api.nvim_create_user_command('NAISetKey', function(opts)
   end
 
   -- Validate provider
-  local valid_providers = { "openai", "openrouter", "dumpling" }
+  local valid_providers = { "openai", "openrouter", "dumpling", "ollama" }
   local is_valid = false
   for _, valid_provider in ipairs(valid_providers) do
     if provider == valid_provider then
@@ -333,18 +331,89 @@ vim.api.nvim_create_user_command('NAISetKey', function(opts)
     return
   end
 
-  -- Save the API key
-  local success = require('nai.config').save_credential(provider, key)
+  -- Check if the credentials file exists and contains this provider already
+  local config = require('nai.config')
+  local path = require('nai.utils.path')
+  local credentials_file = path.expand(config.options.credentials.file_path)
 
-  if success then
+  local existing_credentials = {}
+  if vim.fn.filereadable(credentials_file) == 1 then
+    local content = vim.fn.readfile(credentials_file)
+    local success, creds = pcall(vim.json.decode, table.concat(content, '\n'))
+
+    if success and type(creds) == "table" then
+      existing_credentials = creds
+
+      -- Check if provider key already exists
+      if existing_credentials[provider] then
+        local overwrite = vim.fn.confirm(
+          "API key for " .. provider .. " already exists. Overwrite?",
+          "&Yes\n&No",
+          2
+        )
+
+        if overwrite ~= 1 then
+          vim.notify("Operation cancelled", vim.log.levels.INFO)
+          return
+        end
+      end
+    end
+  end
+
+  -- Ensure the directory exists first
+  local config_dir = vim.fn.fnamemodify(credentials_file, ":h")
+  if vim.fn.isdirectory(config_dir) ~= 1 then
+    local mkdir_result = vim.fn.mkdir(config_dir, "p")
+    if mkdir_result ~= 1 then
+      vim.notify("Failed to create config directory: " .. config_dir, vim.log.levels.ERROR)
+      return
+    end
+  end
+
+  -- Update the credentials with the new key
+  existing_credentials[provider] = key
+
+  -- Format the JSON with indentation
+  local formatted_json = "{\n"
+  local keys = {}
+  for k in pairs(existing_credentials) do
+    table.insert(keys, k)
+  end
+  table.sort(keys) -- Sort keys for consistent output
+
+  for i, k in ipairs(keys) do
+    local v = existing_credentials[k]
+    formatted_json = formatted_json .. string.format('  "%s": "%s"', k, v)
+    if i < #keys then
+      formatted_json = formatted_json .. ",\n"
+    else
+      formatted_json = formatted_json .. "\n"
+    end
+  end
+  formatted_json = formatted_json .. "}\n"
+
+  -- Write back to file
+  local file = io.open(credentials_file, "w")
+
+  if file then
+    file:write(formatted_json)
+    file:close()
+
+    -- Set permissions to be readable only by the owner on Unix
+    if vim.fn.has('unix') == 1 then
+      vim.fn.system("chmod 600 " .. vim.fn.shellescape(credentials_file))
+    end
+
     vim.notify("API key for " .. provider .. " saved successfully", vim.log.levels.INFO)
+  else
+    vim.notify("Failed to save API key: could not write to " .. credentials_file, vim.log.levels.ERROR)
   end
 end, {
   nargs = "*",
   desc = "Set API key for a provider (usage: NAISetKey [provider] [key])",
   complete = function(ArgLead, CmdLine, CursorPos)
     -- Provide completion for providers
-    local providers = { "openai", "openrouter", "dumpling" }
+    local providers = { "openai", "openrouter", "dumpling", "ollama" }
     if CmdLine:match("^%s*NAISetKey%s+%S+%s+") then
       -- If provider is already specified, don't provide completions for the key
       return {}
