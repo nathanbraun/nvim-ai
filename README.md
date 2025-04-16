@@ -72,7 +72,7 @@ So open up an empty markdown file and press `<leader>au`. This will insert a
 *user* prompt (alternatively you can just type out the `>>> user` -- it works
 the same).
 
-Type your message below it and press `<leader>c`.
+Type your message for the LLM below it and press `<leader>c`.
 
 ```
 >>> user
@@ -82,6 +82,8 @@ Briefly tell me about Neovim.
 If all is working well you should see a spinner and a note about generating the
 reponse/model info. When it's ready it'll insert the response (under an `>>>
 assistant` block) followed by another user prompt for you to follow up.
+
+![First Conversation](images/first-convo.jpg)
 
 Try following up under the next `>>> user` prompt ("What year was it
 released?") and press `<leader>c` again to continue the conversation.
@@ -133,8 +135,9 @@ To view past conversations run `:NAIBrowse`, which is mapped to `<leader>ao`
 This will open up a Telescope picker with the extracted *titles* (from the
 YAML) of all your conversations in the `~/nvim-ai-notes` directory.
 
-## Referencing files and web content
+## Referencing local text files and web content
 
+### >>> reference 
 You can include other text files in the chat using the `reference` command.
 Note this can be very helpful for coding, e.g.:
 
@@ -149,44 +152,8 @@ Do you have any ideas for improving this?
 
 ```
 
-whereupon the model comes back:
-
-```markdown
-<<< assistant
-
-Looking at your fruit data analysis code, I have several suggestions to improve
-it:
-
-1. **Add docstrings and comments**: Document your code's purpose and explain
-   complex operations.
-
-2. **Implement error handling**: Add try-except blocks for file reading and data
-   operations.
-
-3. **Modularize your code**: Create functions for different analysis steps.
-
-4. **Add data validation**: Check for missing values and handle them
-   appropriately.
-
-5. **Enhance visualizations**: Add matplotlib or seaborn plots to visualize your
-   findings.
-
-6. **Use more descriptive variable names**: Makes code more readable.
-
-7. **Add data summary statistics**: Include .describe() to get a better
-   overview.
-
-8. **Save results to files**: Export your findings to CSV or Excel.
-
-Here's a refactored version:
-
--- python
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from pathlib import Path
-...
-```
+### >>> snapshot 
+Reference will add the current file to the chat every time
 
 ## Configuration
 nvim-ai can be configured with the setup function (defaults below):
