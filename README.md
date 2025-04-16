@@ -119,6 +119,8 @@ fill it in for you (for me for this query Claude picked "Introduction to YAML
 Basics"). This is all text -- and it won't change existing titles -- so feel
 free to modify.
 
+![New Conversation](images/new-convo.jpg)
+
 The is exactly the same as before -- it's still a normal markdown file and you
 can save, close, pick up where you left off etc.
 
