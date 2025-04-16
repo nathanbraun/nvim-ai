@@ -139,8 +139,7 @@ To view past conversations run `:NAIBrowse`, which is mapped to `<leader>ao`
 This will open up a Telescope picker with the extracted *titles* (from the
 YAML) of all your conversations in the `~/nvim-ai-notes` directory.
 
-## Referencing local text files and web content
-
+## Embedding local text files
 ### >>> reference 
 You can include other text files in the chat using the `reference` command.
 This can be very helpful for coding (see the screenshot below). Note it works
@@ -202,6 +201,16 @@ print(f"Average Dietary Fiber: {average_dietary_fiber} g")
 
 This way you can ask about the file, make changes etc and the LLM will better
 be able to follow what's going on.
+
+## Other blocks
+### >>> web
+You can get text data from simple websites using the `>>> web` block followed
+by a URL. Behind the scenes its using
+[html2text](https://github.com/grobian/html2text) or
+[lynx](https://lynx.invisible-island.net/) and requires one of them be
+installed.
+
+![Web](images/web.jpg)
 
 ## Configuration
 nvim-ai can be configured with the setup function (defaults below):
