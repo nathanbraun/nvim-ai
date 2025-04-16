@@ -1,6 +1,8 @@
 # nvim-ai
 LLM chats as text files inside Neovim.
 
+![Demo](images/main-demo.gif)
+
 ## Features
 - Chat with any LLM inside any text file.
 - Persistant. Save conversations as text files. Pick them up later and continue
