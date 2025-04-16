@@ -6,8 +6,8 @@ LLM chats as text files inside Neovim.
 - Persistant. Save conversations as text files. Pick them up later and continue
   chatting. View, edit and regenerate conversation history.
 - Works with OpenRouter, OpenAI or locally with Ollama.
-- Add local files, text from websites or YouTube video transcripts (requires
-  Dumpling API key).
+- Embed local text files, websites or YouTube video transcripts (requires
+  [Dumpling API](https://dumplingai.com) key).
 - Configurable provider, model, temperature and system prompt.
 - No language dependencies, written in Lua.
 - Asyncronous.
@@ -207,6 +207,31 @@ installed.
 
 ![Web](images/web.jpg)
 
+## >>> alias blocks
+
+Alias blocks let you alias specific `config`, `system` and initial `user` to
+shorthand prompts.
+
+The example `translate` alias included in the config:
+
+```lua
+aliases = {
+    ...,
+    translate = {
+      system =
+      "You are an interpretor. Translate any further text/user messages you recieve to Spanish. If the text is a question, don't answer it, just translate the question to Spanish.",
+      user_prefix = "",
+      config = {
+        model = "openai/gpt-4o-mini",
+        temperature = 0.1,
+      }
+    },
+    }
+```
+
+It's used like this:
+
+![Alias](images/alias-translate.jpg)
 
 # Dumpling AI
 The `web` prompt works on simple sites, but won't work on e.g. SPA's or
@@ -248,8 +273,9 @@ configurable depth (defaults to 2). Uses more Dumpling credits.
 
 Type it out or press `<leader>ac` to insert.
 
-k# >>> youtube
-Will expand to a transcript of any YouTube video.
+## >>> youtube
+Will expand to a transcript of any YouTube video. After its expanded you can
+follow up with user prompts to ask questions about the transcript.
 
 # Configuration
 nvim-ai can be configured with the setup function (defaults below):
