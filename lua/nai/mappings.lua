@@ -31,7 +31,7 @@ M.defaults = {
   settings = {
     select_model = "<Leader>am",    -- Select model
     toggle_provider = "<Leader>ap", -- Toggle provider
-  }
+  },
 
   -- Files (add this new section)
   files = {

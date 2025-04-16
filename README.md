@@ -69,8 +69,8 @@ By default, nvim-ai is enabled on markdown (`*.md`) and vimwiki (`*.wiki`)
 files. Most commands are prefixed with `<leader>a`.
 
 So open up an empty markdown file and press `<leader>au`. This will insert a
-*user* prompt (alternatively you can just type out the >>> user -- it works the
-same).
+*user* prompt (alternatively you can just type out the `>>> user` -- it works
+the same).
 
 Type your message below it and press `<leader>c`.
 
@@ -112,26 +112,81 @@ tags: [ai]
 
 Try typing in a message ("Briefly tell me about YAML").
 
-The first time the LLM responds, if your note is "Untitled" it'll automatically
-update it (for me for this query Claude picked "Introduction to YAML Basics").
-This is all text -- and it'll only do it if you don't already have an existing
-title -- so feel free to change.
+If your note is "Untitled" the first time the LLM responds it'll automatically
+fill it in for you (for me for this query Claude picked "Introduction to YAML
+Basics"). This is all text -- and it won't change existing titles -- so feel
+free to modify.
 
-The whole thing exactly the same as before -- it's still a normal markdown file
-and you can save, close, pick up where you left off etc.
+The is exactly the same as before -- it's still a normal markdown file and you
+can save, close, pick up where you left off etc.
 
-The benefits are:
+The benefits to chatting in dedicated files with `<leader>ai`:
 
-1. Not having to think about where to store your markdown files and what to name them.
-2. Putting them all in one spot makes it easier to ...
+1. Not having to think about where to store your markdown files and what to title or name them.
+2. Putting them all in one spot makes it easier to view previous conversations.
 
 ### View previous conversations
 
-To view past conversations you can run `:NAIBrowse`, which is mapped to
-`<leader>ao` (for *open*) by default.
+To view past conversations run `:NAIBrowse`, which is mapped to `<leader>ao`
+(for *open*) by default.
 
-This will open up a Telescope picker with the *titles* (from the YAML) of all
-your conversations in the `~/.nvim-ai-notes` directory.
+This will open up a Telescope picker with the extracted *titles* (from the
+YAML) of all your conversations in the `~/nvim-ai-notes` directory.
+
+## Referencing files and web content
+
+You can include other text files in the chat using the `reference` command.
+Note this can be very helpful for coding, e.g.:
+
+```markdown
+>>> user
+I'm working on a small data analyis project in Python here:
+
+>>> reference
+/Users/nathanbraun/code/github.com/nathanbraun/techtools-fruit-example/fruit-code.py
+
+Do you have any ideas for improving this?
+
+```
+
+whereupon the model comes back:
+
+```markdown
+<<< assistant
+
+Looking at your fruit data analysis code, I have several suggestions to improve
+it:
+
+1. **Add docstrings and comments**: Document your code's purpose and explain
+   complex operations.
+
+2. **Implement error handling**: Add try-except blocks for file reading and data
+   operations.
+
+3. **Modularize your code**: Create functions for different analysis steps.
+
+4. **Add data validation**: Check for missing values and handle them
+   appropriately.
+
+5. **Enhance visualizations**: Add matplotlib or seaborn plots to visualize your
+   findings.
+
+6. **Use more descriptive variable names**: Makes code more readable.
+
+7. **Add data summary statistics**: Include .describe() to get a better
+   overview.
+
+8. **Save results to files**: Export your findings to CSV or Excel.
+
+Here's a refactored version:
+
+-- python
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from pathlib import Path
+...
+```
 
 ## Configuration
 nvim-ai can be configured with the setup function (defaults below):
