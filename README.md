@@ -139,7 +139,16 @@ To view past conversations run `:NAIBrowse`, which is mapped to `<leader>ao`
 This will open up a Telescope picker with the extracted *titles* (from the
 YAML) of all your conversations in the `~/nvim-ai-notes` directory.
 
-## Embedding local text files
+## System prompt
+You can configure the default system prompt in the config. On chat-by-chat
+basis you can set it using the *system* prompt:
+
+![System](images/system.jpg)
+
+Note you can only set the system prompt at the start of the chat, before any
+`>>> user` commands.
+
+## Embedding local text files and web content
 ### >>> reference 
 You can include other text files in the chat using the `reference` command.
 This can be very helpful for coding (see the screenshot below). Note it works
@@ -202,7 +211,6 @@ print(f"Average Dietary Fiber: {average_dietary_fiber} g")
 This way you can ask about the file, make changes etc and the LLM will better
 be able to follow what's going on.
 
-## Other blocks
 ### >>> web
 You can get text data from simple websites using the `>>> web` block followed
 by a URL. Behind the scenes its using
@@ -211,6 +219,50 @@ by a URL. Behind the scenes its using
 installed.
 
 ![Web](images/web.jpg)
+
+
+## Dumpling
+The `web` block works on simple sites, but won't work on e.g. SPA's or
+javascript-heavy content.
+
+[Dumpling AI](https://www.dumplingai.com/) is a paid (though inexpensive)
+service that provides a bunch of APIs to turn web content into LLM ready text.
+
+They provide a decent amount of free trial credits, so I recommend checking it
+out.
+
+When you get a Dumpling AI API key you can tell `nvim-ai` about it by running:
+
+```
+:NAISetKey dumpling
+```
+
+and pasting it in. Once you enable Dumpling, you'll be able to use the
+following commands.
+
+Note: in order to save on credits and not repeatedly call the Dumpling API,
+**all of the dumpling commands work similar to `snapshot`**. So `nvim-ai` will
+use Dumpling to get the text, then insert it into your chat file.
+
+### >>> scrape
+
+Like `web` but uses Dumpling's APIs instead of `curl` and `html2text`, so it
+works on many more sites.
+
+It also takes longer and is more expensive than `web` (which is free), so I'd
+try `web` first and use this if that doesn't work.
+
+Type it out or press `<leader>ad` (for AI *dumpling*) to insert.
+
+### >>> crawl
+
+Like `scrape` but will also scrape links up to a configurable depth. Uses more
+Dumpling credits.
+
+Type it out or press `<leader>ac` to insert.
+
+### >>> youtube
+Will expand to a transcript of any YouTube video.
 
 ## Configuration
 nvim-ai can be configured with the setup function (defaults below):

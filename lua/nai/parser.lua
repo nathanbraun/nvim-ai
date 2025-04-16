@@ -306,6 +306,11 @@ function M.format_web_block(content)
   return "\n>>> web\n\n" .. content
 end
 
+-- In lua/nai/parser.lua
+function M.format_scrape_block(content)
+  return "\n>>> scrape\n\n" .. content
+end
+
 -- Format a system message for the buffer
 function M.format_system_message(content)
   return "\n>>> system\n\n" .. content
