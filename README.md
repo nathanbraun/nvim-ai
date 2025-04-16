@@ -14,7 +14,7 @@ LLM chats as text files inside Neovim.
 - Auto topic/title detection.
 
 ## Prerequisites
-You'll need an OpenRouter (recommended) or OpenAI API key, *or* an instance of
+You'll need an OpenRouter (recommended) or OpenAI API key. *Or* an instance of
 Ollama running on your computer.
 
 You can get an OpenRouter key here:
@@ -52,6 +52,86 @@ use {
     end
 }
 ```
+
+After installing the plugin and getting your API key, open up Neovim and run:
+
+```
+:NAISetKey openrouter
+```
+
+It'll ask you for your API key. Paste it in. By default this will be saved at:
+
+`/Users/nathanbraun/.config/nvim-ai/credentials.json`
+
+## Quickstart
+### Your first conversation
+By default, nvim-ai is enabled on markdown (`*.md`) and vimwiki (`*.wiki`)
+files. Most commands are prefixed with `<leader>a`.
+
+So open up an empty markdown file and press `<leader>au`. This will insert a
+*user* prompt (alternatively you can just type out the >>> user -- it works the
+same).
+
+Type your message below it and press `<leader>c`.
+
+```
+>>> user
+Briefly tell me about Neovim.
+```
+
+If all is working well you should see a spinner and a note about generating the
+reponse/model info. When it's ready it'll insert the response (under an `>>>
+assistant` block) followed by another user prompt for you to follow up.
+
+Try following up under the next `>>> user` prompt ("What year was it
+released?") and press `<leader>c` again to continue the conversation.
+
+#### Saving, Closing, Re-Opening
+This is a normal markdown file, and can be saved, closed etc. When you re-open
+it you can continue chatting under additional `>>> user` blocks.
+
+### Creating a new conversation
+It can be cumbersome to deal with file and conversation management, and
+`nvim-ai` can take care of that for you.
+
+In Neovim, press `<leader>ai`.
+
+By default (it's configurable) this creates a markdown file
+`~/nvim-ai-notes/XXXX.md` where `XXXX` is a random string. The file starts off
+with a YAML header and ready user prompt:
+
+```markdown
+---
+title: Untitled
+date: YYYY-MM-DD
+tags: [ai]
+---
+
+>>> user
+```
+
+Try typing in a message ("Briefly tell me about YAML").
+
+The first time the LLM responds, if your note is "Untitled" it'll automatically
+update it (for me for this query Claude picked "Introduction to YAML Basics").
+This is all text -- and it'll only do it if you don't already have an existing
+title -- so feel free to change.
+
+The whole thing exactly the same as before -- it's still a normal markdown file
+and you can save, close, pick up where you left off etc.
+
+The benefits are:
+
+1. Not having to think about where to store your markdown files and what to name them.
+2. Putting them all in one spot makes it easier to ...
+
+### View previous conversations
+
+To view past conversations you can run `:NAIBrowse`, which is mapped to
+`<leader>ao` (for *open*) by default.
+
+This will open up a Telescope picker with the *titles* (from the YAML) of all
+your conversations in the `~/.nvim-ai-notes` directory.
 
 ## Configuration
 nvim-ai can be configured with the setup function (defaults below):
