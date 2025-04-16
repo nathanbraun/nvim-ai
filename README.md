@@ -143,6 +143,8 @@ is mapped to `<leader>ao` (for *open*) by default.
 This will open up a Telescope picker with the extracted *titles* (from the
 YAML) of all your conversations in the `~/nvim-ai-notes` directory.
 
+![Open Notes](images/note-picker.gif)
+
 # Other prompts
 ## >>> system 
 You can configure the default system prompt in the config. On chat-by-chat
