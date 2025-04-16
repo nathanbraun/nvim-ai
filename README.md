@@ -12,6 +12,8 @@ LLM chats as text files inside Neovim.
 - No language dependencies, written in Lua.
 - Asyncronous.
 - Auto topic/title detection.
+- Additive (it'll respect your current syntax rules) and lightweight syntax and
+  folding.
 
 ## Prerequisites
 You'll need an OpenRouter (recommended) or OpenAI API key. *Or* an instance of
@@ -141,12 +143,65 @@ YAML) of all your conversations in the `~/nvim-ai-notes` directory.
 
 ### >>> reference 
 You can include other text files in the chat using the `reference` command.
-This can be very helpful for coding, e.g.:
+This can be very helpful for coding (see the screenshot below). Note it works
+on regular glob patterns (`*` and `**` for nested directories).
 
 ![Reference](images/reference.jpg)
 
 ### >>> snapshot 
-Reference will add the current file to the chat every time
+When you submit your chat (`<leader>c` or `:NAIChat`) `reference` works by
+grabbing the *current* state of the file and inserting it into the converstion
+behind the scenes (so nvim-ai sends the file contents to the LLM even though
+it doesn't display it on the screen.
+
+This can be tricky when, say, you ask an LLM about a file with `reference`,
+then update it and continue the conversation. If you've made changes, the LLM
+has no way of knowing what the file looked like before.
+
+`snapshot` gets around this by inserting the complete text of the file (or
+files, it also works with glob patterns) into your chat buffer.
+
+```markdown
+>>> user
+I'm working on a small data analyis project in Python here:
+
+>>> snapshot
+/Users/nathanbraun/code/github.com/nathanbraun/techtools-fruit-example/fruit-code.py
+```
+
+Adding a `snapshot` block means the `:NAIChat` command won't submit to the LLM
+right away. Instead, when you enter it (or press `<leader>c`) the snapshot will
+be *expanded*. This inserts the file contents directly in the buffer, like this:
+
+```markdown
+>>> user
+I'm working on a small data analyis project in Python here:
+
+>>> snapshotted [2025-04-16 09:06:49]
+/Users/nathanbraun/code/github.com/nathanbraun/techtools-fruit-example/fruit-code.py
+
+==> /Users/nathanbraun/code/github.com/nathanbraun/techtools-fruit-example/fruit-code.py <==
+```python
+import pandas as pd
+
+df = pd.read_csv('fruits.csv')
+
+len(df.columns)
+
+df.head()
+
+average_vitamin_c = df['vitamin_c_mg'].mean()
+average_dietary_fiber = df['dietary_fiber_g'].mean()
+
+print(f"Average Vitamin C: {average_vitamin_c} mg")
+print(f"Average Dietary Fiber: {average_dietary_fiber} g")
+
+...
+
+```
+
+This way you can ask about the file, make changes etc and the LLM will better
+be able to follow what's going on.
 
 ## Configuration
 nvim-ai can be configured with the setup function (defaults below):
