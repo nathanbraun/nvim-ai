@@ -233,6 +233,41 @@ It's used like this:
 
 ![Alias](images/alias-translate.jpg)
 
+## Placeholder expansion
+Another feature that works well with aliases are *place holders*. If
+`expand_placeholders` is enabled (it's off by default) you can include
+
+`$FILE_CONTENTS`
+
+In your message, and it'll add the text of the current file *above* the first
+user prompt.
+
+So for example, the `check-todo-list` example alias is configured like this:
+
+```lua
+aliases = {
+    ...,
+    ["check-todo-list"] = {
+      system =
+      [[Your job is to evaluate a todo list and make sure everything is checked off.
+
+
+Instructions:
+- If everything is checked off, respond "Looks good!" and nothing else.
+- Otherwise remind me what I still have to do.]],
+      config = {
+        expand_placeholders = true
+      },
+      user_prefix = [[The todo is here:
+        $FILE_CONTENTS
+        ]]
+    },
+    }
+```
+
+![Alias + Placeholders](images/alias-placeholder.gif)
+
+
 # Dumpling AI
 The `web` prompt works on simple sites, but won't work on e.g. SPA's or
 javascript-heavy content.

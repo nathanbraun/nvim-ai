@@ -113,6 +113,21 @@ tags: [ai]
       "You are a testing expert. Generate comprehensive unit tests for the provided code, focusing on edge cases and full coverage.",
       user_prefix = "Generate tests for:",
     },
+    ["check-todo-list"] = {
+      system =
+      [[Your job is to evaluate a todo list and make sure everything is checked off.
+
+
+Instructions:
+- If everything is checked off, respond "Looks good!" and nothing else.
+- Otherwise remind me what I still have to do.]],
+      config = {
+        expand_placeholders = true
+      },
+      user_prefix = [[The todo is here:
+        $FILE_CONTENTS
+        ]]
+    },
   },
   format_response = {
     enabled = true,             -- Whether to format the assistant's response
