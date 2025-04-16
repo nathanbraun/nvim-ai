@@ -245,7 +245,7 @@ It's used like this:
 ![Alias](images/alias-translate.jpg)
 
 ## Placeholder expansion
-Another feature that works well with aliases are *place holders*. If
+Another feature that works well with aliases are *placeholders*. If
 `expand_placeholders` is enabled (it's off by default) you can include
 
 `$FILE_CONTENTS`
