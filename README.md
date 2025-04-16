@@ -146,11 +146,22 @@ basis you can set it using the *system* prompt:
 ![System](images/system.jpg)
 
 Note you can only set the system prompt at the start of the chat, before any
-`>>> user` commands.
+`>>> user` prompts.
+
+## Config prompt
+You can also set `model`, `temperature` and a few other options in the `>>>
+config` block:
+
+```
+>>> config
+model: openai/gpt-4o-mini
+```
+
+This goes before any system or user prompts. It'll take precedence over defaults.
 
 ## Embedding local text files and web content
 ### >>> reference 
-You can include other text files in the chat using the `reference` command.
+You can include other text files in the chat using the `reference` prompt.
 This can be very helpful for coding (see the screenshot below). Note it works
 on regular glob patterns (`*` and `**` for nested directories).
 
@@ -169,44 +180,14 @@ has no way of knowing what the file looked like before.
 `snapshot` gets around this by inserting the complete text of the file (or
 files, it also works with glob patterns) into your chat buffer.
 
-```markdown
->>> user
-I'm working on a small data analyis project in Python here:
-
->>> snapshot
-/Users/nathanbraun/code/github.com/nathanbraun/techtools-fruit-example/fruit-code.py
-```
+![Snapshot](images/snap.jpg)
 
 Adding a `snapshot` block means the `:NAIChat` command won't submit to the LLM
 right away. Instead, when you enter it (or press `<leader>c`) the snapshot will
-be *expanded*. This inserts the file contents directly in the buffer, like this:
+be *expanded*. This inserts the file contents directly in the buffer with a
+timestamp, like this:
 
-```markdown
->>> user
-I'm working on a small data analyis project in Python here:
-
->>> snapshotted [2025-04-16 09:06:49]
-/Users/nathanbraun/code/github.com/nathanbraun/techtools-fruit-example/fruit-code.py
-
-==> /Users/nathanbraun/code/github.com/nathanbraun/techtools-fruit-example/fruit-code.py <==
-```python
-import pandas as pd
-
-df = pd.read_csv('fruits.csv')
-
-len(df.columns)
-
-df.head()
-
-average_vitamin_c = df['vitamin_c_mg'].mean()
-average_dietary_fiber = df['dietary_fiber_g'].mean()
-
-print(f"Average Vitamin C: {average_vitamin_c} mg")
-print(f"Average Dietary Fiber: {average_dietary_fiber} g")
-
-...
-
-```
+![Snapshotted](images/snapshotted.jpg)
 
 This way you can ask about the file, make changes etc and the LLM will better
 be able to follow what's going on.
@@ -221,7 +202,7 @@ installed.
 ![Web](images/web.jpg)
 
 
-## Dumpling
+## Dumpling AI
 The `web` block works on simple sites, but won't work on e.g. SPA's or
 javascript-heavy content.
 
@@ -238,10 +219,10 @@ When you get a Dumpling AI API key you can tell `nvim-ai` about it by running:
 ```
 
 and pasting it in. Once you enable Dumpling, you'll be able to use the
-following commands.
+following prompts.
 
 Note: in order to save on credits and not repeatedly call the Dumpling API,
-**all of the dumpling commands work similar to `snapshot`**. So `nvim-ai` will
+**all of the dumpling promps work similar to `snapshot`**. So `nvim-ai` will
 use Dumpling to get the text, then insert it into your chat file.
 
 ### >>> scrape
