@@ -145,6 +145,13 @@ YAML) of all your conversations in the `~/nvim-ai-notes` directory.
 
 ![Open Notes](images/note-picker.gif)
 
+## Changing models
+You can run the `:NAIModel` command (bound to `<leader>am` by default) to open
+up a Telescope picker of model options. `:NAIProvider` (`<leader>ap`) does the
+same for provider (OpenRouter, Ollama, etc).
+
+![Select Model](images/change-model.gif)
+
 # Other prompts
 ## >>> system 
 You can configure the default system prompt in the config. On chat-by-chat
