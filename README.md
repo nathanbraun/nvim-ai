@@ -141,18 +141,9 @@ YAML) of all your conversations in the `~/nvim-ai-notes` directory.
 
 ### >>> reference 
 You can include other text files in the chat using the `reference` command.
-Note this can be very helpful for coding, e.g.:
+This can be very helpful for coding, e.g.:
 
-```markdown
->>> user
-I'm working on a small data analyis project in Python here:
-
->>> reference
-/Users/nathanbraun/code/github.com/nathanbraun/techtools-fruit-example/fruit-code.py
-
-Do you have any ideas for improving this?
-
-```
+![Reference](images/reference.jpg)
 
 ### >>> snapshot 
 Reference will add the current file to the chat every time
