@@ -32,6 +32,11 @@ function M.fetch_url(url, callback, on_error)
   local api_key = M.get_api_key()
   local config = require('nai.config')
 
+  if config.options.debug and config.options.debug.enabled then
+    vim.notify("DEBUG: fetch_url called for: " .. url, vim.log.levels.DEBUG)
+    vim.notify("DEBUG: Dumpling API key found: " .. (api_key ~= nil and "YES" or "NO"), vim.log.levels.DEBUG)
+  end
+
   if not api_key then
     if on_error then
       vim.schedule(function()
@@ -51,6 +56,10 @@ function M.fetch_url(url, callback, on_error)
 
   -- Remove trailing slash if present in base_endpoint
   endpoint = endpoint:gsub("//", "/"):gsub(":/", "://")
+
+  if config.options.debug and config.options.debug.enabled then
+    vim.notify("DEBUG: Using Dumpling endpoint: " .. endpoint, vim.log.levels.DEBUG)
+  end
 
   local data = {
     url = url,
@@ -143,8 +152,20 @@ end
 
 -- Function to handle expanding scrape blocks in naichat files
 function M.expand_scrape_block(buffer_id, start_line, end_line)
+  local config = require('nai.config')
+
+  -- Debug logging
+  if config.options.debug and config.options.debug.enabled then
+    vim.notify("DEBUG: expand_scrape_block called for lines " .. start_line .. " to " .. end_line, vim.log.levels.DEBUG)
+  end
+
   -- Get the scrape block lines
   local lines = vim.api.nvim_buf_get_lines(buffer_id, start_line, end_line, false)
+
+  -- Debug print lines
+  if config.options.debug and config.options.debug.enabled then
+    vim.notify("DEBUG: Scrape block content: " .. vim.inspect(lines), vim.log.levels.DEBUG)
+  end
 
   -- Skip the first line which contains the scrape marker
   local url = nil
@@ -169,6 +190,10 @@ function M.expand_scrape_block(buffer_id, start_line, end_line)
       }
     )
     return (end_line - start_line)
+  end
+
+  if config.options.debug and config.options.debug.enabled then
+    vim.notify("DEBUG: Found URL in scrape block: " .. url, vim.log.levels.DEBUG)
   end
 
   -- Change marker to show it's in progress

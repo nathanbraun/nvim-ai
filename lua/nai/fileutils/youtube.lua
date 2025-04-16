@@ -469,7 +469,7 @@ function M.has_unexpanded_youtube_blocks(buffer_id)
 
   for _, line in ipairs(lines) do
     -- Only match exact ">>> youtube" - not "transcribing" or "transcript"
-    if line == ">>> youtube" then
+    if vim.trim(line) == ">>> youtube" then
       return true
     end
   end

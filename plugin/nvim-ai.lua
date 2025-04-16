@@ -936,6 +936,18 @@ vim.api.nvim_create_user_command('NAIBrowse', function()
   }):find()
 end, { desc = "Browse AI chat files" })
 
+vim.api.nvim_create_user_command('NAIToggleDebug', function()
+  local config = require('nai.config')
+
+  if not config.options.debug then
+    config.options.debug = {}
+  end
+
+  config.options.debug.enabled = not (config.options.debug.enabled or false)
+
+  vim.notify("NAI debugging " .. (config.options.debug.enabled and "enabled" or "disabled"), vim.log.levels.INFO)
+end, { desc = "Toggle nvim-ai debug mode" })
+
 local mappings = require('nai.mappings')
 if mappings.active and mappings.active.files and mappings.active.files.browse then
   vim.api.nvim_set_keymap('n', mappings.active.files.browse, ':NAIBrowse<CR>',

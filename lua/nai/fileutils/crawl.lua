@@ -369,7 +369,7 @@ function M.has_unexpanded_crawl_blocks(buffer_id)
 
   for _, line in ipairs(lines) do
     -- Only match exact ">>> crawl" - not "crawling" or "crawled"
-    if line == ">>> crawl" then
+    if vim.trim(line) == ">>> crawl" then
       return true
     end
   end

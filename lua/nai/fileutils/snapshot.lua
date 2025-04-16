@@ -159,8 +159,8 @@ function M.has_unexpanded_snapshot_blocks(buffer_id)
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
 
   for _, line in ipairs(lines) do
-    -- Only match exact ">>> snapshot" and not ones with timestamps
-    if line == ">>> snapshot" then
+    -- Trim whitespace and check for ">>> snapshot"
+    if vim.trim(line) == ">>> snapshot" then
       return true
     end
   end

@@ -330,12 +330,18 @@ function M.get_dumpling_api_key()
   -- Try environment variable first
   local key = vim.env["DUMPLING_API_KEY"]
   if key and key ~= "" then
+    if M.options.debug and M.options.debug.enabled then
+      vim.notify("DEBUG: Found Dumpling API key in environment variable", vim.log.levels.DEBUG)
+    end
     return key
   end
 
   -- Try credentials file
   local credentials = read_credentials()
   if credentials["dumpling"] then
+    if M.options.debug and M.options.debug.enabled then
+      vim.notify("DEBUG: Found Dumpling API key in credentials file", vim.log.levels.DEBUG)
+    end
     return credentials["dumpling"]
   end
 
@@ -352,6 +358,9 @@ function M.get_dumpling_api_key()
     end
   end
 
+  if M.options.debug and M.options.debug.enabled then
+    vim.notify("DEBUG: No Dumpling API key found", vim.log.levels.DEBUG)
+  end
   return nil
 end
 

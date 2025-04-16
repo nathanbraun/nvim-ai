@@ -68,21 +68,24 @@ It'll ask you for your API key. Paste it in. By default this will be saved at:
 # Quickstart
 ## Your first conversation
 By default, nvim-ai is enabled on markdown (`*.md`) and vimwiki (`*.wiki`)
-files. Most commands are prefixed with `<leader>a`.
+files.
+
+Most commands are prefixed with `<leader>a`.
 
 So open up an empty markdown file and press `<leader>au`. This will insert a
-*user* prompt (alternatively you can just type out the `>>> user` -- it works
-the same).
+*user* prompt (alternatively you can just type out `>>> user` -- it works the
+same).
 
 Type your message for the LLM below it and press `<leader>c`.
 
 ```
 >>> user
+
 Briefly tell me about Neovim.
 ```
 
 If all is working well you should see a spinner and a note about generating the
-reponse/model info. When it's ready it'll insert the response (under an `>>>
+reponse/model info. When it's ready it'll insert the response (under an `<<<
 assistant` block) followed by another user prompt for you to follow up.
 
 ![First Conversation](images/first-convo.jpg)
@@ -161,27 +164,30 @@ This goes before any system or user prompts. It'll take precedence over defaults
 
 # Embedding local text files and web content
 ## >>> reference 
-You can include other text files in the chat using the `reference` prompt.
-This can be very helpful for coding (see the screenshot below). Note it works
-on regular glob patterns (`*` and `**` for nested directories).
+You can include other text files on your computer in the chat using the
+`reference` prompt. This can be very helpful for coding (see the screenshot
+below). Note it works with multiple files. Regular glob patterns (`*` and `**`
+for nested directories) work too.
 
 ![Reference](images/reference.jpg)
 
 ## >>> snapshot 
 When you submit your chat (`<leader>c` or `:NAIChat`) `reference` works by
-grabbing the *current* state of the file and inserting it into the converstion
+grabbing the *current* file contents and inserting it into the converstion
 behind the scenes (so `nvim-ai` sends the file contents to the LLM even though
 it doesn't display it on the screen.
 
 This can be tricky when, say, you ask an LLM about a file with `reference`,
-then update it and continue the conversation. If you've made changes, the LLM
-has no way of knowing what the file looked like before.
+update it based on the LLM's instructions, then try and continue the
+conversation. If you've made changes, the LLM has no way of knowing what the
+file looked like originally.
 
 `snapshot` gets around this by inserting the complete text of the file (or
 files, it also works with glob patterns) into your chat buffer.
 
 ![Snapshot](images/snap.jpg)
 
+### Expanding snapshot blocks
 Adding a `snapshot` block means the `:NAIChat` command won't submit to the LLM
 right away. Instead, when you enter it (or press `<leader>c`) the snapshot will
 be *expanded*. This inserts the file contents directly in the buffer with a
@@ -203,7 +209,7 @@ installed.
 
 
 # Dumpling AI
-The `web` block works on simple sites, but won't work on e.g. SPA's or
+The `web` prompt works on simple sites, but won't work on e.g. SPA's or
 javascript-heavy content.
 
 [Dumpling AI](https://www.dumplingai.com/) is a paid (though inexpensive)
@@ -222,27 +228,27 @@ and pasting it in. Once you enable Dumpling, you'll be able to use the
 following prompts.
 
 Note: in order to save on credits and not repeatedly call the Dumpling API,
-**all of the dumpling promps work similar to `snapshot`**. So `nvim-ai` will
+**all of the dumpling prompts work similar to `snapshot`**. So `nvim-ai` will
 use Dumpling to get the text, then insert it into your chat file.
 
 ## >>> scrape
 
 Like `web` but uses Dumpling's APIs instead of `curl` and `html2text`, so it
-works on many more sites.
+works on more sites.
 
 It also takes longer and is more expensive than `web` (which is free), so I'd
-try `web` first and use this if that doesn't work.
+try `web` first and use `scrape` if it doesn't work.
 
 Type it out or press `<leader>ad` (for AI *dumpling*) to insert.
 
 ## >>> crawl
 
-Like `scrape` but will also scrape links up to a configurable depth. Uses more
-Dumpling credits.
+Like `scrape` but will also scrape the pages a site links to up to a
+configurable depth (defaults to 2). Uses more Dumpling credits.
 
 Type it out or press `<leader>ac` to insert.
 
-## >>> youtube
+k# >>> youtube
 Will expand to a transcript of any YouTube video.
 
 # Configuration

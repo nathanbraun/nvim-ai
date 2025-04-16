@@ -634,6 +634,11 @@ function M.expand_blocks(buffer_id)
   buffer_id = buffer_id or vim.api.nvim_get_current_buf()
   local buffer_module = require('nai.buffer')
 
+  -- Debug info
+  if config.options.debug and config.options.debug.enabled then
+    vim.notify("DEBUG: expand_blocks called for buffer: " .. buffer_id, vim.log.levels.DEBUG)
+  end
+
   -- Check if buffer is activated
   local state = require('nai.state') -- Add this line
   if not state.is_buffer_activated(buffer_id) then
@@ -647,6 +652,9 @@ function M.expand_blocks(buffer_id)
   -- Check for unexpanded scrape blocks
   local scrape = require('nai.fileutils.scrape')
   if scrape.has_unexpanded_scrape_blocks(buffer_id) then
+    if config.options.debug and config.options.debug.enabled then
+      vim.notify("DEBUG: Found unexpanded scrape blocks", vim.log.levels.DEBUG)
+    end
     vim.notify("Expanding scrape blocks", vim.log.levels.INFO)
     scrape.expand_scrape_blocks_in_buffer(buffer_id)
     expanded_something = true
@@ -669,7 +677,7 @@ function M.expand_blocks(buffer_id)
 
     -- Find and expand snapshot blocks
     for i, line in ipairs(lines) do
-      if line == ">>> snapshot" then
+      if vim.trim(line) == ">>> snapshot" then
         -- This is an unexpanded snapshot
         local block_start = i - 1 + line_offset
 
