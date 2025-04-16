@@ -90,7 +90,6 @@ assistant` block) followed by another user prompt for you to follow up.
 Try following up under the next `>>> user` prompt ("What year was it
 released?") and press `<leader>c` again to continue the conversation.
 
-### Saving, Closing, Re-Opening
 This is a normal markdown file, and can be saved, closed etc. When you re-open
 it you can continue chatting under additional `>>> user` blocks.
 
@@ -102,7 +101,7 @@ In Neovim, press `<leader>ai`.
 
 By default (it's configurable) this creates a markdown file
 `~/nvim-ai-notes/XXXX.md` where `XXXX` is a random string. The file starts off
-with a YAML header and ready user prompt:
+with a YAML header and ready `user` prompt:
 
 ```markdown
 ---
@@ -131,15 +130,16 @@ The benefits to chatting in dedicated files with `<leader>ai`:
 1. Not having to think about where to store your markdown files and what to title or name them.
 2. Putting them all in one spot makes it easier to view previous conversations.
 
-### View previous conversations
+## Viewing previous conversations
 
-To view past conversations run `:NAIBrowse`, which is mapped to `<leader>ao`
-(for *open*) by default.
+To view (and continue chatting with) past conversations run `:NAIBrowse`, which
+is mapped to `<leader>ao` (for *open*) by default.
 
 This will open up a Telescope picker with the extracted *titles* (from the
 YAML) of all your conversations in the `~/nvim-ai-notes` directory.
 
-## System prompt
+# Other prompts
+## >>> system 
 You can configure the default system prompt in the config. On chat-by-chat
 basis you can set it using the *system* prompt:
 
@@ -148,7 +148,7 @@ basis you can set it using the *system* prompt:
 Note you can only set the system prompt at the start of the chat, before any
 `>>> user` prompts.
 
-## Config prompt
+## >>> config 
 You can also set `model`, `temperature` and a few other options in the `>>>
 config` block:
 
