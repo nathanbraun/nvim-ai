@@ -20,27 +20,98 @@ function M.select_model()
   end
 
   -- Get list of available models for the current provider
-  local models = provider_config.models or {}
-  if #models == 0 then
-    -- Fallback models if none defined in config
-    if provider == "openai" then
-      models = {
-        "gpt-4o",
-        "gpt-4-turbo",
-        "gpt-4",
-        "gpt-3.5-turbo",
-      }
-    elseif provider == "openrouter" then
-      models = {
-        "google/gemini-2.0-flash-001",
-        "google/gemini-2.0-pro-001",
-        "anthropic/claude-3-opus",
-        "anthropic/claude-3-sonnet",
-        "mistralai/mistral-large",
-      }
-    end
-  end
+  local models = {}
 
+  -- For Ollama, dynamically fetch available models
+  if provider == "ollama" then
+    -- Check if ollama is installed
+    if vim.fn.executable('ollama') ~= 1 then
+      vim.notify("Ollama executable not found in PATH", vim.log.levels.ERROR)
+      return
+    end
+
+    -- Use vim.system to run the command asynchronously
+    vim.system({ "ollama", "list" }, { text = true }, function(obj)
+      if obj.code ~= 0 then
+        vim.schedule(function()
+          vim.notify("Failed to get Ollama models: " .. (obj.stderr or "unknown error"), vim.log.levels.ERROR)
+        end)
+        return
+      end
+
+      local output = obj.stdout
+      if not output or output == "" then
+        vim.schedule(function()
+          vim.notify("No models found in Ollama", vim.log.levels.WARN)
+        end)
+        return
+      end
+
+      -- Parse the output to extract model names
+      -- The format is typically:
+      -- NAME            ID              SIZE    MODIFIED
+      -- llama3          ...             ...     ...
+      local ollama_models = {}
+
+      -- Skip the header line
+      local lines = vim.split(output, "\n")
+      for i = 2, #lines do
+        local line = lines[i]
+        if line ~= "" then
+          -- Extract the first column (model name)
+          local model_name = line:match("^(%S+)")
+          if model_name then
+            table.insert(ollama_models, model_name)
+          end
+        end
+      end
+
+      -- If no models were found, show a message
+      if #ollama_models == 0 then
+        vim.schedule(function()
+          vim.notify("No models found in Ollama output", vim.log.levels.WARN)
+        end)
+        return
+      end
+
+      -- Continue with the telescope picker using the fetched models
+      vim.schedule(function()
+        M.show_model_picker(provider, provider_config, ollama_models)
+      end)
+    end)
+
+    -- Return early since we're handling this asynchronously
+    return
+  else
+    -- For other providers, use the existing logic
+    models = provider_config.models or {}
+    if #models == 0 then
+      -- Fallback models if none defined in config
+      if provider == "openai" then
+        models = {
+          "gpt-4o",
+          "gpt-4-turbo",
+          "gpt-4",
+          "gpt-3.5-turbo",
+        }
+      elseif provider == "openrouter" then
+        models = {
+          "google/gemini-2.0-flash-001",
+          "google/gemini-2.0-pro-001",
+          "anthropic/claude-3-opus",
+          "anthropic/claude-3-sonnet",
+          "mistralai/mistral-large",
+        }
+      end
+    end
+
+    -- Show the picker with the models
+    M.show_model_picker(provider, provider_config, models)
+  end
+end
+
+-- Extract the telescope picker logic into a separate function
+function M.show_model_picker(provider, provider_config, models)
   local current_model = provider_config.model or ""
 
   -- Format for telescope finder
@@ -83,6 +154,7 @@ function M.select_model()
           local model_id = selection.value
 
           -- Update the model in the provider's configuration
+          local config = require('nai.config')
           config.options.providers[provider].model = model_id
 
           -- Update state

@@ -33,6 +33,18 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     max_tokens = chat_config and chat_config.max_tokens or provider_config.max_tokens,
   }
 
+  if provider == "ollama" then
+    data = {
+      model = chat_config and chat_config.model or provider_config.model,
+      messages = messages,
+      options = {
+        temperature = chat_config and chat_config.temperature or provider_config.temperature,
+        num_predict = chat_config and chat_config.max_tokens or provider_config.max_tokens,
+      },
+      stream = false
+    }
+  end
+
   -- Register this request in our state
   local state = require('nai.state')
   local events = require('nai.events')
@@ -106,9 +118,26 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       return
     end
 
-    if parsed and parsed.choices and #parsed.choices > 0 then
-      local content = parsed.choices[1].message.content
+    -- Extract content based on provider format
+    local content = nil
 
+    if provider == "ollama" then
+      -- Ollama format handling with deferred logging
+      if parsed.message then
+        if parsed.message.content then
+          content = parsed.message.content
+        else
+        end
+      else
+      end
+    else
+      -- Standard OpenAI format
+      if parsed.choices and #parsed.choices > 0 and parsed.choices[1].message then
+        content = parsed.choices[1].message.content
+      end
+    end
+
+    if content then
       -- Update state
       state.update_request(request_id, {
         status = 'completed',
@@ -135,7 +164,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       events.emit('request:error', request_id, "No valid content in API response")
 
       vim.schedule(function()
-        on_error("No valid content in API response")
+        on_error("No valid content in API response: " .. vim.inspect(parsed))
         -- Clear request from state after callback completes
         state.clear_request(request_id)
       end)

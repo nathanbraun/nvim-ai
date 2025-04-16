@@ -455,9 +455,9 @@ vim.api.nvim_create_user_command('NAISwitchProvider', function(opts)
     local current = config.options.active_provider
 
     provider = vim.fn.input({
-      prompt = "Current provider: " .. current .. "\nSwitch to (openai, openrouter): ",
+      prompt = "Current provider: " .. current .. "\nSwitch to (openai, openrouter, ollama): ",
       completion = function(_, _, _)
-        return { "openai", "openrouter" }
+        return { "openai", "openrouter", "ollama" }
       end
     })
 
@@ -468,8 +468,8 @@ vim.api.nvim_create_user_command('NAISwitchProvider', function(opts)
   end
 
   -- Validate provider
-  if provider ~= "openai" and provider ~= "openrouter" then
-    vim.notify("Invalid provider: " .. provider .. ". Valid options: openai, openrouter", vim.log.levels.ERROR)
+  if provider ~= "openai" and provider ~= "openrouter" and provider ~= "ollama" then
+    vim.notify("Invalid provider: " .. provider .. ". Valid options: openai, openrouter, ollama", vim.log.levels.ERROR)
     return
   end
 
@@ -477,11 +477,23 @@ vim.api.nvim_create_user_command('NAISwitchProvider', function(opts)
   local config = require('nai.config')
   config.options.active_provider = provider
 
-  -- Check if API key exists for this provider
-  local key = config.get_api_key(provider)
-  if not key then
-    vim.notify("Warning: No API key found for " .. provider .. ". Use :NAISetKey " .. provider .. " to set one.",
-      vim.log.levels.WARN)
+  -- Update state
+  require('nai.state').set_current_provider(provider)
+
+  -- If switching to Ollama, ensure the model is valid
+  if provider == "ollama" then
+    config.ensure_valid_ollama_model(config.options.providers.ollama)
+  end
+
+  -- Check if API key exists for this provider (except for Ollama which might not need one)
+  if provider ~= "ollama" then
+    local key = config.get_api_key(provider)
+    if not key then
+      vim.notify("Warning: No API key found for " .. provider .. ". Use :NAISetKey " .. provider .. " to set one.",
+        vim.log.levels.WARN)
+    else
+      vim.notify("Switched to " .. provider .. " provider", vim.log.levels.INFO)
+    end
   else
     vim.notify("Switched to " .. provider .. " provider", vim.log.levels.INFO)
   end
@@ -489,7 +501,7 @@ end, {
   nargs = "?",
   desc = "Switch between AI providers",
   complete = function(ArgLead, CmdLine, CursorPos)
-    local providers = { "openai", "openrouter" }
+    local providers = { "openai", "openrouter", "ollama" }
     local filtered = {}
     for _, provider in ipairs(providers) do
       if provider:find(ArgLead, 1, true) == 1 then
@@ -584,6 +596,143 @@ vim.api.nvim_create_user_command('NAIDebug', function()
   -- Add keymapping to close the window
   vim.api.nvim_buf_set_keymap(buf, 'n', 'q', ':close<CR>', { noremap = true, silent = true })
 end, { desc = "Show nvim-ai debug information" })
+
+vim.api.nvim_create_user_command('NAIOllamaPull', function(opts)
+  local model = opts.args
+
+  if not model or model == "" then
+    vim.notify("Please specify a model to pull (e.g., :NAIOllamaPull llama3)", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Create a floating window to show the pull progress
+  local buf = vim.api.nvim_create_buf(false, true)
+  local width = 80
+  local height = 20
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor((vim.o.columns - width) / 2),
+    style = "minimal",
+    border = "rounded",
+    title = "Pulling Ollama Model: " .. model,
+    title_pos = "center"
+  })
+
+  -- Initial content
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+    "Pulling " .. model .. "...",
+    "",
+    "This may take a while depending on the model size.",
+    "Please wait..."
+  })
+
+  -- Run the pull command
+  local cmd = { "ollama", "pull", model }
+  local job = vim.fn.jobstart(cmd, {
+    on_stdout = function(_, data)
+      if data then
+        vim.schedule(function()
+          -- Append the output lines to the buffer
+          local line_count = vim.api.nvim_buf_line_count(buf)
+          vim.api.nvim_buf_set_lines(buf, line_count, line_count, false, data)
+
+          -- Scroll to the bottom
+          if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_set_cursor(win, { line_count + #data, 0 })
+          end
+        end)
+      end
+    end,
+    on_stderr = function(_, data)
+      if data then
+        vim.schedule(function()
+          -- Append the error lines to the buffer
+          local line_count = vim.api.nvim_buf_line_count(buf)
+          vim.api.nvim_buf_set_lines(buf, line_count, line_count, false, data)
+
+          -- Scroll to the bottom
+          if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_set_cursor(win, { line_count + #data, 0 })
+          end
+        end)
+      end
+    end,
+    on_exit = function(_, exit_code)
+      vim.schedule(function()
+        if exit_code == 0 then
+          -- Add success message
+          local line_count = vim.api.nvim_buf_line_count(buf)
+          vim.api.nvim_buf_set_lines(buf, line_count, line_count, false, {
+            "",
+            "✅ Successfully pulled " .. model,
+            "",
+            "Press 'q' to close this window"
+          })
+
+          vim.notify("Successfully pulled Ollama model: " .. model, vim.log.levels.INFO)
+        else
+          -- Add error message
+          local line_count = vim.api.nvim_buf_line_count(buf)
+          vim.api.nvim_buf_set_lines(buf, line_count, line_count, false, {
+            "",
+            "❌ Failed to pull " .. model,
+            "",
+            "Press 'q' to close this window"
+          })
+
+          vim.notify("Failed to pull Ollama model: " .. model, vim.log.levels.ERROR)
+        end
+
+        -- Add keybinding to close the window
+        if vim.api.nvim_buf_is_valid(buf) then
+          vim.api.nvim_buf_set_keymap(buf, 'n', 'q', ':close<CR>', { noremap = true, silent = true })
+        end
+      end)
+    end,
+    stdout_buffered = false,
+    stderr_buffered = false
+  })
+
+  -- If job failed to start
+  if job <= 0 then
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+      "Failed to start Ollama pull job.",
+      "Please make sure Ollama is installed and in your PATH.",
+      "",
+      "Press 'q' to close this window"
+    })
+
+    vim.api.nvim_buf_set_keymap(buf, 'n', 'q', ':close<CR>', { noremap = true, silent = true })
+
+    vim.notify("Failed to start Ollama pull job", vim.log.levels.ERROR)
+  end
+end, {
+  nargs = "?",
+  desc = "Pull a model from Ollama",
+  complete = function(ArgLead, CmdLine, CursorPos)
+    -- Suggest common models
+    local common_models = {
+      "llama3", "llama3:8b", "llama3:70b",
+      "mistral", "mistral:7b", "mistral:instruct",
+      "codellama", "codellama:7b", "codellama:13b", "codellama:34b",
+      "phi3", "phi3:mini", "phi3:small", "phi3:medium",
+      "gemma", "gemma:2b", "gemma:7b",
+      "neural-chat", "wizard-math"
+    }
+
+    local filtered = {}
+    for _, model in ipairs(common_models) do
+      if model:find(ArgLead, 1, true) == 1 then
+        table.insert(filtered, model)
+      end
+    end
+    return filtered
+  end
+})
+
 
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()

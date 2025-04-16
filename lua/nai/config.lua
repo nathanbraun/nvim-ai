@@ -8,10 +8,17 @@ M.defaults = {
   credentials = {
     file_path = "~/.config/nvim-ai/credentials.json", -- Single file for all credentials
   },
-  active_provider = "openrouter",                     -- "openai", "openrouter", etc.
+  active_filetypes = {
+    patterns = { "*.md", "*.markdown", "*.wiki" }, -- File patterns to activate on
+    autodetect = true,                             -- Detect chat blocks in any file
+    enable_overlay = true,                         -- Enable syntax overlay
+    enable_folding = true,                         -- Enable chat folding
+  },
+  default_system_prompt = "You are a general assistant.",
+  active_provider = "openrouter", -- "openai", "openrouter", etc.
   mappings = {
-    enabled = true,                                   -- Whether to apply default key mappings
-    intercept_ctrl_c = true,                          -- New option to intercept Ctrl+C
+    enabled = true,               -- Whether to apply default key mappings
+    intercept_ctrl_c = true,      -- New option to intercept Ctrl+C
     -- Default mappings will be used from the mappings module
   },
   providers = {
@@ -38,21 +45,25 @@ M.defaults = {
         "perplexity/r1-1776",
       },
     },
-  },
-  active_filetypes = {
-    patterns = { "*.md", "*.markdown", "*.wiki" }, -- File patterns to activate on
-    autodetect = true,                             -- Detect chat blocks in any file
-    enable_overlay = true,                         -- Enable syntax overlay
-    enable_folding = true,                         -- Enable chat folding
-  },
-  tools = {
-    dumpling = {
-      base_endpoint = "https://app.dumplingai.com/api/v1/", -- Base endpoint for all Dumpling API calls
-      format = "markdown",                                  -- Output format: markdown, html, or screenshot
-      cleaned = true,                                       -- Whether to clean the output
-      render_js = true,                                     -- Whether to render JavaScript
-      max_content_length = 100000,                          -- Max length to prevent excessively large responses
-      include_timestamps = true,                            -- Whether to include timestamps in the output
+    ollama = {
+      name = "Ollama",
+      description = "Local models via Ollama",
+      model = "llama3.2:latest",
+      temperature = 0.7,
+      max_tokens = 4000,
+      endpoint = "http://localhost:11434/api/chat",
+      models = {
+        "llama3.2:latest",
+        "llama3",
+        "llama3:8b",
+        "llama3:70b",
+        "mistral",
+        "codellama",
+        "phi3",
+        "gemma",
+        "gemma:7b",
+        "neural-chat",
+      },
     },
   },
   chat_files = {
@@ -71,7 +82,16 @@ tags: [ai]
 ---]],
     },
   },
-  default_system_prompt = "You are a general assistant.",
+  tools = {
+    dumpling = {
+      base_endpoint = "https://app.dumplingai.com/api/v1/", -- Base endpoint for all Dumpling API calls
+      format = "markdown",                                  -- Output format: markdown, html, or screenshot
+      cleaned = true,                                       -- Whether to clean the output
+      render_js = true,                                     -- Whether to render JavaScript
+      max_content_length = 100000,                          -- Max length to prevent excessively large responses
+      include_timestamps = true,                            -- Whether to include timestamps in the output
+    },
+  },
   expand_placeholders = false,
   highlights = {
     user = { fg = "#88AAFF", bold = true },            -- User message highlighting
@@ -146,6 +166,27 @@ end
 
 -- Function to get API key for a specific provider
 function M.get_api_key(provider)
+  if provider == "ollama" then
+    -- Check if endpoint is not localhost
+    local endpoint = M.options.providers.ollama.endpoint
+    if not endpoint:match("localhost") and not endpoint:match("127.0.0.1") then
+      -- Try environment variable first
+      local key = vim.env.OLLAMA_API_KEY
+      if key and key ~= "" then
+        return key
+      end
+
+      -- Try credentials file
+      local credentials = read_credentials()
+      if credentials.ollama then
+        return credentials.ollama
+      end
+    else
+      -- Return a dummy key for local instances that don't need auth
+      return "local"
+    end
+  end
+
   -- Try environment variable first
   local env_var = provider:upper() .. "_API_KEY"
   local key = vim.env[env_var]
@@ -246,6 +287,11 @@ function M.setup(opts)
   -- Initialize state with config
   require('nai.state').init(M.options)
 
+  -- If Ollama is the active provider, ensure the model is valid
+  if M.options.active_provider == "ollama" then
+    M.ensure_valid_ollama_model(M.options.providers.ollama)
+  end
+
   return M.options
 end
 
@@ -316,6 +362,80 @@ function M.get_dumpling_api_key()
   end
 
   return nil
+end
+
+function M.ensure_valid_ollama_model(provider_config)
+  -- Only do this for Ollama provider
+  if provider_config.name ~= "Ollama" then
+    return
+  end
+
+  -- Check if ollama command is available
+  if vim.fn.executable('ollama') ~= 1 then
+    vim.notify("Ollama executable not found, can't verify model availability", vim.log.levels.WARN)
+    return
+  end
+
+  -- Get current model
+  local current_model = provider_config.model
+
+  -- Get available models from ollama
+  vim.system({ "ollama", "list" }, { text = true }, function(obj)
+    if obj.code ~= 0 then
+      vim.schedule(function()
+        vim.notify("Failed to get Ollama models: " .. (obj.stderr or "unknown error"), vim.log.levels.WARN)
+      end)
+      return
+    end
+
+    local output = obj.stdout
+    if not output or output == "" then
+      vim.schedule(function()
+        vim.notify("No models found in Ollama", vim.log.levels.WARN)
+      end)
+      return
+    end
+
+    -- Parse the output to extract model names
+    local available_models = {}
+
+    -- Skip the header line
+    local lines = vim.split(output, "\n")
+    for i = 2, #lines do
+      local line = lines[i]
+      if line ~= "" then
+        -- Extract the first column (model name)
+        local model_name = line:match("^(%S+)")
+        if model_name then
+          table.insert(available_models, model_name)
+        end
+      end
+    end
+
+    -- Check if the current model exists in available models
+    local model_exists = false
+    for _, model in ipairs(available_models) do
+      if model == current_model then
+        model_exists = true
+        break
+      end
+    end
+
+    -- If current model doesn't exist, use the first available model
+    if not model_exists and #available_models > 0 then
+      vim.schedule(function()
+        local new_model = available_models[1]
+        vim.notify("Model '" .. current_model .. "' not found. Using '" .. new_model .. "' instead.", vim.log.levels
+          .INFO)
+        provider_config.model = new_model
+
+        -- Update state if it's the active provider
+        if M.options.active_provider == "ollama" then
+          require('nai.state').set_current_model(new_model)
+        end
+      end)
+    end
+  end)
 end
 
 return M

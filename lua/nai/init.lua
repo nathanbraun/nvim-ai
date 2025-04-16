@@ -89,13 +89,22 @@ end
 
 -- Function to switch between providers
 function M.switch_provider(provider)
-  if provider ~= "openai" and provider ~= "openrouter" then
-    vim.notify("Invalid provider. Use 'openai' or 'openrouter'", vim.log.levels.ERROR)
+  if provider ~= "openai" and provider ~= "openrouter" and provider ~= "ollama" then
+    vim.notify("Invalid provider. Use 'openai', 'openrouter', or 'ollama'", vim.log.levels.ERROR)
     return
   end
 
-  require('nai.config').options.provider = provider
-  require('nai.config').init_config() -- Make sure API key is loaded
+  local config = require('nai.config')
+  config.options.active_provider = provider
+
+  -- Update state
+  require('nai.state').set_current_provider(provider)
+
+  -- If switching to Ollama, ensure the model is valid
+  if provider == "ollama" then
+    config.ensure_valid_ollama_model(config.options.providers.ollama)
+  end
+
   vim.notify("Switched to " .. provider .. " provider", vim.log.levels.INFO)
 end
 
