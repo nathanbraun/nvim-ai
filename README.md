@@ -65,7 +65,7 @@ After installing the plugin and getting your API key, open up Neovim and run:
 
 It'll ask you for your API key. Paste it in. By default this will be saved at:
 
-`/Users/nathanbraun/.config/nvim-ai/credentials.json`
+`~/.config/nvim-ai/credentials.json`
 
 # Quickstart
 ## Your first conversation
