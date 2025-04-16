@@ -65,8 +65,8 @@ It'll ask you for your API key. Paste it in. By default this will be saved at:
 
 `/Users/nathanbraun/.config/nvim-ai/credentials.json`
 
-## Quickstart
-### Your first conversation
+# Quickstart
+## Your first conversation
 By default, nvim-ai is enabled on markdown (`*.md`) and vimwiki (`*.wiki`)
 files. Most commands are prefixed with `<leader>a`.
 
@@ -90,11 +90,11 @@ assistant` block) followed by another user prompt for you to follow up.
 Try following up under the next `>>> user` prompt ("What year was it
 released?") and press `<leader>c` again to continue the conversation.
 
-#### Saving, Closing, Re-Opening
+### Saving, Closing, Re-Opening
 This is a normal markdown file, and can be saved, closed etc. When you re-open
 it you can continue chatting under additional `>>> user` blocks.
 
-### Creating a new conversation
+## Creating a new conversation
 It can be cumbersome to deal with file and conversation management, and
 `nvim-ai` can take care of that for you.
 
@@ -159,18 +159,18 @@ model: openai/gpt-4o-mini
 
 This goes before any system or user prompts. It'll take precedence over defaults.
 
-## Embedding local text files and web content
-### >>> reference 
+# Embedding local text files and web content
+## >>> reference 
 You can include other text files in the chat using the `reference` prompt.
 This can be very helpful for coding (see the screenshot below). Note it works
 on regular glob patterns (`*` and `**` for nested directories).
 
 ![Reference](images/reference.jpg)
 
-### >>> snapshot 
+## >>> snapshot 
 When you submit your chat (`<leader>c` or `:NAIChat`) `reference` works by
 grabbing the *current* state of the file and inserting it into the converstion
-behind the scenes (so nvim-ai sends the file contents to the LLM even though
+behind the scenes (so `nvim-ai` sends the file contents to the LLM even though
 it doesn't display it on the screen.
 
 This can be tricky when, say, you ask an LLM about a file with `reference`,
@@ -192,9 +192,9 @@ timestamp, like this:
 This way you can ask about the file, make changes etc and the LLM will better
 be able to follow what's going on.
 
-### >>> web
+## >>> web
 You can get text data from simple websites using the `>>> web` block followed
-by a URL. Behind the scenes its using
+by a URL. Behind the scenes it uses curl and
 [html2text](https://github.com/grobian/html2text) or
 [lynx](https://lynx.invisible-island.net/) and requires one of them be
 installed.
@@ -202,7 +202,7 @@ installed.
 ![Web](images/web.jpg)
 
 
-## Dumpling AI
+# Dumpling AI
 The `web` block works on simple sites, but won't work on e.g. SPA's or
 javascript-heavy content.
 
@@ -225,7 +225,7 @@ Note: in order to save on credits and not repeatedly call the Dumpling API,
 **all of the dumpling promps work similar to `snapshot`**. So `nvim-ai` will
 use Dumpling to get the text, then insert it into your chat file.
 
-### >>> scrape
+## >>> scrape
 
 Like `web` but uses Dumpling's APIs instead of `curl` and `html2text`, so it
 works on many more sites.
@@ -235,17 +235,17 @@ try `web` first and use this if that doesn't work.
 
 Type it out or press `<leader>ad` (for AI *dumpling*) to insert.
 
-### >>> crawl
+## >>> crawl
 
 Like `scrape` but will also scrape links up to a configurable depth. Uses more
 Dumpling credits.
 
 Type it out or press `<leader>ac` to insert.
 
-### >>> youtube
+## >>> youtube
 Will expand to a transcript of any YouTube video.
 
-## Configuration
+# Configuration
 nvim-ai can be configured with the setup function (defaults below):
 
 ```lua
