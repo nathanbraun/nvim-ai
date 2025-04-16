@@ -467,6 +467,9 @@ function M.new_chat()
   -- Set buffer name with both arguments (buffer_id and name)
   vim.api.nvim_buf_set_name(buffer_id, md_filename)
 
+  -- Trigger filetype detection based on the filename
+  vim.cmd("doautocmd BufRead " .. vim.fn.fnameescape(md_filename))
+
   -- Activate the buffer with our chat functionality
   require('nai.buffer').activate_buffer(buffer_id)
 

@@ -802,6 +802,145 @@ end, {
   end
 })
 
+vim.api.nvim_create_user_command('NAIBrowse', function()
+  -- Check if telescope is available
+  local has_telescope, telescope = pcall(require, 'telescope')
+  if not has_telescope then
+    vim.notify("Telescope is required but not found", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Get the notes directory from config
+  local config = require('nai.config')
+  local notes_dir = vim.fn.expand(config.options.chat_files.directory)
+
+  -- Check if directory exists
+  if vim.fn.isdirectory(notes_dir) ~= 1 then
+    vim.notify("Notes directory not found: " .. notes_dir, vim.log.levels.ERROR)
+    return
+  end
+
+  -- Function to extract title from YAML frontmatter
+  local function extract_title(file_path)
+    local file = io.open(file_path, "r")
+    if not file then return nil end
+
+    local in_yaml = false
+    local title = nil
+
+    for line in file:lines() do
+      if line == "---" then
+        if not in_yaml then
+          in_yaml = true
+        else
+          break -- End of YAML frontmatter
+        end
+      elseif in_yaml and line:match("^title:%s*(.+)$") then
+        title = line:match("^title:%s*(.+)$")
+        break
+      end
+    end
+
+    file:close()
+    return title
+  end
+
+  -- Find all markdown files in the directory
+  local find_command = nil
+  local path = require('nai.utils.path')
+
+  if path.is_windows then
+    -- Windows command
+    find_command = { 'powershell', '-NoProfile', '-Command',
+      string.format('Get-ChildItem -Path "%s" -Filter "*.md" -Recurse | ForEach-Object { $_.FullName }', notes_dir) }
+  else
+    -- Unix command
+    find_command = { 'find', notes_dir, '-type', 'f', '-name', '*.md' }
+  end
+
+  -- Create the picker
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
+  local pickers = require("telescope.pickers")
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+  local previewers = require("telescope.previewers")
+
+  -- Create a custom previewer that shows the beginning of the file
+  local file_previewer = previewers.new_buffer_previewer({
+    title = "AI Chat Preview",
+    define_preview = function(self, entry, status)
+      local file_path = entry.value
+      local lines = {}
+      local file = io.open(file_path, "r")
+
+      if file then
+        local count = 0
+        for line in file:lines() do
+          table.insert(lines, line)
+          count = count + 1
+          if count >= 30 then break end -- Show first 30 lines
+        end
+        file:close()
+      end
+
+      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
+
+      -- Set filetype to markdown for proper highlighting
+      vim.api.nvim_buf_set_option(self.state.bufnr, "filetype", "markdown")
+    end
+  })
+
+  -- Create a finder that uses the system command to find files
+  local finder = finders.new_oneshot_job(
+    find_command,
+    {
+      entry_maker = function(file_path)
+        local title = extract_title(file_path) or vim.fn.fnamemodify(file_path, ":t:r")
+        local display = title .. " (" .. vim.fn.fnamemodify(file_path, ":t") .. ")"
+
+        return {
+          value = file_path,
+          display = display,
+          ordinal = title, -- Use title for sorting
+          path = file_path,
+        }
+      end
+    }
+  )
+
+  -- Create the picker
+  pickers.new({}, {
+    prompt_title = "AI Chat Files",
+    finder = finder,
+    sorter = conf.generic_sorter({}),
+    previewer = file_previewer,
+    attach_mappings = function(prompt_bufnr, map)
+      actions.select_default:replace(function()
+        local selection = action_state.get_selected_entry()
+        actions.close(prompt_bufnr)
+
+        if selection then
+          -- Open the selected file
+          vim.cmd("edit " .. vim.fn.fnameescape(selection.value))
+        end
+      end)
+      return true
+    end,
+    layout_strategy = "horizontal",
+    layout_config = {
+      width = 0.8,
+      height = 0.8,
+      preview_width = 0.5,
+    },
+  }):find()
+end, { desc = "Browse AI chat files" })
+
+local mappings = require('nai.mappings')
+if mappings.active and mappings.active.files and mappings.active.files.browse then
+  vim.api.nvim_set_keymap('n', mappings.active.files.browse, ':NAIBrowse<CR>',
+    { noremap = true, silent = true, desc = 'Browse AI chat files' })
+end
 
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()

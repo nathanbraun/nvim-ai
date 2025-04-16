@@ -32,6 +32,11 @@ M.defaults = {
     select_model = "<Leader>am",    -- Select model
     toggle_provider = "<Leader>ap", -- Toggle provider
   }
+
+  -- Files (add this new section)
+  files = {
+    browse = "<Leader>ao", -- Browse AI chat files
+  }
 }
 
 -- Store active mappings (will be populated from config)
@@ -74,6 +79,10 @@ function M.apply_to_buffer(bufnr)
 
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.toggle_provider, ':NAIProvider<CR>',
     { noremap = true, silent = true, desc = 'Select provider' })
+
+  -- Add the browse mapping
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.files.browse, ':NAIBrowse<CR>',
+    { noremap = true, silent = true, desc = 'Browse AI chat files' })
 
   -- Add Ctrl+C mapping if enabled
   if config.options.mappings.intercept_ctrl_c then
