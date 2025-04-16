@@ -9,31 +9,60 @@ function M.fetch_url(url)
     return "Error: Required tools not found. Please install html2text or lynx."
   end
 
-  -- First fetch the URL content with curl
-  local curl_cmd = 'curl -sL "' .. url .. '"'
-  local html_content = vim.fn.system(curl_cmd)
+  -- First fetch the URL content with curl with a timeout and size limit
+  local curl_cmd = 'curl -sL --max-time 10 --max-filesize 1000000 "' .. url .. '"'
 
-  if vim.v.shell_error ~= 0 then
-    return "Error fetching URL: " .. url
+  -- Use pcall to catch any errors
+  local success, html_content = pcall(function()
+    return vim.fn.system(curl_cmd)
+  end)
+
+  if not success or vim.v.shell_error ~= 0 then
+    return "Error fetching URL: " .. url .. "\nDetails: " .. (html_content or "Unknown error")
   end
 
-  -- Convert to markdown
+  -- Limit the size of the content to process
+  if #html_content > 1000000 then -- 1MB limit
+    html_content = string.sub(html_content, 1, 1000000) .. "\n\n[Content truncated due to large size]"
+  end
+
+  -- Convert to markdown with better error handling
   local md_content = ""
-  if html2text_available then
-    md_content = vim.fn.system('echo ' .. vim.fn.shellescape(html_content) .. ' | html2text -b 0')
-  elseif lynx_available then
-    -- Create a temporary file for the HTML content
-    local path = require('nai.utils.path')
-    local temp_file = path.tmpname()
-    local file = io.open(temp_file, "w")
-    file:write(html_content)
-    file:close()
+  success = pcall(function()
+    if html2text_available then
+      -- Use a temporary file approach for large content
+      local temp_file = os.tmpname()
+      local file = io.open(temp_file, "w")
+      if file then
+        file:write(html_content)
+        file:close()
+        md_content = vim.fn.system('html2text ' .. temp_file)
+        os.remove(temp_file)
+      else
+        md_content = "Error: Failed to create temporary file"
+      end
+    elseif lynx_available then
+      -- Create a temporary file for the HTML content
+      local temp_file = os.tmpname()
+      local file = io.open(temp_file, "w")
+      file:write(html_content)
+      file:close()
 
-    -- Convert using lynx
-    md_content = vim.fn.system('lynx -dump -nolist ' .. temp_file)
+      -- Convert using lynx
+      md_content = vim.fn.system('lynx -dump -nolist ' .. temp_file)
 
-    -- Clean up
-    os.remove(temp_file)
+      -- Clean up
+      os.remove(temp_file)
+    end
+  end)
+
+  if not success then
+    return "Error converting HTML to text for URL: " .. url
+  end
+
+  -- Limit the size of the final content
+  if #md_content > 100000 then -- 100KB limit for display
+    md_content = string.sub(md_content, 1, 100000) .. "\n\n[Content truncated due to large size]"
   end
 
   return "==> Web (Simple): " .. url .. " <==\n\n" .. md_content
