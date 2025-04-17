@@ -37,7 +37,8 @@ You can get an OpenRouter key here:
 
 ## Installation
 
-Using lazy.nvim:
+<details>
+  <summary>lazy.nvim</summary>
 ```lua
 {
     'nathanbraun/nvim-ai',
@@ -51,8 +52,10 @@ Using lazy.nvim:
     end
 }
 ```
+</details>
 
-Using packer.nvim:
+<details>
+  <summary>packer.nvim</summary>
 ```lua
 use {
     'nathanbraun/nvim-ai',
@@ -65,6 +68,7 @@ use {
         })
     end
 }
+</details>
 ```
 
 After installing the plugin and getting your API key, open up Neovim and run:
@@ -464,3 +468,11 @@ tags: [ai]
     },
 })
 ```
+
+# Acknowledgements
+This plugin was inspired by [madox2/vim-ai](https://github.com/madox2/vim-ai),
+which (among other things) enabled chatting with `.aichat` files. In a lot of
+ways, `nvim-ai` is just that functionality + a few tweaks.
+
+# License
+[MIT](LICENSE)
