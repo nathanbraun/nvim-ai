@@ -154,8 +154,8 @@ same for provider (OpenRouter, Ollama, etc).
 
 # Other prompts
 ## >>> system 
-You can configure the default system prompt in the config. On chat-by-chat
-basis you can set it using the *system* prompt:
+You can configure the default system prompt in the config. You can set it for
+individual chats using the *system* prompt:
 
 ![System](images/system.jpg)
 
@@ -176,9 +176,11 @@ This goes before any system or user prompts. It'll take precedence over defaults
 # Embedding local text files and web content
 ## >>> reference 
 You can include other text files on your computer in the chat using the
-`reference` prompt. This can be very helpful for coding (see the screenshot
-below). Note it works with multiple files. Regular glob patterns (`*` and `**`
-for nested directories) work too.
+`reference` prompt. By default, `<leader>ar` inserts a reference prompt, although again, you can type it out.
+
+This can be very helpful for coding (see the screenshot below). Note it works
+with multiple files. Regular glob patterns (`*` and `**` for nested
+directories) work too.
 
 ![Reference](images/reference.jpg)
 
@@ -204,7 +206,7 @@ right away. Instead, when you enter it (or press `<leader>c`) the snapshot will
 be *expanded*. This inserts the file contents directly in the buffer with a
 timestamp, like this:
 
-![Snapshotted](images/snapshotted.jpg)
+![Snapshotted](images/snapshot.gif)
 
 This way you can ask about the file, make changes etc and the LLM will better
 be able to follow what's going on.
