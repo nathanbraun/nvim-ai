@@ -25,23 +25,38 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     return
   end
 
-  -- Merge global config with chat-specific config
-  local data = {
-    model = chat_config and chat_config.model or provider_config.model,
-    messages = messages,
-    temperature = chat_config and chat_config.temperature or provider_config.temperature,
-    max_tokens = chat_config and chat_config.max_tokens or provider_config.max_tokens,
-  }
+  -- Get the model
+  local model = chat_config and chat_config.model or provider_config.model
+  local max_tokens_value = chat_config and chat_config.max_tokens or provider_config.max_tokens
+
+  -- Create data structure based on provider and model
+  local data = {}
 
   if provider == "ollama" then
     data = {
-      model = chat_config and chat_config.model or provider_config.model,
+      model = model,
       messages = messages,
       options = {
         temperature = chat_config and chat_config.temperature or provider_config.temperature,
-        num_predict = chat_config and chat_config.max_tokens or provider_config.max_tokens,
+        num_predict = max_tokens_value,
       },
       stream = false
+    }
+  elseif provider == "openai" and (model == "o3" or model:match("^o3:")) then
+    -- Special case for OpenAI's o3 model
+    data = {
+      model = model,
+      messages = messages,
+      max_completion_tokens = max_tokens_value
+      -- Omit temperature for o3 model as it only supports the default value
+    }
+  else
+    -- Default case for other models
+    data = {
+      model = model,
+      messages = messages,
+      temperature = chat_config and chat_config.temperature or provider_config.temperature,
+      max_tokens = max_tokens_value
     }
   end
 
@@ -204,6 +219,10 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     end
   else
     -- Standard approach for Unix or smaller payloads on Windows
+    if config.options.debug and config.options.debug.enabled then
+      vim.notify("DEBUG: API request data for " .. provider .. "/" .. model .. ":\n" .. json_data, vim.log.levels.DEBUG)
+    end
+
     handle = vim.system({
       "curl",
       "-s",

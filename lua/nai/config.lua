@@ -29,11 +29,15 @@ M.defaults = {
       temperature = 0.7,
       max_tokens = 10000,
       endpoint = "https://api.openai.com/v1/chat/completions",
+      models = {
+        "gpt-4",
+        "o3"
+      }
     },
     openrouter = {
       name = "OpenRouter",
       description = "OpenRouter API (Multiple providers)",
-      model = "google/gemini-2.0-flash-001",
+      model = "anthropic/claude-3.7-sonnet",
       temperature = 0.7,
       max_tokens = 10000,
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
@@ -130,7 +134,7 @@ Instructions:
     },
   },
   format_response = {
-    enabled = true,             -- Whether to format the assistant's response
+    enabled = false,             -- Whether to format the assistant's response
     exclude_code_blocks = true, -- Don't format inside code blocks
     wrap_width = 80             -- Width to wrap text at
   },

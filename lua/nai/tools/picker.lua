@@ -2,111 +2,131 @@
 local M = {}
 
 function M.select_model()
-  -- Check if telescope is available
-  local has_telescope, telescope = pcall(require, 'telescope')
-  if not has_telescope then
-    vim.notify("Telescope is required but not found", vim.log.levels.ERROR)
-    return
-  end
-
   -- Get configuration
   local config = require('nai.config')
-  local provider = config.options.active_provider
-  local provider_config = config.options.providers[provider]
+  local current_provider = config.options.active_provider
+  local current_model = config.options.providers[current_provider].model
 
-  if not provider_config then
-    vim.notify("Provider configuration not found for: " .. provider, vim.log.levels.ERROR)
-    return
+  -- Create a unified list of all models across providers
+  local all_models = {}
+
+  -- Find the longest provider name for padding
+  local max_provider_length = 0
+  for provider_id, _ in pairs(config.options.providers) do
+    max_provider_length = math.max(max_provider_length, #provider_id)
   end
 
-  -- Get list of available models for the current provider
-  local models = {}
+  -- Go through each provider and collect their models
+  for provider_id, provider_config in pairs(config.options.providers) do
+    local provider_name = provider_config.name or provider_id
+    local models = provider_config.models or {}
 
-  -- For Ollama, dynamically fetch available models
-  if provider == "ollama" then
-    -- Check if ollama is installed
-    if vim.fn.executable('ollama') ~= 1 then
-      vim.notify("Ollama executable not found in PATH", vim.log.levels.ERROR)
-      return
-    end
+    -- Create fixed-width provider prefix
+    local provider_prefix = string.format("%-" .. max_provider_length .. "s", provider_id)
 
-    -- Use vim.system to run the command asynchronously
-    vim.system({ "ollama", "list" }, { text = true }, function(obj)
-      if obj.code ~= 0 then
-        vim.schedule(function()
-          vim.notify("Failed to get Ollama models: " .. (obj.stderr or "unknown error"), vim.log.levels.ERROR)
-        end)
-        return
+    -- For Ollama, we'll handle it differently (see below)
+    if provider_id ~= "ollama" then
+      -- Add each model to our unified list
+      for _, model_id in ipairs(models) do
+        -- Create a display name that includes provider info
+        local display_name
+
+        -- For models with provider in the name (like google/gemini), extract just the model part
+        if model_id:match("/") then
+          local _, model_part = model_id:match("([^/]+)/(.+)")
+          display_name = provider_prefix .. " │ " .. model_part
+        else
+          display_name = provider_prefix .. " │ " .. model_id
+        end
+
+        table.insert(all_models, {
+          display = display_name ..
+              (model_id == current_model and current_provider == provider_id and " (current)" or ""),
+          value = model_id,
+          provider = provider_id,
+          ordinal = provider_id .. " " .. model_id -- For sorting
+        })
       end
 
-      local output = obj.stdout
-      if not output or output == "" then
-        vim.schedule(function()
-          vim.notify("No models found in Ollama", vim.log.levels.WARN)
-        end)
-        return
-      end
-
-      -- Parse the output to extract model names
-      -- The format is typically:
-      -- NAME            ID              SIZE    MODIFIED
-      -- llama3          ...             ...     ...
-      local ollama_models = {}
-
-      -- Skip the header line
-      local lines = vim.split(output, "\n")
-      for i = 2, #lines do
-        local line = lines[i]
-        if line ~= "" then
-          -- Extract the first column (model name)
-          local model_name = line:match("^(%S+)")
-          if model_name then
-            table.insert(ollama_models, model_name)
+      -- Also add the current model if it's not in the list
+      local current_in_list = false
+      if provider_id == current_provider then
+        for _, model in ipairs(models) do
+          if model == current_model then
+            current_in_list = true
+            break
           end
         end
-      end
 
-      -- If no models were found, show a message
-      if #ollama_models == 0 then
-        vim.schedule(function()
-          vim.notify("No models found in Ollama output", vim.log.levels.WARN)
-        end)
-        return
-      end
+        if not current_in_list then
+          local display_name
+          if current_model:match("/") then
+            local _, model_part = current_model:match("([^/]+)/(.+)")
+            display_name = provider_prefix .. " │ " .. model_part
+          else
+            display_name = provider_prefix .. " │ " .. current_model
+          end
 
-      -- Continue with the telescope picker using the fetched models
-      vim.schedule(function()
-        M.show_model_picker(provider, provider_config, ollama_models)
-      end)
-    end)
-
-    -- Return early since we're handling this asynchronously
-    return
-  else
-    -- For other providers, use the existing logic
-    models = provider_config.models or {}
-    if #models == 0 then
-      -- Fallback models if none defined in config
-      if provider == "openai" then
-        models = {
-          "gpt-4o",
-          "gpt-4-turbo",
-          "gpt-4",
-          "gpt-3.5-turbo",
-        }
-      elseif provider == "openrouter" then
-        models = {
-          "google/gemini-2.0-flash-001",
-          "google/gemini-2.0-pro-001",
-          "anthropic/claude-3-opus",
-          "anthropic/claude-3-sonnet",
-          "mistralai/mistral-large",
-        }
+          table.insert(all_models, {
+            display = display_name .. " (current)",
+            value = current_model,
+            provider = provider_id,
+            ordinal = provider_id .. " " .. current_model
+          })
+        end
       end
     end
+  end
 
-    -- Show the picker with the models
-    M.show_model_picker(provider, provider_config, models)
+  -- Handle Ollama models separately - fetch them dynamically if possible
+  if vim.fn.executable('ollama') == 1 then
+    -- Create fixed-width provider prefix for Ollama
+    local provider_prefix = string.format("%-" .. max_provider_length .. "s", "ollama")
+
+    vim.system({ "ollama", "list" }, { text = true }, function(obj)
+      if obj.code == 0 and obj.stdout and obj.stdout ~= "" then
+        -- Parse the output to extract model names
+        local ollama_models = {}
+
+        -- Skip the header line
+        local lines = vim.split(obj.stdout, "\n")
+        for i = 2, #lines do
+          local line = lines[i]
+          if line ~= "" then
+            -- Extract the first column (model name)
+            local model_name = line:match("^(%S+)")
+            if model_name then
+              table.insert(ollama_models, model_name)
+            end
+          end
+        end
+
+        -- Add Ollama models to our unified list
+        for _, model_id in ipairs(ollama_models) do
+          local display_name = provider_prefix .. " │ " .. model_id
+
+          table.insert(all_models, {
+            display = display_name .. (model_id == current_model and current_provider == "ollama" and " (current)" or ""),
+            value = model_id,
+            provider = "ollama",
+            ordinal = "ollama " .. model_id -- For sorting
+          })
+        end
+
+        -- Show the picker with all models
+        vim.schedule(function()
+          M.show_unified_model_picker_with_fallbacks(all_models, current_provider, current_model)
+        end)
+      else
+        -- If we couldn't get Ollama models, just show what we have
+        vim.schedule(function()
+          M.show_unified_model_picker_with_fallbacks(all_models, current_provider, current_model)
+        end)
+      end
+    end)
+  else
+    -- If Ollama is not available, just show the models we have
+    M.show_unified_model_picker_with_fallbacks(all_models, current_provider, current_model)
   end
 end
 
@@ -175,118 +195,328 @@ function M.show_model_picker(provider, provider_config, models)
   }):find()
 end
 
-function M.select_provider()
-  -- Check if telescope is available
-  local has_telescope, telescope = pcall(require, 'telescope')
-  if not has_telescope then
-    vim.notify("Telescope is required but not found", vim.log.levels.ERROR)
-    return
-  end
-
-  -- Get configuration
-  local config = require('nai.config')
-  local current_provider = config.options.active_provider
-
-  -- Get providers from config
-  local providers = {}
-  for provider_id, provider_config in pairs(config.options.providers) do
-    table.insert(providers, {
-      id = provider_id,
-      name = provider_config.name or provider_id,
-      description = provider_config.description or "",
-      config = provider_config
-    })
-  end
-
-  -- Format for telescope finder
-  local finder_items = {}
-  for _, provider in ipairs(providers) do
-    table.insert(finder_items, {
-      display = provider.name .. (provider.id == current_provider and " (current)" or ""),
-      value = provider.id,
-      description = provider.description,
-      config = provider.config,
-      ordinal = provider.name -- For sorting
-    })
-  end
-
+function M.show_unified_model_picker(models, current_provider, current_model)
   -- Create the picker using telescope
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
   local pickers = require("telescope.pickers")
   local finders = require("telescope.finders")
   local conf = require("telescope.config").values
-  local previewers = require("telescope.previewers")
-
-  -- Create a custom previewer
-  local provider_previewer = previewers.new_buffer_previewer({
-    title = "Provider Info",
-    define_preview = function(self, entry, status)
-      local preview_lines = {
-        "Provider: " .. entry.display,
-        "",
-        entry.description or "",
-        "",
-        "Current Configuration:",
-        "-------------------",
-        "Model: " .. (entry.config.model or "Not set"),
-        "Temperature: " .. (entry.config.temperature or "Not set"),
-        "Max Tokens: " .. (entry.config.max_tokens or "Not set"),
-      }
-
-      -- Add available models if present
-      if entry.config.models and #entry.config.models > 0 then
-        table.insert(preview_lines, "")
-        table.insert(preview_lines, "Available Models:")
-        table.insert(preview_lines, "---------------")
-        for _, model in ipairs(entry.config.models) do
-          table.insert(preview_lines, "- " .. model)
-        end
-      end
-
-      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, preview_lines)
-    end
-  })
 
   pickers.new({}, {
-    prompt_title = "Select AI Provider",
+    prompt_title = "Select AI Model",
     finder = finders.new_table {
-      results = finder_items,
+      results = models,
       entry_maker = function(entry)
         return {
           value = entry.value,
           display = entry.display,
           ordinal = entry.ordinal,
-          description = entry.description,
-          config = entry.config
+          provider = entry.provider
         }
       end
     },
     sorter = conf.generic_sorter({}),
-    previewer = provider_previewer,
     attach_mappings = function(prompt_bufnr, map)
       actions.select_default:replace(function()
         local selection = action_state.get_selected_entry()
         actions.close(prompt_bufnr)
 
-        -- Set the selected provider
         if selection then
-          local provider_id = selection.value
-          config.options.active_provider = provider_id
+          local model_id = selection.value
+          local provider_id = selection.provider
+
+          -- Switch provider if needed
+          if provider_id ~= current_provider then
+            local config = require('nai.config')
+            config.options.active_provider = provider_id
+            require('nai.state').set_current_provider(provider_id)
+
+            -- Notify about provider change
+            vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
+          end
+
+          -- Update the model
+          local config = require('nai.config')
+          config.options.providers[provider_id].model = model_id
+
+          -- Update state
+          require('nai.state').set_current_model(model_id)
+          require('nai.events').emit('model:change', model_id)
 
           -- Notify user
-          local provider_name = config.options.providers[provider_id].name or provider_id
-          vim.notify("Provider changed to " .. provider_name, vim.log.levels.INFO)
+          vim.notify("Model changed to " .. model_id, vim.log.levels.INFO)
         end
       end)
       return true
     end,
-    layout_strategy = "center", -- Center the window
+    layout_strategy = "center",
     layout_config = {
-      width = 0.6,              -- Use 60% of screen width
-      height = 0.6,             -- Use 60% of screen height
+      width = 0.6,
+      height = 0.5,
     },
   }):find()
+end
+
+function M.show_unified_model_picker_with_fallbacks(models, current_provider, current_model)
+  -- Try snacks first
+  local has_snacks, snacks = pcall(require, 'snacks')
+  if has_snacks then
+    return M.show_unified_model_picker_snacks(models, current_provider, current_model)
+  end
+
+  -- Try telescope next
+  local has_telescope, telescope = pcall(require, 'telescope')
+  if has_telescope then
+    return M.show_unified_model_picker_telescope(models, current_provider, current_model)
+  end
+
+  -- Try fzf-lua last
+  local has_fzf_lua, fzf_lua = pcall(require, 'fzf-lua')
+  if has_fzf_lua then
+    return M.show_unified_model_picker_fzf_lua(models, current_provider, current_model)
+  end
+
+  -- Fallback to simple UI if none of the pickers are available
+  vim.notify("No picker plugin found (snacks, telescope, or fzf-lua)", vim.log.levels.WARN)
+  return M.show_unified_model_picker_simple(models, current_provider, current_model)
+end
+
+-- Implementation for snacks
+function M.show_unified_model_picker_snacks(models, current_provider, current_model)
+  -- Check if Snacks is available
+  local has_snacks, Snacks = pcall(require, 'snacks')
+  if not has_snacks then
+    return false
+  end
+
+  -- Create a custom finder function
+  local finder = function()
+    local items = {}
+    for i, model in ipairs(models) do
+      table.insert(items, {
+        idx = i,
+        text = model.display,
+        value = model.value,
+        provider = model.provider,
+        ordinal = model.ordinal,
+        -- Add a preview property to avoid the error
+        preview = {
+          text = "Model: " .. model.value ..
+              "\nProvider: " .. model.provider ..
+              "\n\nStatus: " .. (model.value == current_model and model.provider == current_provider
+                and "Current model" or "Available model"),
+          ft = "markdown" -- Use markdown for nice highlighting
+        }
+      })
+    end
+    return items
+  end
+
+  -- Use Snacks picker with a custom source config
+  Snacks.picker.pick({
+    finder = finder,           -- Use our custom finder function
+    format = function(item)
+      return { { item.text } } -- Format the display text
+    end,
+    title = "Select AI Model",
+    preview = "preview", -- Use the preview from the item
+    confirm = function(picker, item)
+      -- Close the picker first
+      picker:close()
+
+      -- Then handle the selection
+      if item then
+        local model_id = item.value
+        local provider_id = item.provider
+
+        -- Switch provider if needed
+        if provider_id ~= current_provider then
+          local config = require('nai.config')
+          config.options.active_provider = provider_id
+          require('nai.state').set_current_provider(provider_id)
+
+          -- Notify about provider change
+          vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
+        end
+
+        -- Update the model
+        local config = require('nai.config')
+        config.options.providers[provider_id].model = model_id
+
+        -- Update state
+        require('nai.state').set_current_model(model_id)
+        require('nai.events').emit('model:change', model_id)
+
+        -- Notify user
+        vim.notify("Model changed to " .. model_id, vim.log.levels.INFO)
+      end
+    end
+  })
+
+  return true
+end
+
+-- Implementation for telescope (existing function renamed)
+function M.show_unified_model_picker_telescope(models, current_provider, current_model)
+  -- Create the picker using telescope
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
+  local pickers = require("telescope.pickers")
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+
+  pickers.new({}, {
+    prompt_title = "Select AI Model",
+    finder = finders.new_table {
+      results = models,
+      entry_maker = function(entry)
+        return {
+          value = entry.value,
+          display = entry.display,
+          ordinal = entry.ordinal,
+          provider = entry.provider
+        }
+      end
+    },
+    sorter = conf.generic_sorter({}),
+    attach_mappings = function(prompt_bufnr, map)
+      actions.select_default:replace(function()
+        local selection = action_state.get_selected_entry()
+        actions.close(prompt_bufnr)
+
+        if selection then
+          local model_id = selection.value
+          local provider_id = selection.provider
+
+          -- Switch provider if needed
+          if provider_id ~= current_provider then
+            local config = require('nai.config')
+            config.options.active_provider = provider_id
+            require('nai.state').set_current_provider(provider_id)
+
+            -- Notify about provider change
+            vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
+          end
+
+          -- Update the model
+          local config = require('nai.config')
+          config.options.providers[provider_id].model = model_id
+
+          -- Update state
+          require('nai.state').set_current_model(model_id)
+          require('nai.events').emit('model:change', model_id)
+
+          -- Notify user
+          vim.notify("Model changed to " .. model_id, vim.log.levels.INFO)
+        end
+      end)
+      return true
+    end,
+    layout_strategy = "center",
+    layout_config = {
+      width = 0.6,
+      height = 0.5,
+    },
+  }):find()
+end
+
+function M.show_unified_model_picker_fzf_lua(models, current_provider, current_model)
+  local fzf_lua = require('fzf-lua')
+
+  -- Format items for fzf-lua
+  local items = {}
+  local item_map = {}
+  for i, model in ipairs(models) do
+    table.insert(items, model.display)
+    item_map[model.display] = model
+  end
+
+  fzf_lua.fzf_exec(items, {
+    prompt = "Select AI Model> ",
+    actions = {
+      ["default"] = function(selected)
+        if selected and #selected > 0 then
+          local selected_display = selected[1]
+          local model = item_map[selected_display]
+          if model then
+            local model_id = model.value
+            local provider_id = model.provider
+
+            -- Switch provider if needed
+            if provider_id ~= current_provider then
+              local config = require('nai.config')
+              config.options.active_provider = provider_id
+              require('nai.state').set_current_provider(provider_id)
+
+              -- Notify about provider change
+              vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
+            end
+
+            -- Update the model
+            local config = require('nai.config')
+            config.options.providers[provider_id].model = model_id
+
+            -- Update state
+            require('nai.state').set_current_model(model_id)
+            require('nai.events').emit('model:change', model_id)
+
+            -- Notify user
+            vim.notify("Model changed to " .. model_id, vim.log.levels.INFO)
+          end
+        end
+      end
+    }
+  })
+
+  return true
+end
+
+-- Simple fallback using vim.ui.select
+function M.show_unified_model_picker_simple(models, current_provider, current_model)
+  local items = {}
+  for _, model in ipairs(models) do
+    table.insert(items, {
+      name = model.display,
+      value = model.value,
+      provider = model.provider
+    })
+  end
+
+  vim.ui.select(items, {
+    prompt = "Select AI Model",
+    format_item = function(item)
+      return item.name
+    end
+  }, function(choice)
+    if choice then
+      local model_id = choice.value
+      local provider_id = choice.provider
+
+      -- Switch provider if needed
+      if provider_id ~= current_provider then
+        local config = require('nai.config')
+        config.options.active_provider = provider_id
+        require('nai.state').set_current_provider(provider_id)
+
+        -- Notify about provider change
+        vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
+      end
+
+      -- Update the model
+      local config = require('nai.config')
+      config.options.providers[provider_id].model = model_id
+
+      -- Update state
+      require('nai.state').set_current_model(model_id)
+      require('nai.events').emit('model:change', model_id)
+
+      -- Notify user
+      vim.notify("Model changed to " .. model_id, vim.log.levels.INFO)
+    end
+  end)
+
+  return true
 end
 
 return M
