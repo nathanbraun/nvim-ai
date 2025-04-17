@@ -14,14 +14,18 @@ LLM chats as text files inside Neovim.
 - No language dependencies, written in Lua.
 - Asyncronous.
 - Auto topic/title detection.
-- Additive (it'll respect your current syntax rules) and lightweight syntax and
-  folding.
+- Lightweight (it'll respect your current syntax rules) syntax and folding.
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
 - [Creating a new conversation](#creating-a-new-conversation)
-- Viewing previous conversations
-- Changing models
+- [Viewing previous conversations](#viewing-previous-conversations)
+- [Changing models](#changing-models)
+- [Other prompts](#other-prompts)
+- [Embedding local text files and web content](#embedding-local-text-files-and-web-content)
+- [Alias blocks](#>>>-alias-blocks)
+- [Dumpling AI](#dumpling-ai)
+- [Configuration](#configuration)
 
 ## Prerequisites
 You'll need an OpenRouter (recommended) or OpenAI API key. *Or* an instance of
@@ -124,7 +128,8 @@ tags: [ai]
 >>> user
 ```
 
-Try typing in a message ("Briefly tell me about YAML").
+Try typing in a message ("Briefly tell me about YAML") and `:NAIChat`
+(`<leader>c`) to send to the LLM.
 
 If your note is "Untitled" the first time the LLM responds it'll automatically
 fill it in for you (for me for this query Claude picked "Introduction to YAML
