@@ -17,6 +17,12 @@ LLM chats as text files inside Neovim.
 - Additive (it'll respect your current syntax rules) and lightweight syntax and
   folding.
 
+## Table of Contents
+- [Prerequisites](#prerequisites)
+- [Creating a new conversation](#creating-a-new-conversation)
+- Viewing previous conversations
+- Changing models
+
 ## Prerequisites
 You'll need an OpenRouter (recommended) or OpenAI API key. *Or* an instance of
 Ollama running on your computer.
