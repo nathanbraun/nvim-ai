@@ -55,6 +55,7 @@ M.defaults = {
       max_tokens = 8000,
       endpoint = "https://generativelanguage.googleapis.com/v1beta/models/",
       models = {
+        "gemini-2.5-flash-preview-04-17",
         "gemini-2.0-flash",
         "gemini-2.0-pro",
         "gemini-1.5-flash",
