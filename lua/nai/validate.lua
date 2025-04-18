@@ -39,6 +39,48 @@ function M.validate_config(config)
     if not config.providers or not config.providers[config.active_provider] then
       table.insert(errors, "Config error: active_provider '" .. config.active_provider ..
         "' not found in providers configuration")
+    else
+      -- Check active_model format based on provider
+      if config.active_model then
+        -- Check format of active_model based on provider type
+        if config.active_provider == "openrouter" then
+          if not string.match(config.active_model, "^[^/]+/[^/]+$") then
+            table.insert(errors, string.format(
+              "Config error: active_model '%s' should follow the format 'provider/model' for OpenRouter provider",
+              config.active_model
+            ))
+          end
+        elseif string.match(config.active_model, "/") then
+          table.insert(errors, string.format(
+            "Config error: active_model '%s' should not be in format 'provider/model' for %s provider, just 'model'",
+            config.active_model, config.active_provider
+          ))
+        end
+
+        -- Check if active_model exists in the active provider's models list
+        local provider_config = config.providers[config.active_provider]
+        if provider_config and provider_config.models then
+          local model_exists = false
+          for _, model in ipairs(provider_config.models) do
+            if model == config.active_model then
+              model_exists = true
+              break
+            end
+          end
+
+          if not model_exists then
+            table.insert(errors, string.format(
+              "Config error: active_model '%s' not found in %s provider's models list",
+              config.active_model, config.active_provider
+            ))
+          end
+        else
+          table.insert(errors, string.format(
+            "Config error: provider '%s' has no models defined",
+            config.active_provider
+          ))
+        end
+      end
     end
   end
 
@@ -59,6 +101,36 @@ function M.validate_config(config)
         else
           if not provider_config.endpoint then
             table.insert(errors, "Config error: " .. provider_path .. ".endpoint is required")
+          end
+
+          -- Check models format based on provider
+          if provider_config.models then
+            local valid, err = M.check_type(provider_config.models, "table", provider_path .. ".models")
+            if not valid then
+              table.insert(errors, err)
+            else
+              -- Validate model format for OpenRouter
+              if provider_name == "openrouter" then
+                for i, model in ipairs(provider_config.models) do
+                  if not string.match(model, "^[^/]+/[^/]+$") then
+                    table.insert(errors, string.format(
+                      "Config error: %s.models[%d] = '%s' should follow the format 'provider/model' for OpenRouter",
+                      provider_path, i, model
+                    ))
+                  end
+                end
+              elseif provider_name ~= "openrouter" then
+                -- For non-OpenRouter providers, models should NOT contain a slash
+                for i, model in ipairs(provider_config.models) do
+                  if string.match(model, "/") then
+                    table.insert(errors, string.format(
+                      "Config error: active_model '%s' should not be in format 'provider/model' for %s provider, just 'model'",
+                      provider_path, i, model, provider_name
+                    ))
+                  end
+                end
+              end
+            end
           end
 
           -- Check types of common fields
