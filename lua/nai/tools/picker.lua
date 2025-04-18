@@ -512,4 +512,328 @@ function M.show_unified_model_picker_simple(models, current_provider, current_mo
   return true
 end
 
+function M.browse_files()
+  -- Get the notes directory from config
+  local config = require('nai.config')
+  local notes_dir = vim.fn.expand(config.options.chat_files.directory)
+
+  -- Check if directory exists
+  if vim.fn.isdirectory(notes_dir) ~= 1 then
+    vim.notify("Notes directory not found: " .. notes_dir, vim.log.levels.ERROR)
+    return
+  end
+
+  -- Find all markdown files in the directory
+  local find_command = nil
+  local path = require('nai.utils.path')
+
+  if path.is_windows then
+    -- Windows command
+    find_command = { 'powershell', '-NoProfile', '-Command',
+      string.format('Get-ChildItem -Path "%s" -Filter "*.md" -Recurse | ForEach-Object { $_.FullName }', notes_dir) }
+  else
+    -- Unix command
+    find_command = { 'find', notes_dir, '-type', 'f', '-name', '*.md' }
+  end
+
+  -- Execute the find command and collect the results
+  vim.system(find_command, { text = true }, function(obj)
+    -- Schedule the UI operations to run outside of the fast event context
+    vim.schedule(function()
+      if obj.code ~= 0 then
+        vim.notify("Failed to list chat files (exit code " .. obj.code .. ")", vim.log.levels.ERROR)
+        return
+      end
+
+      if not obj.stdout or obj.stdout == "" then
+        vim.notify("No chat files found in " .. notes_dir, vim.log.levels.WARN)
+        return
+      end
+
+      -- Process the file list
+      local files = vim.split(obj.stdout, "\n")
+      local items = {}
+
+      for _, file_path in ipairs(files) do
+        if file_path and file_path ~= "" then
+          local title = M.extract_title(file_path) or vim.fn.fnamemodify(file_path, ":t:r")
+          local display = title .. " (" .. vim.fn.fnamemodify(file_path, ":t") .. ")"
+
+          table.insert(items, {
+            value = file_path,
+            display = display,
+            title = title,
+            ordinal = title, -- For sorting
+            filename = vim.fn.fnamemodify(file_path, ":t"),
+            path = file_path -- Ensure path is included
+          })
+        end
+      end
+
+      if #items == 0 then
+        vim.notify("No valid chat files found in " .. notes_dir, vim.log.levels.WARN)
+        return
+      end
+
+      -- Try different pickers in order with fallbacks
+      M.show_file_browser_with_fallbacks(items)
+    end) -- End of vim.schedule
+  end)
+end
+
+-- Function to extract title from YAML frontmatter
+function M.extract_title(file_path)
+  local file = io.open(file_path, "r")
+  if not file then return nil end
+
+  local in_yaml = false
+  local title = nil
+
+  for line in file:lines() do
+    if line == "---" then
+      if not in_yaml then
+        in_yaml = true
+      else
+        break -- End of YAML frontmatter
+      end
+    elseif in_yaml and line:match("^title:%s*(.+)$") then
+      title = line:match("^title:%s*(.+)$")
+      break
+    end
+  end
+
+  file:close()
+  return title
+end
+
+-- Try different pickers with fallbacks
+function M.show_file_browser_with_fallbacks(items)
+  -- Try snacks first
+  local has_snacks, _ = pcall(require, 'snacks')
+  if has_snacks then
+    return M.show_file_browser_snacks(items)
+  end
+
+  -- Try telescope next
+  local has_telescope, _ = pcall(require, 'telescope')
+  if has_telescope then
+    return M.show_file_browser_telescope(items)
+  end
+
+  -- Try fzf-lua last
+  local has_fzf_lua, _ = pcall(require, 'fzf-lua')
+  if has_fzf_lua then
+    return M.show_file_browser_fzf_lua(items)
+  end
+
+  -- Fallback to simple UI if none of the pickers are available
+  vim.notify("No picker plugin found (snacks, telescope, or fzf-lua), using simple UI", vim.log.levels.INFO)
+  return M.show_file_browser_simple(items)
+end
+
+-- Implementation for browsing with Snacks
+function M.show_file_browser_snacks(items)
+  local Snacks = require('snacks')
+  
+  -- Pre-load file contents for previews to avoid issues
+  for _, item in ipairs(items) do
+    if item.value and vim.fn.filereadable(item.value) == 1 then
+      local lines = {}
+      local file = io.open(item.value, "r")
+      if file then
+        local count = 0
+        for line in file:lines() do
+          table.insert(lines, line)
+          count = count + 1
+          if count >= 30 then break end
+        end
+        file:close()
+        
+        -- Create a proper preview object as per Snacks documentation
+        item.preview = {
+          text = table.concat(lines, "\n"),
+          ft = "markdown"
+        }
+      else
+        item.preview = {
+          text = "Could not open file: " .. item.value,
+          ft = "text"
+        }
+      end
+    else
+      item.preview = {
+        text = item.value and ("File not readable: " .. item.value) or "No file path",
+        ft = "text"
+      }
+    end
+  end
+  
+  -- Use Snacks picker with the proper layout configuration
+  Snacks.picker.pick({
+    finder = function() return items end,
+    format = function(item)
+      return { { item.display } }
+    end,
+    title = "AI Chat Files",
+    -- Use the item.preview property (Snacks will handle this automatically)
+    -- Don't specify a preview function - let Snacks use the item.preview property
+    preview = "preview", -- This tells Snacks to use the item.preview property
+    
+    -- Use a layout that shows the preview on the right
+    layout = {
+      preset = "default", -- This preset has the preview on the right
+    },
+    
+    confirm = function(picker, item)
+      picker:close()
+      if item and item.value then
+        vim.cmd("edit " .. vim.fn.fnameescape(item.value))
+      end
+    end
+  })
+  
+  return true
+end
+
+-- Implementation for browsing with Telescope
+function M.show_file_browser_telescope(items)
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
+  local pickers = require("telescope.pickers")
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+  local previewers = require("telescope.previewers")
+
+  -- Create a custom previewer that shows the beginning of the file
+  local file_previewer = previewers.new_buffer_previewer({
+    title = "AI Chat Preview",
+    define_preview = function(self, entry, status)
+      if not entry or not entry.value then
+        vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, { "Invalid entry or missing file path" })
+        return
+      end
+
+      local file_path = entry.value
+      local lines = {}
+      local file = io.open(file_path, "r")
+
+      if file then
+        local count = 0
+        for line in file:lines() do
+          table.insert(lines, line)
+          count = count + 1
+          if count >= 30 then break end -- Show first 30 lines
+        end
+        file:close()
+      else
+        table.insert(lines, "Could not open file: " .. file_path)
+      end
+
+      vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
+      vim.api.nvim_buf_set_option(self.state.bufnr, "filetype", "markdown")
+    end
+  })
+
+  -- Create the picker
+  pickers.new({}, {
+    prompt_title = "AI Chat Files",
+    finder = finders.new_table {
+      results = items,
+      entry_maker = function(entry)
+        return {
+          value = entry.value,
+          display = entry.display,
+          ordinal = entry.ordinal,
+          path = entry.value,
+        }
+      end
+    },
+    sorter = conf.generic_sorter({}),
+    previewer = file_previewer,
+    attach_mappings = function(prompt_bufnr, map)
+      actions.select_default:replace(function()
+        local selection = action_state.get_selected_entry()
+        actions.close(prompt_bufnr)
+
+        if selection and selection.value then
+          vim.cmd("edit " .. vim.fn.fnameescape(selection.value))
+        end
+      end)
+      return true
+    end,
+    layout_strategy = "horizontal",
+    layout_config = {
+      width = 0.8,
+      height = 0.8,
+      preview_width = 0.5,
+    },
+  }):find()
+
+  return true
+end
+
+-- Implementation for browsing with fzf-lua
+function M.show_file_browser_fzf_lua(items)
+  local fzf_lua = require('fzf-lua')
+
+  -- Format items for fzf-lua
+  local formatted_items = {}
+  local item_map = {}
+
+  for _, item in ipairs(items) do
+    table.insert(formatted_items, item.display)
+    item_map[item.display] = item
+  end
+
+  fzf_lua.fzf_exec(formatted_items, {
+    prompt = "AI Chat Files> ",
+    previewer = "buffer",
+    preview_window = "right:50%",
+    actions = {
+      ["default"] = function(selected)
+        if selected and #selected > 0 then
+          local selected_display = selected[1]
+          local item = item_map[selected_display]
+          if item and item.value then
+            vim.cmd("edit " .. vim.fn.fnameescape(item.value))
+          end
+        end
+      end
+    },
+    -- Use a custom preview function that safely handles the file path
+    preview = function(_, item_display, _)
+      local item = item_map[item_display]
+      if not item or not item.value then
+        return "Invalid item or missing file path"
+      end
+
+      local file_path = item.value
+      if vim.fn.filereadable(file_path) ~= 1 then
+        return "File not readable: " .. file_path
+      end
+
+      -- Return the file content (fzf-lua will handle the display)
+      return vim.fn.readfile(file_path, "", 30) -- Read up to 30 lines
+    end
+  })
+
+  return true
+end
+
+-- Simple fallback using vim.ui.select
+function M.show_file_browser_simple(items)
+  vim.ui.select(items, {
+    prompt = "Select AI Chat File",
+    format_item = function(item)
+      return item.display
+    end
+  }, function(choice)
+    if choice and choice.value then
+      vim.cmd("edit " .. vim.fn.fnameescape(choice.value))
+    end
+  end)
+
+  return true
+end
+
 return M

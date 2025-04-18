@@ -1,3 +1,6 @@
+# 2.0.2 (2025-04-18)
+- use snacks as default file browser (if installed, then telescope or fzf)
+
 # 2.0.1 (2025-04-18)
 Fixes
 - issue with folding
