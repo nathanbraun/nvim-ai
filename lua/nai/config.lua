@@ -49,6 +49,20 @@ M.defaults = {
         "perplexity/r1-1776",
       },
     },
+    google = {
+      name = "Google",
+      description = "Google AI (Gemini models)",
+      model = "gemini-2.0-flash",
+      temperature = 0.7,
+      max_tokens = 8000,
+      endpoint = "https://generativelanguage.googleapis.com/v1beta/models/",
+      models = {
+        "gemini-2.0-flash",
+        "gemini-2.0-pro",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro"
+      },
+    },
     ollama = {
       name = "Ollama",
       description = "Local models via Ollama",
@@ -134,7 +148,7 @@ Instructions:
     },
   },
   format_response = {
-    enabled = false,             -- Whether to format the assistant's response
+    enabled = false,            -- Whether to format the assistant's response
     exclude_code_blocks = true, -- Don't format inside code blocks
     wrap_width = 80             -- Width to wrap text at
   },
@@ -190,6 +204,30 @@ function M.get_api_key(provider)
       local credentials = read_credentials()
       if credentials.ollama then
         return credentials.ollama
+      end
+    elseif provider == "google" then
+      -- Try environment variable first
+      local key = vim.env.GOOGLE_API_KEY
+      if key and key ~= "" then
+        return key
+      end
+
+      -- Try credentials file
+      local credentials = read_credentials()
+      if credentials.google then
+        return credentials.google
+      end
+
+      -- For backward compatibility, try old token files
+      local token_file = vim.fn.expand("~/.config/google.token")
+      if vim.fn.filereadable(token_file) == 1 then
+        local lines = vim.fn.readfile(token_file)
+        if #lines > 0 then
+          key = vim.fn.trim(lines[1])
+          if key ~= "" then
+            return key
+          end
+        end
       end
     else
       -- Return a dummy key for local instances that don't need auth

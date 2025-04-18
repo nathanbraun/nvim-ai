@@ -42,6 +42,38 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       },
       stream = false
     }
+  elseif provider == "google" then
+    -- Special case for Google's Gemini models
+    -- For Google, we need a simpler structure
+    local parts = {}
+
+    -- Add each message as a separate part
+    for _, msg in ipairs(messages) do
+      local prefix = ""
+      if msg.role == "system" then
+        prefix = "System: "
+      elseif msg.role == "user" then
+        prefix = "Human: "
+      elseif msg.role == "assistant" then
+        prefix = "Assistant: "
+      end
+
+      -- Add to parts array
+      table.insert(parts, { text = prefix .. msg.content })
+    end
+
+    -- Build the final data structure
+    data = {
+      contents = {
+        {
+          parts = { { text = messages[#messages].content } }
+        }
+      },
+      generationConfig = {
+        temperature = chat_config and chat_config.temperature or provider_config.temperature,
+        maxOutputTokens = max_tokens_value
+      }
+    }
   elseif provider == "openai" and (model == "o3" or model:match("^o3:")) then
     -- Special case for OpenAI's o3 model
     data = {
@@ -78,9 +110,21 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
   -- Emit event
   events.emit('request:start', request_id, provider, data.model)
 
-  local json_data = vim.json.encode(data)
+  -- Prepare the endpoint URL and auth header
   local endpoint_url = provider_config.endpoint
-  local auth_header = "Authorization: Bearer " .. api_key
+  local auth_header = nil
+
+  -- Handle provider-specific URL and auth
+  if provider == "google" then
+    -- For Google, construct the URL with the model and API key
+    endpoint_url = provider_config.endpoint .. model .. ":generateContent?key=" .. api_key
+    -- No auth header needed for Google when using API key in URL
+  else
+    -- For other providers, use bearer token auth
+    auth_header = "Authorization: Bearer " .. api_key
+  end
+
+  local json_data = vim.json.encode(data)
 
   -- Detect platform
   local path = require('nai.utils.path')
@@ -128,7 +172,16 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
 
     if parsed.error then
       vim.schedule(function()
-        on_error(error_utils.handle_api_error(response, provider))
+        -- For Google, the error format is different
+        if provider == "google" then
+          local error_message = parsed.error.message or "Unknown Google API error"
+          on_error(error_utils.log("Google API Error: " .. error_message, error_utils.LEVELS.ERROR, {
+            provider = provider,
+            error_detail = parsed.error
+          }))
+        else
+          on_error(error_utils.handle_api_error(response, provider))
+        end
       end)
       return
     end
@@ -141,9 +194,15 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       if parsed.message then
         if parsed.message.content then
           content = parsed.message.content
-        else
         end
-      else
+      end
+    elseif provider == "google" then
+      -- Google format handling
+      if parsed.candidates and #parsed.candidates > 0 and
+          parsed.candidates[1].content and
+          parsed.candidates[1].content.parts and
+          #parsed.candidates[1].content.parts > 0 then
+        content = parsed.candidates[1].content.parts[1].text
       end
     else
       -- Standard OpenAI format
@@ -188,6 +247,32 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
 
   local handle
 
+  -- Enable debug for this request
+  local debug_enabled = config.options.debug and config.options.debug.enabled
+  local verbose_debug = debug_enabled and config.options.debug.verbose
+
+  if debug_enabled then
+    vim.notify("DEBUG: API request URL: " .. endpoint_url, vim.log.levels.DEBUG)
+    vim.notify("DEBUG: API request data for " .. provider .. "/" .. model .. ":\n" .. json_data, vim.log.levels.DEBUG)
+    if verbose_debug then
+      -- Add verbose debug for curl
+      table.insert(curl_args, "-v")
+
+      -- Replace the process_response function with one that logs everything
+      local original_process_response = process_response
+      process_response = function(obj)
+        if verbose_debug then
+          vim.notify("VERBOSE DEBUG: Curl exit code: " .. obj.code, vim.log.levels.DEBUG)
+          vim.notify("VERBOSE DEBUG: Curl stdout:\n" .. (obj.stdout or "Empty"), vim.log.levels.DEBUG)
+          vim.notify("VERBOSE DEBUG: Curl stderr:\n" .. (obj.stderr or "Empty"), vim.log.levels.DEBUG)
+        end
+
+        -- Call the original handler
+        original_process_response(obj)
+      end
+    end
+  end
+
   -- On Windows with large payloads, use a temporary file approach
   if is_windows and #json_data > 8000 then -- Windows has command line length limits
     local temp_file = path.tmpname()
@@ -197,15 +282,25 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       file:write(json_data)
       file:close()
 
-      handle = vim.system({
+      local curl_args = {
         "curl",
         "-s",
         "-X", "POST",
         endpoint_url,
         "-H", "Content-Type: application/json",
-        "-H", auth_header,
-        "-d", "@" .. temp_file
-      }, { text = true }, function(obj)
+      }
+
+      -- Only add auth header if it exists (not for Google)
+      if auth_header then
+        table.insert(curl_args, "-H")
+        table.insert(curl_args, auth_header)
+      end
+
+      -- Add data from file
+      table.insert(curl_args, "-d")
+      table.insert(curl_args, "@" .. temp_file)
+
+      handle = vim.system(curl_args, { text = true }, function(obj)
         -- Clean up temp file
         os.remove(temp_file)
         process_response(obj)
@@ -219,19 +314,35 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     end
   else
     -- Standard approach for Unix or smaller payloads on Windows
-    if config.options.debug and config.options.debug.enabled then
-      vim.notify("DEBUG: API request data for " .. provider .. "/" .. model .. ":\n" .. json_data, vim.log.levels.DEBUG)
-    end
-
-    handle = vim.system({
+    local curl_args = {
       "curl",
       "-s",
       "-X", "POST",
       endpoint_url,
       "-H", "Content-Type: application/json",
-      "-H", auth_header,
-      "-d", json_data
-    }, { text = true }, process_response)
+    }
+
+    -- Only add auth header if it exists (not for Google)
+    if auth_header then
+      table.insert(curl_args, "-H")
+      table.insert(curl_args, auth_header)
+    end
+
+    -- Add data
+    table.insert(curl_args, "-d")
+    table.insert(curl_args, json_data)
+
+    -- For debugging
+    if debug_enabled then
+      local curl_cmd = "curl -s -X POST \"" .. endpoint_url .. "\" -H \"Content-Type: application/json\""
+      if auth_header then
+        curl_cmd = curl_cmd .. " -H \"" .. auth_header .. "\""
+      end
+      curl_cmd = curl_cmd .. " -d '" .. json_data:gsub("'", "'\\''") .. "'"
+      vim.notify("DEBUG: Equivalent curl command:\n" .. curl_cmd, vim.log.levels.DEBUG)
+    end
+
+    handle = vim.system(curl_args, { text = true }, process_response)
   end
 
   -- Store the request ID with the handle for cancellation

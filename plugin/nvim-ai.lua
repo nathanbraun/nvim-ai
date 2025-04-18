@@ -311,7 +311,7 @@ vim.api.nvim_create_user_command('NAISetKey', function(opts)
   end
 
   -- Validate provider
-  local valid_providers = { "openai", "openrouter", "dumpling", "ollama" }
+  local valid_providers = { "openai", "openrouter", "dumpling", "ollama", "google" } -- Add Google
   local is_valid = false
   for _, valid_provider in ipairs(valid_providers) do
     if provider == valid_provider then
@@ -408,7 +408,7 @@ end, {
   desc = "Set API key for a provider (usage: NAISetKey [provider] [key])",
   complete = function(ArgLead, CmdLine, CursorPos)
     -- Provide completion for providers
-    local providers = { "openai", "openrouter", "dumpling", "ollama" }
+    local providers = { "openai", "openrouter", "dumpling", "ollama", "google" } -- Add Google
     if CmdLine:match("^%s*NAISetKey%s+%S+%s+") then
       -- If provider is already specified, don't provide completions for the key
       return {}
@@ -428,7 +428,7 @@ end, {
 -- Command to check which API keys are configured
 vim.api.nvim_create_user_command('NAICheckKeys', function()
   local config = require('nai.config')
-  local providers = { "openai", "openrouter", "dumpling" }
+  local providers = { "openai", "openrouter", "dumpling", "google" }
   local results = {}
 
   for _, provider in ipairs(providers) do
@@ -565,7 +565,7 @@ end, {
   nargs = "?",
   desc = "Switch between AI providers",
   complete = function(ArgLead, CmdLine, CursorPos)
-    local providers = { "openai", "openrouter", "ollama" }
+    local providers = { "openai", "openrouter", "ollama", "google" }
     local filtered = {}
     for _, provider in ipairs(providers) do
       if provider:find(ArgLead, 1, true) == 1 then
@@ -948,6 +948,51 @@ if mappings.active and mappings.active.files and mappings.active.files.browse th
   vim.api.nvim_set_keymap('n', mappings.active.files.browse, ':NAIBrowse<CR>',
     { noremap = true, silent = true, desc = 'Browse AI chat files' })
 end
+
+-- Add this to plugin/nvim-ai.lua
+vim.api.nvim_create_user_command('NAIVerboseDebug', function()
+  local config = require('nai.config')
+
+  if not config.options.debug then
+    config.options.debug = {}
+  end
+
+  config.options.debug.verbose = not (config.options.debug.verbose or false)
+  config.options.debug.enabled = true
+
+  vim.notify("NAI verbose debugging " ..
+    (config.options.debug.verbose and "enabled" or "disabled"),
+    vim.log.levels.INFO)
+
+  if config.options.debug.verbose then
+    -- Execute a test curl command to check Google API connectivity
+    local api_key = config.get_api_key("google")
+    if api_key then
+      local test_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" ..
+      api_key
+      local test_data = '{"contents":[{"parts":[{"text":"Hello, world!"}]}]}'
+
+      vim.notify("Testing Google API connectivity...", vim.log.levels.INFO)
+
+      vim.system({
+        "curl",
+        "-s",
+        "-X", "POST",
+        test_url,
+        "-H", "Content-Type: application/json",
+        "-d", test_data
+      }, { text = true }, function(obj)
+        if obj.code ~= 0 then
+          vim.notify("Curl test failed with code: " .. obj.code, vim.log.levels.ERROR)
+        else
+          vim.notify("Curl test response:\n" .. (obj.stdout or "Empty response"), vim.log.levels.INFO)
+        end
+      end)
+    else
+      vim.notify("No Google API key found for testing", vim.log.levels.WARN)
+    end
+  end
+end, { desc = "Toggle verbose debugging for nvim-ai" })
 
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
