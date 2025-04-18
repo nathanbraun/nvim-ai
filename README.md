@@ -501,7 +501,7 @@ Instructions:
 # Acknowledgements
 This plugin was inspired by [madox2/vim-ai](https://github.com/madox2/vim-ai),
 which (among other things) enabled chatting with `.aichat` files. In a lot of
-ways, `nvim-ai` is just that functionality + a few tweaks.
+ways, `nvim-ai` is just that functionality + a few tweaks and enhancements.
 
 # License
 [MIT](LICENSE)
