@@ -70,8 +70,8 @@ use {
         })
     end
 }
-</details>
 ```
+</details>
 
 After installing the plugin and getting your API key, open up Neovim and run:
 
