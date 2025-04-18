@@ -7,7 +7,7 @@ LLM chats as text files inside Neovim.
 - Chat with any LLM inside any text file.
 - Persistant. Save conversations as text files. Pick them up later and continue
   chatting. View, edit and regenerate conversation history.
-- Works with OpenRouter, OpenAI or locally with Ollama.
+- Works with OpenAI, Google, OpenRouter or locally with Ollama.
 - Embed local text files, websites or YouTube video transcripts (requires
   [Dumpling API](https://dumplingai.com) key).
 - Configurable provider, model, temperature and system prompt.
@@ -28,8 +28,8 @@ LLM chats as text files inside Neovim.
 - [Configuration](#configuration)
 
 ## Prerequisites
-You'll need an OpenRouter (recommended) or OpenAI API key. *Or* an instance of
-Ollama running on your computer.
+You'll need an OpenRouter (recommended), OpenAI or Google AI API key. *Or* an
+instance of Ollama running on your computer.
 
 You can get an OpenRouter key here:
 

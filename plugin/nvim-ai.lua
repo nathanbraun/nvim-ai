@@ -292,10 +292,10 @@ vim.api.nvim_create_user_command('NAISetKey', function(opts)
     key = vim.fn.inputsecret("Enter API key for " .. provider .. ": ")
   else
     -- Interactive mode - ask for both provider and key
-    local providers = { "openai", "openrouter", "dumpling", "ollama" }
+    local providers = { "openai", "google", "openrouter", "dumpling", "ollama" }
 
     -- Use simple input instead of input with completion
-    provider = vim.fn.input("Provider (openai, openrouter, dumpling, ollama): ")
+    provider = vim.fn.input("Provider (openai, google, openrouter, dumpling, ollama): ")
 
     if provider == "" then
       vim.notify("Operation cancelled", vim.log.levels.INFO)
@@ -519,7 +519,7 @@ vim.api.nvim_create_user_command('NAISwitchProvider', function(opts)
     local current = config.options.active_provider
 
     provider = vim.fn.input({
-      prompt = "Current provider: " .. current .. "\nSwitch to (openai, openrouter, ollama): ",
+      prompt = "Current provider: " .. current .. "\nSwitch to (openai, openrouter, ollama, google): ",
       completion = function(_, _, _)
         return { "openai", "openrouter", "ollama" }
       end
@@ -533,7 +533,8 @@ vim.api.nvim_create_user_command('NAISwitchProvider', function(opts)
 
   -- Validate provider
   if provider ~= "openai" and provider ~= "openrouter" and provider ~= "ollama" then
-    vim.notify("Invalid provider: " .. provider .. ". Valid options: openai, openrouter, ollama", vim.log.levels.ERROR)
+    vim.notify("Invalid provider: " .. provider .. ". Valid options: openai, openrouter, ollama, google",
+      vim.log.levels.ERROR)
     return
   end
 
@@ -969,7 +970,7 @@ vim.api.nvim_create_user_command('NAIVerboseDebug', function()
     local api_key = config.get_api_key("google")
     if api_key then
       local test_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" ..
-      api_key
+          api_key
       local test_data = '{"contents":[{"parts":[{"text":"Hello, world!"}]}]}'
 
       vim.notify("Testing Google API connectivity...", vim.log.levels.INFO)
