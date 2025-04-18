@@ -8,7 +8,9 @@ function M.expand_paths(path_pattern)
   local MAX_FILES = _G.TEST_MAX_FILES or 100
 
   -- Debug info
-  vim.notify("DEBUG: Original path_pattern: " .. path_pattern, vim.log.levels.INFO)
+  if config.options.debug and config.options.debug.enabled then
+    vim.notify("DEBUG: Original path_pattern: " .. path_pattern, vim.log.levels.INFO)
+  end
 
   -- If it doesn't contain wildcards, just return the expanded path
   if not path_pattern:match("[*?%[%]]") then
