@@ -16,16 +16,16 @@ M.defaults = {
   },
   default_system_prompt = "You are a general assistant.",
   active_provider = "openrouter", -- "openai", "openrouter", etc.
+  active_model = "anthropic/claude-3.7-sonnet",
   mappings = {
-    enabled = true,               -- Whether to apply default key mappings
-    intercept_ctrl_c = true,      -- New option to intercept Ctrl+C
+    enabled = true,          -- Whether to apply default key mappings
+    intercept_ctrl_c = true, -- New option to intercept Ctrl+C
     -- Default mappings will be used from the mappings module
   },
   providers = {
     openai = {
       name = "OpenAI",
       description = "OpenAI API (GPT models)",
-      model = "gpt-4o",
       temperature = 0.7,
       max_tokens = 10000,
       endpoint = "https://api.openai.com/v1/chat/completions",
@@ -37,7 +37,6 @@ M.defaults = {
     openrouter = {
       name = "OpenRouter",
       description = "OpenRouter API (Multiple providers)",
-      model = "anthropic/claude-3.7-sonnet",
       temperature = 0.7,
       max_tokens = 10000,
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
@@ -52,7 +51,6 @@ M.defaults = {
     google = {
       name = "Google",
       description = "Google AI (Gemini models)",
-      model = "gemini-2.0-flash",
       temperature = 0.7,
       max_tokens = 8000,
       endpoint = "https://generativelanguage.googleapis.com/v1beta/models/",
@@ -66,7 +64,6 @@ M.defaults = {
     ollama = {
       name = "Ollama",
       description = "Local models via Ollama",
-      model = "llama3.2:latest",
       temperature = 0.7,
       max_tokens = 4000,
       endpoint = "http://localhost:11434/api/chat",
@@ -276,6 +273,10 @@ function M.get_provider_config()
   return M.options.providers[provider]
 end
 
+function M.get_active_model()
+  return M.options.active_model
+end
+
 -- Auto-initialize with defaults and try to load API key
 local function init_config()
   -- Create config directory if needed
@@ -291,6 +292,14 @@ end
 function M.setup(opts)
   -- Merge user options with defaults
   M.options = vim.tbl_deep_extend("force", M.defaults, opts or {})
+
+  -- Migration: If no active_model is set but provider has model, use that
+  if not M.options.active_model and M.options.active_provider then
+    local provider_config = M.options.providers[M.options.active_provider]
+    if provider_config and provider_config.model then
+      M.options.active_model = provider_config.model
+    end
+  end
 
   -- Handle backward compatibility
   if opts and opts.openai then

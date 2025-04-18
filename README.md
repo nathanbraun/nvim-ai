@@ -347,127 +347,154 @@ nvim-ai can be configured with the setup function (defaults below):
 
 ```lua
 require('nai').setup({
-    credentials = {
-        file_path = "~/.config/nvim-ai/credentials.json",
+  credentials = {
+    file_path = "~/.config/nvim-ai/credentials.json", -- Single file for all credentials
+  },
+  active_filetypes = {
+    patterns = { "*.md", "*.markdown", "*.wiki" }, -- File patterns to activate on
+    autodetect = true,                             -- Detect chat blocks in any file
+    enable_overlay = true,                         -- Enable syntax overlay
+    enable_folding = true,                         -- Enable chat folding
+  },
+  default_system_prompt = "You are a general assistant.",
+  active_provider = "openrouter", -- e.g. starting provider
+  active_model = "google/gemini-2.0-flash-001", -- e.g. starting model
+  mappings = {
+    enabled = true,          -- Whether to apply default key mappings
+    intercept_ctrl_c = true, -- New option to intercept Ctrl+C
+    -- Default mappings will be used from the mappings module
+  },
+  providers = {
+    openai = {
+      name = "OpenAI",
+      description = "OpenAI API (GPT models)",
+      temperature = 0.7,
+      max_tokens = 10000,
+      endpoint = "https://api.openai.com/v1/chat/completions",
+      models = {
+        "gpt-4",
+        "o3"
+      }
     },
-    active_filetypes = {
-      patterns = { "*.md", "*.markdown", "*.wiki" },
-      autodetect = true,
-      enable_overlay = true,
-      enable_folding = true,
+    openrouter = {
+      name = "OpenRouter",
+      description = "OpenRouter API (Multiple providers)",
+      temperature = 0.7,
+      max_tokens = 10000,
+      endpoint = "https://openrouter.ai/api/v1/chat/completions",
+      models = {
+        "anthropic/claude-3.7-sonnet",
+        "google/gemini-2.0-flash-001",
+        "openai/gpt-4o",
+        "openai/gpt-4o-mini",
+        "perplexity/r1-1776",
+      },
     },
-    default_system_prompt = "You are a general assistant.",
-    active_provider = "openrouter",
-    mappings = {
-        enabled = true,
-        intercept_ctrl_c = true,
-        chat = {
-            continue = "<Leader>c",
-            new = "<Leader>ai",
-            cancel = "<Leader>ax",
-        },
-        expand = {
-            blocks = "<Leader>ae",
-        },
-        insert = {
-            user_message = "<Leader>au",
-            scrape = "<Leader>ad",
-            web = "<Leader>aw",
-            youtube = "<Leader>ay",
-            reference = "<Leader>ar",
-            snapshot = "<Leader>as",
-            crawl = "<Leader>ac",
-        },
-        settings = {
-            select_model = "<Leader>am",
-            toggle_provider = "<Leader>ap",
-        }
+    google = {
+      name = "Google",
+      description = "Google AI (Gemini models)",
+      temperature = 0.7,
+      max_tokens = 8000,
+      endpoint = "https://generativelanguage.googleapis.com/v1beta/models/",
+      models = {
+        "gemini-2.0-flash",
+        "gemini-2.0-pro",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro"
+      },
     },
-    providers = {
-        openai = {
-            name = "OpenAI",
-            description = "OpenAI API (GPT models)",
-            model = "gpt-4o",
-            temperature = 0.7,
-            max_tokens = 10000,
-            endpoint = "https://api.openai.com/v1/chat/completions",
-        },
-        openrouter = {
-            name = "OpenRouter",
-            description = "OpenRouter API (Multiple providers)",
-            model = "anthropic/claude-3.7-sonnet",
-            temperature = 0.7,
-            max_tokens = 10000,
-            endpoint = "https://openrouter.ai/api/v1/chat/completions",
-            models = {
-                "anthropic/claude-3.7-sonnet",
-                "google/gemini-2.0-flash-001",
-                "openai/gpt-4o",
-                "openai/gpt-4o-mini",
-                "perplexity/r1-1776",
-            },
-        },
-        ollama = {
-          name = "Ollama",
-          description = "Local models via Ollama",
-          model = "llama3.2:latest",
-          temperature = 0.7,
-          max_tokens = 4000,
-          endpoint = "http://localhost:11434/api/chat",
-          models = {
-            "llama3.2:latest",
-          },
-        },
+    ollama = {
+      name = "Ollama",
+      description = "Local models via Ollama",
+      temperature = 0.7,
+      max_tokens = 4000,
+      endpoint = "http://localhost:11434/api/chat",
+      models = {
+        "llama3.2:latest",
+      },
     },
-    chat_files = {
-        directory = vim.fn.expand("~/nvim-ai-notes"),
-        format = "{id}.md",
-        auto_save = false,
-        id_length = 4,
-        use_timestamp = false,
-        auto_title = true,
-        header = {
-            enabled = true,
-            template = [[---
+  },
+  chat_files = {
+    directory = vim.fn.expand("~/nvim-ai-notes"), -- Default save location
+    format = "{id}.md",                           -- Filename format
+    auto_save = false,                            -- Save after each interaction
+    id_length = 4,                                -- Length of random ID
+    use_timestamp = false,                        -- Use timestamp instead of random ID if true
+    auto_title = true,                            -- Automatically generate title for untitled chats
+    header = {
+      enabled = true,                             -- Whether to include YAML header
+      template = [[---
 title: {title}
 date: {date}
 tags: [ai]
 ---]],
-        },
     },
-    expand_placeholders = false,
-    highlights = {
-        user = { fg = "#88AAFF", bold = true },
-        assistant = { fg = "#AAFFAA", bold = true },
-        system = { fg = "#FFAA88", bold = true },
-        special_block = { fg = "#AAAAFF", bold = true },
-        error_block = { fg = "#FF8888", bold = true },
-        content_start = { fg = "#AAAAAA", italic = true },
-        placeholder = { fg = "#FFCC66", bold = true },
+  },
+  tools = {
+    dumpling = {
+      base_endpoint = "https://app.dumplingai.com/api/v1/", -- Base endpoint for all Dumpling API calls
+      format = "markdown",                                  -- Output format: markdown, html, or screenshot
+      cleaned = true,                                       -- Whether to clean the output
+      render_js = true,                                     -- Whether to render JavaScript
+      max_content_length = 100000,                          -- Max length to prevent excessively large responses
+      include_timestamps = true,                            -- Whether to include timestamps in the output
     },
-    aliases = {
-        translate = {
-            system = "You are an interpreter. Translate any further text/user messages you receive to Spanish.",
-            user_prefix = "",
-            config = {
-                model = "openai/gpt-4o-mini",
-                temperature = 0.1,
-            }
-        },
-        refactor = {
-            system = "You are a coding expert. Refactor the provided code to improve readability, efficiency, and adherence to best practices. Explain your key improvements.",
-            user_prefix = "Refactor the following code:",
-        },
+  },
+  expand_placeholders = false,
+  highlights = {
+    user = { fg = "#88AAFF", bold = true },            -- User message highlighting
+    assistant = { fg = "#AAFFAA", bold = true },       -- Assistant message highlighting
+    system = { fg = "#FFAA88", bold = true },          -- System message highlighting
+    special_block = { fg = "#AAAAFF", bold = true },   -- Special blocks (scrape, youtube, etc.)
+    error_block = { fg = "#FF8888", bold = true },     -- Error blocks
+    content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
+    placeholder = { fg = "#FFCC66", bold = true },     -- Golden yellow for placeholders
+  },
+  aliases = {
+    translate = {
+      system =
+      "You are an interpretor. Translate any further text/user messages you recieve to Spanish. If the text is a question, don't answer it, just translate the question to Spanish.",
+      user_prefix = "",
+      config = {
+        model = "openai/gpt-4o-mini",
+        temperature = 0.1,
+      }
     },
-    format_response = {
-        enabled = true,
-        exclude_code_blocks = true,
-        wrap_width = 80
+    refactor = {
+      system =
+      "You are a coding expert. Refactor the provided code to improve readability, efficiency, and adherence to best practices. Explain your key improvements.",
+      user_prefix = "Refactor the following code:",
     },
-    debug = {
-        enabled = false,
-        auto_title = false,
+    test = {
+      system =
+      "You are a testing expert. Generate comprehensive unit tests for the provided code, focusing on edge cases and full coverage.",
+      user_prefix = "Generate tests for:",
     },
+    ["check-todo-list"] = {
+      system =
+      [[Your job is to evaluate a todo list and make sure everything is checked off.
+
+
+Instructions:
+- If everything is checked off, respond "Looks good!" and nothing else.
+- Otherwise remind me what I still have to do.]],
+      config = {
+        expand_placeholders = true
+      },
+      user_prefix = [[The todo is here:
+        $FILE_CONTENTS
+        ]]
+    },
+  },
+  format_response = {
+    enabled = false,            -- Whether to format the assistant's response
+    exclude_code_blocks = true, -- Don't format inside code blocks
+    wrap_width = 80             -- Width to wrap text at
+  },
+  debug = {
+    enabled = false,
+    auto_title = false,
+  },
 })
 ```
 

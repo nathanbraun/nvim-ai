@@ -25,8 +25,8 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     return
   end
 
-  -- Get the model
-  local model = chat_config and chat_config.model or provider_config.model
+  -- Get the model - use chat-specific, active_model, or default
+  local model = chat_config and chat_config.model or config.options.active_model
   local max_tokens_value = chat_config and chat_config.max_tokens or provider_config.max_tokens
 
   -- Create data structure based on provider and model

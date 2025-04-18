@@ -5,7 +5,7 @@ function M.select_model()
   -- Get configuration
   local config = require('nai.config')
   local current_provider = config.options.active_provider
-  local current_model = config.options.providers[current_provider].model
+  local current_model = config.options.active_model
 
   -- Create a unified list of all models across providers
   local all_models = {}
@@ -236,9 +236,10 @@ function M.show_unified_model_picker(models, current_provider, current_model)
             vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
           end
 
-          -- Update the model
+          -- Update the model in both places
           local config = require('nai.config')
           config.options.providers[provider_id].model = model_id
+          config.options.active_model = model_id
 
           -- Update state
           require('nai.state').set_current_model(model_id)
@@ -340,9 +341,9 @@ function M.show_unified_model_picker_snacks(models, current_provider, current_mo
           vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
         end
 
-        -- Update the model
+        -- Update the model at the top level
         local config = require('nai.config')
-        config.options.providers[provider_id].model = model_id
+        config.options.active_model = model_id
 
         -- Update state
         require('nai.state').set_current_model(model_id)
@@ -389,21 +390,13 @@ function M.show_unified_model_picker_telescope(models, current_provider, current
           local model_id = selection.value
           local provider_id = selection.provider
 
-          -- Switch provider if needed
-          if provider_id ~= current_provider then
-            local config = require('nai.config')
-            config.options.active_provider = provider_id
-            require('nai.state').set_current_provider(provider_id)
-
-            -- Notify about provider change
-            vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
-          end
-
-          -- Update the model
+          -- Update both provider and model in config
           local config = require('nai.config')
-          config.options.providers[provider_id].model = model_id
+          config.options.active_provider = provider_id
+          config.options.active_model = model_id
 
           -- Update state
+          require('nai.state').set_current_provider(provider_id)
           require('nai.state').set_current_model(model_id)
           require('nai.events').emit('model:change', model_id)
 
@@ -453,9 +446,9 @@ function M.show_unified_model_picker_fzf_lua(models, current_provider, current_m
               vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
             end
 
-            -- Update the model
+            -- Update the model at the top level
             local config = require('nai.config')
-            config.options.providers[provider_id].model = model_id
+            config.options.active_model = model_id
 
             -- Update state
             require('nai.state').set_current_model(model_id)
@@ -503,9 +496,9 @@ function M.show_unified_model_picker_simple(models, current_provider, current_mo
         vim.notify("Switched to " .. provider_id .. " provider", vim.log.levels.INFO)
       end
 
-      -- Update the model
+      -- Update the model at the top level
       local config = require('nai.config')
-      config.options.providers[provider_id].model = model_id
+      config.options.active_model = model_id
 
       -- Update state
       require('nai.state').set_current_model(model_id)

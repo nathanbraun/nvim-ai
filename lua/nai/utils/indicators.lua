@@ -37,7 +37,7 @@ function M.create_assistant_placeholder(buffer_id, row)
       tokens = 0,
       elapsed_time = 0,
       start_time = vim.loop.now(),
-      model = config.get_provider_config().model,
+      model = config.get_active_model()
     }
   }
 

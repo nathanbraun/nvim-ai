@@ -56,10 +56,6 @@ function M.validate_config(config)
         if not valid then
           table.insert(errors, err)
         else
-          -- Check required fields
-          if not provider_config.model then
-            table.insert(errors, "Config error: " .. provider_path .. ".model is required")
-          end
 
           if not provider_config.endpoint then
             table.insert(errors, "Config error: " .. provider_path .. ".endpoint is required")
