@@ -39,6 +39,7 @@ You can get an OpenRouter key here:
 
 <details>
   <summary>lazy.nvim</summary>
+
 ```lua
 {
     'nathanbraun/nvim-ai',
@@ -56,6 +57,7 @@ You can get an OpenRouter key here:
 
 <details>
   <summary>packer.nvim</summary>
+
 ```lua
 use {
     'nathanbraun/nvim-ai',
