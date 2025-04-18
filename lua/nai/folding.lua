@@ -32,14 +32,14 @@ function M.get_fold_level(lnum)
   local prev_line = lnum > 1 and vim.fn.getline(lnum - 1) or ""
   local winid = vim.fn.win_getid()
 
-  -- Check for chat markers
-  if line:match("^" .. vim.pesc(constants.MARKERS.USER) .. "$") then
+  -- Check for chat markers - using direct string comparison for reliability
+  if line == ">>> user" then
     return ">1" -- Start a fold for user messages
-  elseif line:match("^" .. vim.pesc(constants.MARKERS.ASSISTANT) .. "$") then
+  elseif line == "<<< assistant" then
     return ">1" -- Start a fold for assistant messages
-  elseif line:match("^" .. vim.pesc(constants.MARKERS.SYSTEM) .. "$") then
+  elseif line == ">>> system" then
     return ">1" -- Start a fold for system messages
-  elseif line:match("^" .. vim.pesc(constants.MARKERS.CONFIG) .. "$") then
+  elseif line == ">>> config" then
     return ">1" -- Start a fold for config messages
   end
 
@@ -187,6 +187,29 @@ function M.restore_original(bufnr)
       M.original_settings[key] = nil
     end
   end
+end
+
+function M.setup_autocmds()
+  local augroup = vim.api.nvim_create_augroup('NaiFoldingGlobal', { clear = true })
+
+  -- Apply folding when entering a window with an activated buffer
+  vim.api.nvim_create_autocmd("WinEnter", {
+    group = augroup,
+    callback = function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      local state = require('nai.state')
+
+      if state.is_buffer_activated(bufnr) and
+          config.options.active_filetypes.enable_folding ~= false then
+        local winid = vim.fn.win_getid()
+
+        -- Set folding for this window
+        vim.wo[winid].foldmethod = "expr"
+        vim.wo[winid].foldexpr = "v:lua.require('nai.folding').get_fold_level(v:lnum)"
+        vim.wo[winid].foldenable = true
+      end
+    end
+  })
 end
 
 return M
