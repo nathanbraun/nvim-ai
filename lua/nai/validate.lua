@@ -29,7 +29,8 @@ function M.validate_config(config)
 
   -- Check active_provider
   if config.active_provider then
-    local valid, err = M.check_enum(config.active_provider, { "openai", "openrouter" }, "active_provider")
+    local valid, err = M.check_enum(config.active_provider, { "openai", "openrouter", "ollama", "google" },
+      "active_provider")
     if not valid then
       table.insert(errors, err)
     end
@@ -56,7 +57,6 @@ function M.validate_config(config)
         if not valid then
           table.insert(errors, err)
         else
-
           if not provider_config.endpoint then
             table.insert(errors, "Config error: " .. provider_path .. ".endpoint is required")
           end
