@@ -2,6 +2,7 @@ local M = {}
 local utils = require('nai.utils')
 local error_utils = require('nai.utils.error')
 local path = require('nai.utils.path')
+local config = require('nai.config')
 
 function M.expand_paths(path_pattern)
   -- Set a reasonable maximum file limit to prevent accidental massive expansions
