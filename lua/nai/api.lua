@@ -20,7 +20,27 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
 
   if not api_key then
     vim.schedule(function()
+      -- Create a dummy request ID for tracking this error
+      local error_request_id = "error_" .. tostring(os.time()) .. "_" .. tostring(math.random(10000))
+
+      -- Register and immediately update the request state
+      state.register_request(error_request_id, {
+        id = error_request_id,
+        type = 'chat',
+        status = 'error',
+        start_time = os.time(),
+        end_time = os.time(),
+        provider = provider,
+        error = "API key not found for " .. provider
+      })
+
+      -- Emit event
+      events.emit('request:error', error_request_id, "API key not found")
+
       on_error("API key not found for " .. provider)
+
+      -- Clear request from state after callback completes
+      state.clear_request(error_request_id)
     end)
     return
   end
@@ -140,37 +160,86 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     end
 
     if obj.code ~= 0 then
+      -- Update state to error and clear the request
+      state.update_request(request_id, {
+        status = 'error',
+        end_time = os.time(),
+        error = "Request failed with code " .. obj.code
+      })
+
+      -- Emit event
+      events.emit('request:error', request_id, "Request failed with code " .. obj.code)
+
       vim.schedule(function()
         on_error(error_utils.log("Request failed with code " .. obj.code, error_utils.LEVELS.ERROR, {
           provider = provider,
           endpoint = endpoint_url
         }))
+
+        -- Clear request from state after callback completes
+        state.clear_request(request_id)
       end)
       return
     end
 
     local response = obj.stdout
     if not response or response == "" then
+      -- Update state to error
+      state.update_request(request_id, {
+        status = 'error',
+        end_time = os.time(),
+        error = "Empty response from API"
+      })
+
+      -- Emit event
+      events.emit('request:error', request_id, "Empty response from API")
+
       vim.schedule(function()
         on_error(error_utils.log("Empty response from API", error_utils.LEVELS.ERROR, {
           provider = provider
         }))
+
+        -- Clear request from state after callback completes
+        state.clear_request(request_id)
       end)
       return
     end
 
     local success, parsed = pcall(vim.json.decode, response)
     if not success then
+      -- Update state to error
+      state.update_request(request_id, {
+        status = 'error',
+        end_time = os.time(),
+        error = "Failed to parse API response"
+      })
+
+      -- Emit event
+      events.emit('request:error', request_id, "Failed to parse API response")
+
       vim.schedule(function()
         on_error(error_utils.log("Failed to parse API response", error_utils.LEVELS.ERROR, {
           provider = provider,
           response_preview = string.sub(response, 1, 100)
         }))
+
+        -- Clear request from state after callback completes
+        state.clear_request(request_id)
       end)
       return
     end
 
     if parsed.error then
+      -- Update state to error
+      state.update_request(request_id, {
+        status = 'error',
+        end_time = os.time(),
+        error = "API error: " .. (parsed.error.message or "Unknown error")
+      })
+
+      -- Emit event
+      events.emit('request:error', request_id, "API error")
+
       vim.schedule(function()
         -- For Google, the error format is different
         if provider == "google" then
@@ -182,6 +251,9 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
         else
           on_error(error_utils.handle_api_error(response, provider))
         end
+
+        -- Clear request from state after callback completes
+        state.clear_request(request_id)
       end)
       return
     end

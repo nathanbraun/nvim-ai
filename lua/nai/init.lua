@@ -408,10 +408,14 @@ function M.cancel()
 
   -- Get all active requests from state
   local active_requests = state.get_active_requests()
+  local request_count = vim.tbl_count(active_requests)
 
   for request_id, request_data in pairs(active_requests) do
     -- Cancel the request
     api.cancel_request({ request_id = request_id })
+
+    -- Explicitly clear the request from state
+    state.clear_request(request_id)
   end
 
   -- Handle indicators
@@ -444,7 +448,18 @@ function M.cancel()
     state.clear_indicator(indicator_id)
   end
 
-  vim.notify("AI completion cancelled", vim.log.levels.INFO)
+  -- Reset the active_request variable directly
+  M.active_request = nil
+  M.active_indicator = nil
+
+  if request_count > 0 then
+    vim.notify("AI completion cancelled", vim.log.levels.INFO)
+  else
+    vim.notify("No active AI requests to cancel", vim.log.levels.INFO)
+  end
+
+  -- Force a complete state reset to ensure we can start fresh
+  state.reset_processing_state()
 end
 
 function M.new_chat()

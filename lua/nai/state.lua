@@ -117,4 +117,19 @@ function M.get_activated_buffers()
   return M.activated_buffers
 end
 
+function M.reset_processing_state()
+  -- Clear all active requests
+  M.active_requests = {}
+
+  -- Clear all indicators
+  M.active_indicators = {}
+
+  -- Reset processing flag
+  M.ui_state.is_processing = false
+
+  -- We don't clear activated_buffers as those should persist
+
+  return true
+end
+
 return M
