@@ -157,15 +157,16 @@ The benefits to chatting in dedicated files with `<leader>ai`:
 To view (and continue chatting with) past conversations run `:NAIBrowse`, which
 is mapped to `<leader>ao` (for *open*) by default.
 
-This will open up a Telescope picker with the extracted *titles* (from the
-YAML) of all your conversations in the `~/nvim-ai-notes` directory.
+This will open up a picker (Snacks, Telescope or Fzf Lua) with the extracted
+*titles* (from the YAML) of all your conversations in the `~/nvim-ai-notes`
+directory.
 
 ![Open Notes](images/note-picker.gif)
 
 ## Changing models
 You can run the `:NAIModel` command (bound to `<leader>am` by default) to open
-up a Telescope picker of model options. `:NAIProvider` (`<leader>ap`) does the
-same for provider (OpenRouter, Ollama, etc).
+up a picker of model options. `:NAIProvider` (`<leader>ap`) does the same for
+provider (OpenRouter, Ollama, etc).
 
 ![Select Model](images/change-model.gif)
 
