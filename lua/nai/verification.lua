@@ -28,6 +28,7 @@ end
 function M.generate_hash(messages, response, context)
   -- Add a context parameter to identify which function is calling this
   context = context or "unknown"
+  local constants = require('nai.constants')
 
   -- Start with an empty content string
   local content = ""
@@ -45,6 +46,11 @@ function M.generate_hash(messages, response, context)
 
     -- Remove any signature lines from the content
     normalized_content = normalized_content:gsub("\n<<< signature [0-9a-f]+", "")
+
+    -- If this is a system message, remove the auto-title instruction
+    if msg.role == "system" then
+      normalized_content = normalized_content:gsub(vim.pesc(constants.AUTO_TITLE_INSTRUCTION), "")
+    end
 
     -- Remove all blank lines
     local lines = {}
@@ -156,11 +162,20 @@ function M.add_signature_after_response(bufnr, insertion_row, messages, response
     response_preview = response:sub(1, 50) .. (response:len() > 50 and "..." or "")
   })
 
+  -- Clean up messages by removing auto-title instruction from system messages
+  local constants = require('nai.constants')
+  local clean_messages = vim.deepcopy(messages)
+  for _, msg in ipairs(clean_messages) do
+    if msg.role == "system" and msg.content then
+      msg.content = msg.content:gsub(vim.pesc(constants.AUTO_TITLE_INSTRUCTION), "")
+    end
+  end
+
   -- IMPORTANT: Do not add the response again, it's already in the buffer
   -- Just calculate the hash based on the messages and response
 
   -- Generate hash with context
-  local hash = M.generate_hash(messages, response, "original_signature")
+  local hash = M.generate_hash(clean_messages, response, "original_signature")
 
   -- Format signature line
   local signature_line = M.format_signature(hash)

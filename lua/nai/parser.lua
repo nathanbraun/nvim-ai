@@ -384,11 +384,11 @@ end
 -- Generate a system prompt that references title instruction when needed
 function M.get_system_prompt_with_title_request(is_untitled)
   local base_prompt = config.options.default_system_prompt
+  local constants = require('nai.constants')
 
   -- If auto-titling is enabled and this is an untitled chat, append the title instruction
   if config.options.chat_files.auto_title and is_untitled then
-    return base_prompt ..
-        "\nFor your first response, please begin with 'Proposed Title: ' followed by a concise 3-7 word title summarizing this conversation. Place this on the first line of your response."
+    return base_prompt .. constants.AUTO_TITLE_INSTRUCTION
   else
     return base_prompt
   end
