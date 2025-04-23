@@ -32,13 +32,31 @@ function M.generate_hash(messages, response, context)
   -- Start with an empty content string
   local content = ""
 
-  -- Add all messages that were sent to the API
+  -- Add all messages that were sent to the API, filtering out signature blocks
   for i, msg in ipairs(messages) do
-    -- Normalize the content by trimming whitespace
+    -- Skip if this is a signature block
+    if msg.role == "assistant" and msg.content and msg.content:match("^<<< signature") then
+      M.debug_log("Skipping signature block in message " .. i)
+      goto continue
+    end
+
+    -- Normalize the content by trimming whitespace and removing blank lines
     local normalized_content = msg.content:gsub("^%s+", ""):gsub("%s+$", "")
 
+    -- Remove any signature lines from the content
+    normalized_content = normalized_content:gsub("\n<<< signature [0-9a-f]+", "")
+
+    -- Remove all blank lines
+    local lines = {}
+    for line in normalized_content:gmatch("[^\r\n]+") do
+      if line:match("%S") then -- Only keep lines with non-whitespace characters
+        table.insert(lines, line)
+      end
+    end
+    normalized_content = table.concat(lines, "\n")
+
     -- Add to the content string (no trailing newline after the last message)
-    if i > 1 then
+    if i > 1 and content ~= "" then
       content = content .. "\n" -- Add a newline before each message except the first
     end
 
@@ -48,16 +66,34 @@ function M.generate_hash(messages, response, context)
       role = msg.role,
       content_preview = normalized_content:sub(1, 50) .. (normalized_content:len() > 50 and "..." or "")
     })
+
+    ::continue::
   end
 
-  -- Normalize the response by trimming whitespace
+  -- Normalize the response by trimming whitespace and removing blank lines
   local normalized_response = response:gsub("^%s+", ""):gsub("%s+$", "")
 
   -- Remove any "A:" prefix that might appear in the buffer but not in the original
   normalized_response = normalized_response:gsub("^A:%s*", "")
 
+  -- Remove any signature lines from the response
+  normalized_response = normalized_response:gsub("\n<<< signature [0-9a-f]+", "")
+
+  -- Remove all blank lines
+  local response_lines = {}
+  for line in normalized_response:gmatch("[^\r\n]+") do
+    if line:match("%S") then -- Only keep lines with non-whitespace characters
+      table.insert(response_lines, line)
+    end
+  end
+  normalized_response = table.concat(response_lines, "\n")
+
   -- Add the normalized response with a single newline separator
-  content = content .. "\nassistant:" .. normalized_response
+  if content ~= "" then
+    content = content .. "\n"
+  end
+  content = content .. "assistant:" .. normalized_response
+
   M.debug_log("Hash input response", normalized_response:sub(1, 50) .. (normalized_response:len() > 50 and "..." or ""))
 
   -- Create a more accessible directory for output files
@@ -202,8 +238,19 @@ function M.verify_single_response(bufnr, response_start_line, signature_line)
     })
   end
 
+  -- Filter out any signature blocks from parsed messages
+  local filtered_messages = {}
+  for _, msg in ipairs(parsed_messages) do
+    -- Skip messages that are just signature blocks
+    if msg.role == "assistant" and msg.content and msg.content:match("^<<< signature") then
+      M.debug_log("Filtered out signature block from parsed messages")
+    else
+      table.insert(filtered_messages, msg)
+    end
+  end
+
   -- Generate expected hash with context
-  local expected_hash = M.generate_hash(parsed_messages, response, "verification")
+  local expected_hash = M.generate_hash(filtered_messages, response, "verification")
   M.debug_log("Generated hash", expected_hash)
 
   -- Compare hashes
@@ -284,6 +331,62 @@ function M.verify_all_responses(bufnr)
     local level = all_verified and vim.log.levels.INFO or vim.log.levels.WARN
     vim.notify(status, level)
     return all_verified
+  end
+end
+
+function M.verify_last_response(bufnr)
+  -- Get all lines in buffer
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+
+  -- Clear existing verification indicators
+  vim.api.nvim_buf_clear_namespace(bufnr, M.namespace_id, 0, -1)
+
+  -- Find the last assistant message and its signature
+  local last_assistant_start = nil
+  local last_signature_line = nil
+  local in_assistant = false
+  local assistant_start = nil
+
+  for i, line in ipairs(lines) do
+    local row = i - 1 -- Convert to 0-indexed
+
+    if line:match("^<<< assistant") then
+      in_assistant = true
+      assistant_start = row
+    elseif in_assistant and line:match("^<<< signature") then
+      -- Found a signature for an assistant message
+      last_assistant_start = assistant_start
+      last_signature_line = row
+      in_assistant = false
+    elseif in_assistant and (line:match("^>>>") or line:match("^<<<") and not line:match("^<<< signature")) then
+      -- End of assistant message without signature
+      in_assistant = false
+    end
+  end
+
+  -- If we found a last assistant message with signature
+  if last_assistant_start and last_signature_line then
+    local is_verified, message = M.verify_single_response(bufnr, last_assistant_start, last_signature_line)
+
+    -- Add visual indicator
+    local highlight_group = is_verified and "DiagnosticOk" or "DiagnosticError"
+    local status_text = is_verified and "✓ Verified" or "✗ Modified"
+
+    vim.api.nvim_buf_add_highlight(bufnr, M.namespace_id, highlight_group, last_signature_line, 0, -1)
+    vim.api.nvim_buf_set_extmark(bufnr, M.namespace_id, last_signature_line, 0, {
+      virt_text = { { status_text, highlight_group } },
+      virt_text_pos = "eol",
+    })
+
+    -- Show verification status
+    local status = is_verified and "✓ Last response verified" or "⚠ Last response could not be verified"
+    local level = is_verified and vim.log.levels.INFO or vim.log.levels.WARN
+    vim.notify(status, level)
+
+    return is_verified
+  else
+    vim.notify("No verifiable content found in buffer", vim.log.levels.INFO)
+    return false
   end
 end
 

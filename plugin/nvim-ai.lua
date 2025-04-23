@@ -868,31 +868,8 @@ end, { desc = "Toggle verbose debugging for nvim-ai" })
 vim.api.nvim_create_user_command('NAIVerify', function()
   local buffer_id = vim.api.nvim_get_current_buf()
   local verification = require('nai.verification')
-  verification.verify_all_responses(buffer_id)
-end, { desc = "Verify the integrity of AI responses in the current buffer" })
-
--- Keep the debug command
-vim.api.nvim_create_user_command('NAIVerifyDebug', function()
-  local buffer_id = vim.api.nvim_get_current_buf()
-  local config = require('nai.config')
-
-  -- Enable debugging temporarily
-  local original_debug = config.options.debug and config.options.debug.enabled
-  if config.options.debug then
-    config.options.debug.enabled = true
-  else
-    config.options.debug = { enabled = true }
-  end
-
-  -- Run verification with debug output
-  local verification = require('nai.verification')
-  verification.verify_all_responses(buffer_id)
-
-  -- Restore original debug setting
-  if config.options.debug then
-    config.options.debug.enabled = original_debug
-  end
-end, { desc = "Run verification with debug output" })
+  verification.verify_last_response(buffer_id)
+end, { desc = "Verify the integrity of the last AI response in the current buffer" })
 
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
