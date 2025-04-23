@@ -341,6 +341,11 @@ function M.chat(opts)
         lines_to_append
       )
 
+      -- Add our verification code right after this:
+      -- Add verification signature if enabled
+      local verification = require('nai.verification')
+      verification.add_signature_after_response(buffer_id, insertion_row + #lines_to_append, messages, modified_response)
+
       -- Add a new user message template if not at the end
       local new_line_count = vim.api.nvim_buf_line_count(buffer_id)
       if new_line_count == insertion_row + #lines_to_append then
