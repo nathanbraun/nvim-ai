@@ -147,7 +147,7 @@ Instructions:
     },
   },
   verification = {
-    enabled = true,            -- Whether to enable response verification
+    enabled = false,            -- Whether to enable response verification
     highlight_verified = true, -- Highlight verified responses
   },
   format_response = {

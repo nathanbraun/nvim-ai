@@ -871,6 +871,34 @@ vim.api.nvim_create_user_command('NAIVerify', function()
   verification.verify_last_response(buffer_id)
 end, { desc = "Verify the integrity of the last AI response in the current buffer" })
 
+vim.api.nvim_create_user_command('NAISignedChat', function(opts)
+  -- Get the current buffer ID before starting the chat
+  local buffer_id = vim.api.nvim_get_current_buf()
+
+  -- Start the chat with forced signature
+  local request_handle = require('nai').chat(opts, true)
+
+  -- If we have a handle, set up a listener to run NAIVerify when complete
+  if request_handle then
+    local events = require('nai.events')
+
+    -- Create a one-time event listener that will clean itself up
+    local remove_listener = events.on('request:complete', function(request_id, content)
+      -- Remove this listener after it's triggered
+      if remove_listener then remove_listener() end
+
+      -- Run NAIVerify after a short delay to ensure buffer is updated
+      vim.defer_fn(function()
+        -- Make sure buffer is still valid
+        if vim.api.nvim_buf_is_valid(buffer_id) then
+          -- Run the verification command
+          vim.cmd("NAIVerify")
+        end
+      end, 100) -- 100ms delay should be enough for buffer to update
+    end)
+  end
+end, { range = true, nargs = '?', desc = 'AI chat with forced verification signature and automatic verification' })
+
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()

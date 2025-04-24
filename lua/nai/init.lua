@@ -108,7 +108,7 @@ function M.switch_provider(provider)
   vim.notify("Switched to " .. provider .. " provider", vim.log.levels.INFO)
 end
 
-function M.chat(opts)
+function M.chat(opts, force_signature)
   local parser = require('nai.parser')
   local fileutils = require('nai.fileutils')
   local buffer_id = vim.api.nvim_get_current_buf()
@@ -344,7 +344,8 @@ function M.chat(opts)
       -- Add our verification code right after this:
       -- Add verification signature if enabled
       local verification = require('nai.verification')
-      verification.add_signature_after_response(buffer_id, insertion_row + #lines_to_append, messages, modified_response)
+      verification.add_signature_after_response(buffer_id, insertion_row + #lines_to_append, messages, modified_response,
+        force_signature)
 
       local is_new_chat = #messages <= 3 -- System message + 1 user message + 1 assistant message
 

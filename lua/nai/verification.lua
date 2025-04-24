@@ -152,9 +152,9 @@ function M.format_signature(hash)
   return "<<< signature " .. hash
 end
 
-function M.add_signature_after_response(bufnr, insertion_row, messages, response)
-  -- Only proceed if verification is enabled
-  if not config.options.verification or not config.options.verification.enabled then
+function M.add_signature_after_response(bufnr, insertion_row, messages, response, force_signature)
+  -- Only proceed if verification is enabled or forced
+  if not (force_signature or (config.options.verification and config.options.verification.enabled)) then
     return insertion_row
   end
 

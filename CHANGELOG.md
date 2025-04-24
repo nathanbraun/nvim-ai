@@ -1,3 +1,14 @@
+# 2.1.0 (2025-04-24)
+Features
+- Added ability to "sign"/verify chats. How it works:
+  - If enabled (in config or by running `:NAISIgnedChat`, the message/response
+    from the LLM is hashed and added to the chat.
+  - Immediately (and again when you enter `:NAIVerify` this hash is compared to
+    the buffer to check whether there have been any changes.
+  - When buffer is edited at all, verification indicator dissapears. Type
+    `:NAIVerify` to recheck the file.
+  - When comparing, ignores other signatures and blank lines.
+
 # 2.0.3 (2025-04-24)
 Fixes
 - Issue where Google models weren't getting full conversation history
