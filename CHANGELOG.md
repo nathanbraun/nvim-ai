@@ -1,3 +1,7 @@
+# 2.0.3 (2025-04-24)
+Fixes
+- Issue where Google models weren't getting full conversation history
+
 # 2.0.2 (2025-04-18)
 - use snacks as default file browser (if installed, then telescope or fzf)
 

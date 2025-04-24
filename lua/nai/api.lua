@@ -63,32 +63,26 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       stream = false
     }
   elseif provider == "google" then
-    -- Special case for Google's Gemini models
-    -- For Google, we need a simpler structure
-    local parts = {}
+    -- For Google, we need to format the conversation history correctly
+    local contents = {}
 
-    -- Add each message as a separate part
-    for _, msg in ipairs(messages) do
-      local prefix = ""
-      if msg.role == "system" then
-        prefix = "System: "
-      elseif msg.role == "user" then
-        prefix = "Human: "
-      elseif msg.role == "assistant" then
-        prefix = "Assistant: "
+    -- Add each message as a separate part in the contents array
+    for i, msg in ipairs(messages) do
+      local role = "user"
+      if msg.role == "assistant" then
+        role = "model"
       end
 
-      -- Add to parts array
-      table.insert(parts, { text = prefix .. msg.content })
+      -- Create a new content entry for each message
+      table.insert(contents, {
+        role = role,
+        parts = { { text = msg.content } }
+      })
     end
 
     -- Build the final data structure
     data = {
-      contents = {
-        {
-          parts = { { text = messages[#messages].content } }
-        }
-      },
+      contents = contents,
       generationConfig = {
         temperature = chat_config and chat_config.temperature or provider_config.temperature,
         maxOutputTokens = max_tokens_value
