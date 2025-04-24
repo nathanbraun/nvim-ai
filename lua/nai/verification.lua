@@ -2,6 +2,8 @@
 local M = {}
 local config = require('nai.config')
 
+M.verified_regions = {} -- Buffer ID -> { { start_line, end_line, signature_line }, ... }
+
 -- Namespace for verification indicators
 M.namespace_id = vim.api.nvim_create_namespace('nvim_ai_verification')
 
@@ -153,13 +155,12 @@ end
 function M.add_signature_after_response(bufnr, insertion_row, messages, response)
   -- Only proceed if verification is enabled
   if not config.options.verification or not config.options.verification.enabled then
-    return
+    return insertion_row
   end
 
   M.debug_log("Adding signature", {
     buffer = bufnr,
-    insertion_row = insertion_row,
-    response_preview = response:sub(1, 50) .. (response:len() > 50 and "..." or "")
+    insertion_row = insertion_row
   })
 
   -- Clean up messages by removing auto-title instruction from system messages
@@ -171,25 +172,47 @@ function M.add_signature_after_response(bufnr, insertion_row, messages, response
     end
   end
 
-  -- IMPORTANT: Do not add the response again, it's already in the buffer
-  -- Just calculate the hash based on the messages and response
-
   -- Generate hash with context
   local hash = M.generate_hash(clean_messages, response, "original_signature")
 
   -- Format signature line
   local signature_line = M.format_signature(hash)
-  M.debug_log("Signature line", signature_line)
 
-  -- Insert signature at the specified insertion row
-  vim.api.nvim_buf_set_lines(bufnr, insertion_row, insertion_row, false, { "", signature_line })
+  -- Check if there's already a signature line at or after the insertion point
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
+  local has_existing_signature = false
 
-  -- Apply highlighting if enabled
-  if config.options.verification and config.options.verification.highlight_verified then
-    vim.api.nvim_buf_add_highlight(bufnr, M.namespace_id, "DiagnosticOk", insertion_row, 0, -1)
+  -- Look for existing signature within the next few lines
+  for i = insertion_row, math.min(insertion_row + 3, line_count - 1) do
+    local line_content = vim.api.nvim_buf_get_lines(bufnr, i, i + 1, false)[1]
+    if line_content and line_content:match("^<<< signature") then
+      -- Found existing signature, update it
+      vim.api.nvim_buf_set_lines(bufnr, i, i + 1, false, { signature_line })
+
+      -- Apply highlighting
+      vim.api.nvim_buf_clear_namespace(bufnr, M.namespace_id, i, i + 1)
+      if config.options.verification and config.options.verification.highlight_verified then
+        vim.api.nvim_buf_add_highlight(bufnr, M.namespace_id, "DiagnosticOk", i, 0, -1)
+      end
+
+      has_existing_signature = true
+      return i + 1 -- Return position after the signature
+    end
   end
 
-  return insertion_row + 2 -- Return the new position after insertion
+  -- If no existing signature found, insert a new one
+  if not has_existing_signature then
+    -- Insert signature at the specified insertion row
+    vim.api.nvim_buf_set_lines(bufnr, insertion_row, insertion_row, false, { "", signature_line })
+
+    -- Apply highlighting if enabled
+    if config.options.verification and config.options.verification.highlight_verified then
+      -- Use naichatSignature for the signature line itself
+      vim.api.nvim_buf_add_highlight(bufnr, M.namespace_id, "naichatSignature", insertion_row + 1, 0, -1)
+    end
+
+    return insertion_row + 2 -- Return the new position after insertion
+  end
 end
 
 -- Verify a single response
@@ -279,74 +302,39 @@ function M.verify_single_response(bufnr, response_start_line, signature_line)
     })
   end
 
-  return is_verified, is_verified and "Response verified" or "Response has been modified"
-end
-
--- Scan buffer and verify all responses
-function M.verify_all_responses(bufnr)
-  -- Get all lines in buffer
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-
-  -- Clear existing verification indicators
-  vim.api.nvim_buf_clear_namespace(bufnr, M.namespace_id, 0, -1)
-
-  -- Track verification status
-  local all_verified = true
-  local verification_count = 0
-
-  -- Find assistant messages and their signatures
-  local in_assistant = false
-  local assistant_start = nil
-
-  for i, line in ipairs(lines) do
-    local row = i - 1 -- Convert to 0-indexed
-
-    if line:match("^<<< assistant") then
-      in_assistant = true
-      assistant_start = row
-    elseif in_assistant and line:match("^<<< signature") then
-      -- Found a signature for an assistant message
-      local is_verified, message = M.verify_single_response(bufnr, assistant_start, row)
-      verification_count = verification_count + 1
-
-      -- Add visual indicator
-      local highlight_group = is_verified and "DiagnosticOk" or "DiagnosticError"
-      local status_text = is_verified and "✓ Verified" or "✗ Modified"
-
-      vim.api.nvim_buf_add_highlight(bufnr, M.namespace_id, highlight_group, row, 0, -1)
-      vim.api.nvim_buf_set_extmark(bufnr, M.namespace_id, row, 0, {
-        virt_text = { { status_text, highlight_group } },
-        virt_text_pos = "eol",
-      })
-
-      if not is_verified then
-        all_verified = false
-      end
-
-      in_assistant = false
-    elseif in_assistant and (line:match("^>>>") or line:match("^<<<") and not line:match("^<<< signature")) then
-      -- Found an assistant message without a signature
-      vim.api.nvim_buf_add_highlight(bufnr, M.namespace_id, "DiagnosticWarn", assistant_start, 0, -1)
-      vim.api.nvim_buf_set_extmark(bufnr, M.namespace_id, assistant_start, 0, {
-        virt_text = { { "⚠ Not verified", "DiagnosticWarn" } },
-        virt_text_pos = "eol",
-      })
-
-      all_verified = false
-      in_assistant = false
+  if is_verified then
+    -- Initialize the verified regions table for this buffer if needed
+    if not M.verified_regions[bufnr] then
+      M.verified_regions[bufnr] = {}
     end
+
+    -- Check if we already have this region tracked
+    local existing_index = nil
+    for i, region in ipairs(M.verified_regions[bufnr]) do
+      if region.signature_line == signature_line then
+        existing_index = i
+        break
+      end
+    end
+
+    -- Update or add the region
+    local region_data = {
+      start_line = response_start_line,
+      end_line = signature_line - 1,
+      signature_line = signature_line
+    }
+
+    if existing_index then
+      M.verified_regions[bufnr][existing_index] = region_data
+    else
+      table.insert(M.verified_regions[bufnr], region_data)
+    end
+
+    -- Set up change detection
+    M.attach_change_detection(bufnr)
   end
 
-  -- Show overall verification status
-  if verification_count == 0 then
-    vim.notify("No verifiable content found in buffer", vim.log.levels.INFO)
-    return false
-  else
-    local status = all_verified and "✓ All responses verified" or "⚠ Some responses could not be verified"
-    local level = all_verified and vim.log.levels.INFO or vim.log.levels.WARN
-    vim.notify(status, level)
-    return all_verified
-  end
+  return is_verified, is_verified and "Response verified" or "Response has been modified"
 end
 
 function M.verify_last_response(bufnr)
@@ -355,6 +343,14 @@ function M.verify_last_response(bufnr)
 
   -- Clear existing verification indicators
   vim.api.nvim_buf_clear_namespace(bufnr, M.namespace_id, 0, -1)
+
+  -- Initialize verified regions for this buffer (but don't use signature_line yet)
+  M.verified_regions[bufnr] = {}
+
+  -- Reset the attachment flag so we can reattach
+  if vim.b[bufnr] then
+    vim.b[bufnr].nai_verification_attached = nil
+  end
 
   -- Find the last assistant message and its signature
   local last_assistant_start = nil
@@ -383,15 +379,48 @@ function M.verify_last_response(bufnr)
   if last_assistant_start and last_signature_line then
     local is_verified, message = M.verify_single_response(bufnr, last_assistant_start, last_signature_line)
 
-    -- Add visual indicator
+    -- Add visual indicator - use naichatSignature for the line itself
+    vim.api.nvim_buf_add_highlight(bufnr, M.namespace_id, "naichatSignature", last_signature_line, 0, -1)
+
+    -- Add the appropriate verification indicator based on verification status
     local highlight_group = is_verified and "DiagnosticOk" or "DiagnosticError"
     local status_text = is_verified and "✓ Verified" or "✗ Modified"
 
-    vim.api.nvim_buf_add_highlight(bufnr, M.namespace_id, highlight_group, last_signature_line, 0, -1)
     vim.api.nvim_buf_set_extmark(bufnr, M.namespace_id, last_signature_line, 0, {
       virt_text = { { status_text, highlight_group } },
       virt_text_pos = "eol",
     })
+
+    -- Track this region for change detection regardless of verification status
+    if not M.verified_regions[bufnr] then
+      M.verified_regions[bufnr] = {}
+    end
+
+    -- Add or update the region
+    local region_data = {
+      start_line = last_assistant_start,
+      end_line = last_signature_line - 1,
+      signature_line = last_signature_line,
+      is_verified = is_verified -- Store verification status
+    }
+
+    -- Check if we already have this region tracked
+    local existing_index = nil
+    for i, region in ipairs(M.verified_regions[bufnr]) do
+      if region.signature_line == last_signature_line then
+        existing_index = i
+        break
+      end
+    end
+
+    if existing_index then
+      M.verified_regions[bufnr][existing_index] = region_data
+    else
+      table.insert(M.verified_regions[bufnr], region_data)
+    end
+
+    -- Set up change detection
+    M.attach_change_detection(bufnr)
 
     -- Show verification status
     local status = is_verified and "✓ Last response verified" or "⚠ Last response could not be verified"
@@ -403,6 +432,94 @@ function M.verify_last_response(bufnr)
     vim.notify("No verifiable content found in buffer", vim.log.levels.INFO)
     return false
   end
+end
+
+function M.attach_change_detection(bufnr)
+  -- Skip if buffer isn't valid anymore
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  -- Always detach first if already attached (to ensure we're starting fresh)
+  if vim.b[bufnr] and vim.b[bufnr].nai_verification_attached then
+    -- We can't directly detach, but we can reset our state
+    vim.b[bufnr].nai_verification_attached = nil
+  end
+
+  -- Set buffer variable to track attachment
+  vim.api.nvim_buf_set_var(bufnr, "nai_verification_attached", true)
+
+  -- Attach to buffer changes with simplified logic
+  vim.api.nvim_buf_attach(bufnr, false, {
+    on_lines = function(_, buf, _, first_line, last_line_old, last_line_new, _)
+      -- Skip if no verified regions
+      if not M.verified_regions[buf] then
+        return true
+      end
+
+      -- Check if lines were added or removed
+      if last_line_old ~= last_line_new then
+        -- Clear all verification indicators
+        vim.api.nvim_buf_clear_namespace(buf, M.namespace_id, 0, -1)
+        -- Clear all tracking
+        M.verified_regions[buf] = {}
+        return true
+      end
+
+      -- For in-place edits, check each region
+      for i = #M.verified_regions[buf], 1, -1 do -- Iterate in reverse to safely remove items
+        local region = M.verified_regions[buf][i]
+
+        -- If the change is at or before the end of this region
+        -- (any change before or within the region could affect verification)
+        if first_line <= region.end_line then
+          -- Clear the verification indicator
+          M.clear_verification_indicator(buf, region.signature_line)
+          -- Remove this region from tracking
+          table.remove(M.verified_regions[buf], i)
+        end
+      end
+
+      return true
+    end,
+    on_detach = function()
+      M.verified_regions[bufnr] = nil
+    end,
+  })
+
+  -- Set up cleanup on buffer unload
+  local augroup = vim.api.nvim_create_augroup('NaiVerificationCleanup' .. bufnr, { clear = true })
+  vim.api.nvim_create_autocmd("BufUnload", {
+    group = augroup,
+    buffer = bufnr,
+    callback = function()
+      M.verified_regions[bufnr] = nil
+    end
+  })
+end
+
+function M.clear_verification_indicator(bufnr, signature_line)
+  -- Skip if buffer isn't valid anymore
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
+  -- Check if the line still exists in the buffer
+  local line_count = vim.api.nvim_buf_line_count(bufnr)
+  if signature_line >= line_count then
+    return
+  end
+
+  -- Get the current line content to check if it's still a signature line
+  local line_content = vim.api.nvim_buf_get_lines(bufnr, signature_line, signature_line + 1, false)[1]
+  if not line_content or not line_content:match("^<<< signature") then
+    -- If this isn't a signature line anymore, just clear highlights and return
+    vim.api.nvim_buf_clear_namespace(bufnr, M.namespace_id, signature_line, signature_line + 1)
+    return
+  end
+
+  -- Clear the highlight and extmark for just this line
+  vim.api.nvim_buf_clear_namespace(bufnr, M.namespace_id, signature_line, signature_line + 1)
 end
 
 return M

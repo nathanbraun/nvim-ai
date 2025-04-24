@@ -59,6 +59,7 @@ function M.define_highlight_groups()
   vim.cmd(create_highlight_cmd("naichatSpecialBlock", hl_config.special_block))
   vim.cmd(create_highlight_cmd("naichatErrorBlock", hl_config.error_block))
   vim.cmd(create_highlight_cmd("naichatContentStart", hl_config.content_start))
+  vim.cmd(create_highlight_cmd("naichatSignature", hl_config.signature or { fg = "#777777", italic = true }))
 
   -- highlight group for placeholders
   vim.cmd(create_highlight_cmd("naichatPlaceholder", {
@@ -104,6 +105,11 @@ function M.apply_to_buffer(bufnr)
     elseif line:match("^" .. vim.pesc(markers.CONFIG) .. "$") then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
+
+      -- Signature line
+    elseif line:match("^<<< signature") then
+      local line_length = #line
+      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSignature", line_nr, 0, line_length)
 
       -- Special blocks
     elseif line:match("^>>> [a-z%-]+") then
