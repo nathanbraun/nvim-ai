@@ -145,6 +145,13 @@ Instructions:
         ]]
     },
   },
+  verification = {
+    enabled = true,           -- Whether to enable response verification
+    method = "hash",           -- Verification method: "hash" (simple) or "signature" (more secure, for future)
+    show_indicator = true,     -- Show visual indicator of verification status
+    highlight_verified = true, -- Highlight verified responses
+    auto_verify = true,        -- Automatically verify when loading a buffer
+  },
   format_response = {
     enabled = false,            -- Whether to format the assistant's response
     exclude_code_blocks = true, -- Don't format inside code blocks

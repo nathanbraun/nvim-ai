@@ -865,6 +865,12 @@ vim.api.nvim_create_user_command('NAIVerboseDebug', function()
   end
 end, { desc = "Toggle verbose debugging for nvim-ai" })
 
+vim.api.nvim_create_user_command('NAIVerify', function()
+  local buffer_id = vim.api.nvim_get_current_buf()
+  local verification = require('nai.verification')
+  verification.verify_last_response(buffer_id)
+end, { desc = "Verify the integrity of the last AI response in the current buffer" })
+
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()
