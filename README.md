@@ -11,6 +11,7 @@ LLM chats as text files inside Neovim.
 - Embed local text files, websites or YouTube video transcripts (requires
   [Dumpling API](https://dumplingai.com) key).
 - Configurable provider, model, temperature and system prompt.
+- Ability to prove/verify conversations match LLM output without edits.
 - No language dependencies, written in Lua.
 - Asyncronous.
 - Auto topic/title detection.
