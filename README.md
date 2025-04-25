@@ -25,6 +25,7 @@ LLM chats as text files inside Neovim.
 - [Embedding local text files and web content](#embedding-local-text-files-and-web-content)
 - [Alias blocks](#>>>-alias-blocks)
 - [Dumpling AI](#dumpling-ai)
+- [Verifying Chats](#verifying-chats)
 - [Configuration](#configuration)
 
 ## Prerequisites
