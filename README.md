@@ -357,7 +357,7 @@ ambiguity in the rules — so you decide to each make your case and submit it to
 
 ![Dispute prompt](images/dispute-prompt.jpg)
 
-If you're chatting with the LLM in your text editor, you can't just show you're
+If you're chatting with the LLM in your text editor, you can't just show your
 friend:
 
 ```
@@ -365,7 +365,7 @@ friend:
 You are right, your friend is wrong.
 ```
 
-How do they know that's what the LLM really said? Maybe *you* typed it. You're
+How do they know that was the actual response? Maybe *you* typed it. You're
 chatting with an LLM in your text editor, you could have typed anything!
 
 Instead you can submit your question to the LLM with `:NAISignedChat` to
