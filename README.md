@@ -344,15 +344,16 @@ Will expand to a transcript of any YouTube video. After its expanded you can
 follow up with user prompts to ask questions about the transcript.
 
 # Verifying Chats
-## Motivation
 The point of `nvim-ai` is to chat with and edit LLM conversations in text
-files, but sometimes (maybe theoretically) you might want to "prove" than an AI
+files, but sometimes (theoretically) you might want to "prove" than an AI
 conversation is unaltered.
 
 An example would be using an LLM as an arbitrator for dispute resolution. Say
 you and a friend disagree — maybe you're playing a board game and there's
 ambiguity in the rules — so you decide to each make your case and submit it to
 `o3` to decide.
+
+![Dispute prompt](images/dispute-prompt.jpg)
 
 If you're chatting with the LLM in your text editor, you can't just show you're
 friend:
@@ -362,8 +363,8 @@ friend:
 You are right, your friend is wrong.
 ```
 
-How do they know you didn't just write that? It's your text editor, you could
-have typed anything!
+How do they know you didn't just write that? You're chatting with an LLM in
+your text editor, you could have typed anything!
 
 Instead you can submit your question to the LLM with `:NAISignedChat` to
 "prove" a conversation is unaltered.
@@ -385,6 +386,13 @@ The hashing algorithm will ignore previous signature blocks and blank lines,
 but other formatting changes count as differences and won't verify.
 
 ![Verified Chats](images/dispute.gif)
+
+## Caveats
+
+Obviously this isn't perfect. Theoretically the user has control over the
+plugin and could edit the LLM's response before it's hashed. The user could
+also could hash the response they want, and put that in for the signature.
+Eventually maybe I'll fix the latter, but it's good enough for now.
 
 # Configuration
 nvim-ai can be configured with the setup function (defaults below):
