@@ -104,47 +104,69 @@ function M.generate_hash(messages, response, context)
 
   M.debug_log("Hash input response", normalized_response:sub(1, 50) .. (normalized_response:len() > 50 and "..." or ""))
 
-  -- Create a more accessible directory for output files
-  local output_dir = vim.fn.expand("~/.cache/nvim-ai/verification")
-  vim.fn.mkdir(output_dir, "p") -- Create directory if it doesn't exist
+  -- Only write debug files if debug mode is enabled
+  local config = require('nai.config')
+  if config.options.debug and config.options.debug.enabled then
+    -- Create a more accessible directory for output files
+    local output_dir = vim.fn.expand("~/.cache/nvim-ai/verification")
+    vim.fn.mkdir(output_dir, "p") -- Create directory if it doesn't exist
 
-  -- Generate a unique filename based on timestamp
-  local timestamp = os.time()
-  local output_file = output_dir .. "/hash_input_" .. context .. "_" .. timestamp .. ".txt"
+    -- Generate a unique filename based on timestamp
+    local timestamp = os.time()
+    local output_file = output_dir .. "/hash_input_" .. context .. "_" .. timestamp .. ".txt"
 
-  local file = io.open(output_file, "w")
-  if file then
-    file:write(content)
-    file:close()
+    local file = io.open(output_file, "w")
+    if file then
+      file:write(content)
+      file:close()
 
-    M.debug_log("Wrote hash input to file", output_file)
-    vim.notify("Wrote hash input to file: " .. output_file, vim.log.levels.INFO)
+      M.debug_log("Wrote hash input to file", output_file)
+      vim.notify("Wrote hash input to file: " .. output_file, vim.log.levels.INFO)
+    else
+      M.debug_log("Failed to write hash input to file", output_file)
+      vim.notify("Failed to write hash input to file: " .. output_file, vim.log.levels.ERROR)
+    end
+
+    -- Generate SHA-256 hash
+    local handle
+    if file then
+      handle = io.popen("sha256sum " .. vim.fn.shellescape(output_file))
+    else
+      -- If file writing failed, hash the content directly
+      local temp_file = os.tmpname()
+      local temp = io.open(temp_file, "w")
+      temp:write(content)
+      temp:close()
+      handle = io.popen("sha256sum " .. vim.fn.shellescape(temp_file))
+    end
+
+    local hash_output = handle:read("*a")
+    handle:close()
+
+    -- Extract just the hash part (remove filename and whitespace)
+    local hash = hash_output:match("^([0-9a-f]+)")
+    M.debug_log("Generated hash", hash)
+
+    return hash
   else
-    M.debug_log("Failed to write hash input to file", output_file)
-    vim.notify("Failed to write hash input to file: " .. output_file, vim.log.levels.ERROR)
-  end
-
-  -- Generate SHA-256 hash
-  local handle
-  if file then
-    handle = io.popen("sha256sum " .. vim.fn.shellescape(output_file))
-  else
-    -- If file writing failed, hash the content directly
+    -- If debug mode is disabled, just hash the content directly without writing files
     local temp_file = os.tmpname()
     local temp = io.open(temp_file, "w")
     temp:write(content)
     temp:close()
-    handle = io.popen("sha256sum " .. vim.fn.shellescape(temp_file))
+
+    local handle = io.popen("sha256sum " .. vim.fn.shellescape(temp_file))
+    local hash_output = handle:read("*a")
+    handle:close()
+
+    -- Clean up the temporary file
+    os.remove(temp_file)
+
+    -- Extract just the hash part (remove filename and whitespace)
+    local hash = hash_output:match("^([0-9a-f]+)")
+
+    return hash
   end
-
-  local hash_output = handle:read("*a")
-  handle:close()
-
-  -- Extract just the hash part (remove filename and whitespace)
-  local hash = hash_output:match("^([0-9a-f]+)")
-  M.debug_log("Generated hash", hash)
-
-  return hash
 end
 
 -- Format a signature line to be added to the buffer
@@ -255,10 +277,6 @@ function M.verify_single_response(bufnr, response_start_line, signature_line)
     return false, "Invalid signature format"
   end
 
-  -- Get the messages that were sent to the API
-  -- This is tricky because we need to reconstruct what was in the messages array
-  -- when the API was called
-
   -- Get all buffer content up to the response
   local buffer_lines = vim.api.nvim_buf_get_lines(bufnr, 0, response_start_line, false)
   local buffer_content = table.concat(buffer_lines, "\n")
@@ -276,12 +294,23 @@ function M.verify_single_response(bufnr, response_start_line, signature_line)
     })
   end
 
-  -- Filter out any signature blocks from parsed messages
+  -- Process aliases using the same function used for API requests
+  local processed_messages, _ = parser.process_alias_messages(parsed_messages)
+
+  M.debug_log("After alias processing, message count", #processed_messages)
+  for i, msg in ipairs(processed_messages) do
+    M.debug_log("Processed message " .. i, {
+      role = msg.role,
+      content_preview = msg.content:sub(1, 50) .. (msg.content:len() > 50 and "..." or "")
+    })
+  end
+
+  -- Filter out any signature blocks from processed messages
   local filtered_messages = {}
-  for _, msg in ipairs(parsed_messages) do
+  for _, msg in ipairs(processed_messages) do
     -- Skip messages that are just signature blocks
     if msg.role == "assistant" and msg.content and msg.content:match("^<<< signature") then
-      M.debug_log("Filtered out signature block from parsed messages")
+      M.debug_log("Filtered out signature block from processed messages")
     else
       table.insert(filtered_messages, msg)
     end

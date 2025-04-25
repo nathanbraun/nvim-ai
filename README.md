@@ -343,6 +343,49 @@ Type it out or press `<leader>ac` to insert.
 Will expand to a transcript of any YouTube video. After its expanded you can
 follow up with user prompts to ask questions about the transcript.
 
+# Verifying Chats
+## Motivation
+The point of `nvim-ai` is to chat with and edit LLM conversations in text
+files, but sometimes (maybe theoretically) you might want to "prove" than an AI
+conversation is unaltered.
+
+An example would be using an LLM as an arbitrator for dispute resolution. Say
+you and a friend disagree — maybe you're playing a board game and there's
+ambiguity in the rules — so you decide to each make your case and submit it to
+`o3` to decide.
+
+If you're chatting with the LLM in your text editor, you can't just show you're
+friend:
+
+```
+>>> assistant
+You are right, your friend is wrong.
+```
+
+How do they know you didn't just write that? It's your text editor, you could
+have typed anything!
+
+Instead you can submit your question to the LLM with `:NAISignedChat` to
+"prove" a conversation is unaltered.
+
+## How it works
+In a signed chat, `nvim-ai` hashes the full conversation history and latest
+response immediately after getting a reply from the LLM. It inserts that hash
+into the buffer as a signature block.
+
+Separately, the `:NAIVerify` command hashes the full buffer, compares it to the
+signature, and displays some (virtual/diagnostic) "Verified" text if it
+matches.
+
+As soon as the buffer is edited the "Verified" text disapears (since we can no
+longer gaurantee it matches) but you can check it again by running
+`:NAIVerify`.
+
+The hashing algorithm will ignore previous signature blocks and blank lines,
+but other formatting changes count as differences and won't verify.
+
+![Verified Chats](images/dispute.gif)
+
 # Configuration
 nvim-ai can be configured with the setup function (defaults below):
 
@@ -398,6 +441,7 @@ require('nai').setup({
       max_tokens = 8000,
       endpoint = "https://generativelanguage.googleapis.com/v1beta/models/",
       models = {
+        "gemini-2.5-flash-preview-04-17",
         "gemini-2.0-flash",
         "gemini-2.0-pro",
         "gemini-1.5-flash",
@@ -450,6 +494,7 @@ tags: [ai]
     error_block = { fg = "#FF8888", bold = true },     -- Error blocks
     content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
     placeholder = { fg = "#FFCC66", bold = true },     -- Golden yellow for placeholders
+    signature = { fg = "#777777", italic = true },     -- Gray for signature lines
   },
   aliases = {
     translate = {
@@ -486,6 +531,10 @@ Instructions:
         $FILE_CONTENTS
         ]]
     },
+  },
+  verification = {
+    enabled = false,            -- Whether to enable response verification
+    highlight_verified = true, -- Highlight verified responses
   },
   format_response = {
     enabled = false,            -- Whether to format the assistant's response

@@ -7,24 +7,29 @@ local M = {}
 M.defaults = {
   -- Chat commands
   chat = {
-    continue = "<Leader>c", -- Continue chat
-    new = "<Leader>ai",     -- New chat
-    cancel = "<Leader>ax",  -- Cancel request
+    continue = "<Leader>c",       -- Continue chat
+    verified_chat = "<Leader>av", -- Continue chat
+    new = "<Leader>ai",           -- New chat
+    cancel = "<Leader>ax",        -- Cancel request
   },
 
   expand = {
     blocks = "<Leader>ae", -- Expand blocks
   },
 
+  verify = {
+    reverify = "<Leader>arv", -- Re-verify blocks
+  },
+
   -- Insert commands
   insert = {
-    user_message = "<Leader>au", -- Add user message
-    scrape = "<Leader>ad",       -- Add scrape block
-    web = "<Leader>aw",          -- Add web block
-    youtube = "<Leader>ay",      -- Add YouTube block
-    reference = "<Leader>ar",    -- Add reference block
-    snapshot = "<Leader>as",     -- Add snapshot block
-    crawl = "<Leader>ac",        -- Add snapshot block
+    user_message = "<Leader>anu", -- Add user message
+    scrape = "<Leader>and",       -- Add scrape block
+    web = "<Leader>anw",          -- Add web block
+    youtube = "<Leader>any",      -- Add YouTube block
+    reference = "<Leader>anr",    -- Add reference block
+    snapshot = "<Leader>ans",     -- Add snapshot block
+    crawl = "<Leader>anc",        -- Add snapshot block
   },
 
   -- Settings
@@ -47,6 +52,8 @@ function M.apply_to_buffer(bufnr)
   -- Chat commands
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.chat.continue, ':NAIChat<CR>',
     { noremap = true, silent = true, desc = 'Continue chat' })
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.chat.verified_chat, ':NAISignedChat<CR>',
+    { noremap = true, silent = true, desc = 'Continue and verify chat' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.chat.new, ':NAINew<CR>',
     { noremap = true, silent = true, desc = 'New chat' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.chat.cancel, ':NAICancel<CR>',
@@ -54,6 +61,10 @@ function M.apply_to_buffer(bufnr)
 
   -- expand commands
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.expand.blocks, ':NAIExpand<CR>',
+    { noremap = true, silent = true, desc = 'Expand special blocks' })
+
+  -- re-verify commands
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.verify.reverify, ':NAIVerify<CR>',
     { noremap = true, silent = true, desc = 'Expand special blocks' })
 
   -- Insert commands

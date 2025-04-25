@@ -1,4 +1,4 @@
-# 2.1.0 (2025-04-24)
+# 2.1.0 (2025-04-25)
 Features
 - Added ability to "sign"/verify chats. How it works:
   - If enabled (in config or by running `:NAISIgnedChat`, the message/response

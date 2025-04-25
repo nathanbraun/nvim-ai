@@ -223,49 +223,11 @@ function M.parse_chat_buffer(content, buffer_id)
     table.insert(messages, current_message)
   end
   -- Process any alias messages
-  local processed_messages = {}
-  local i = 1
-  while i <= #messages do
-    local msg = messages[i]
+  local processed_messages, alias_chat_config = M.process_alias_messages(messages)
 
-    if msg.role == "user" and msg._alias then
-      local alias_name = msg._alias
-      local alias_config = config.options.aliases[alias_name]
-
-      if alias_config then
-        -- Insert the system message from the alias config
-        table.insert(processed_messages, {
-          role = "system",
-          content = alias_config.system
-        })
-
-        -- Add the user message (optionally with prefix)
-        local user_content = msg.content
-        if alias_config.user_prefix and alias_config.user_prefix ~= "" then
-          user_content = alias_config.user_prefix .. "\n\n" .. user_content
-        end
-
-        table.insert(processed_messages, {
-          role = "user",
-          content = user_content
-        })
-
-        if alias_config.config then
-          -- Merge alias config with chat_config (alias takes precedence)
-          for key, value in pairs(alias_config.config) do
-            chat_config[key] = value
-          end
-        end
-      else
-        -- If alias not found, just add the original message
-        table.insert(processed_messages, msg)
-      end
-    else
-      -- For non-alias messages, just add them as-is
-      table.insert(processed_messages, msg)
-    end
-
-    i = i + 1
+  -- Merge alias_chat_config into chat_config
+  for key, value in pairs(alias_chat_config) do
+    chat_config[key] = value
   end
 
 
@@ -422,6 +384,60 @@ function M.replace_placeholders(content, buffer_id)
   end
 
   return content
+end
+
+function M.process_alias_messages(messages)
+  local config = require('nai.config')
+
+  -- Process any alias messages
+  local processed_messages = {}
+  local chat_config = {}
+
+  local i = 1
+  while i <= #messages do
+    local msg = messages[i]
+
+    if msg.role == "user" and msg._alias then
+      local alias_name = msg._alias
+      local alias_config = config.options.aliases[alias_name]
+
+      if alias_config then
+        -- Insert the system message from the alias config
+        table.insert(processed_messages, {
+          role = "system",
+          content = alias_config.system
+        })
+
+        -- Add the user message (optionally with prefix)
+        local user_content = msg.content
+        if alias_config.user_prefix and alias_config.user_prefix ~= "" then
+          user_content = alias_config.user_prefix .. "\n\n" .. user_content
+        end
+
+        table.insert(processed_messages, {
+          role = "user",
+          content = user_content
+        })
+
+        if alias_config.config then
+          -- Merge alias config with chat_config (alias takes precedence)
+          for key, value in pairs(alias_config.config) do
+            chat_config[key] = value
+          end
+        end
+      else
+        -- If alias not found, just add the original message
+        table.insert(processed_messages, msg)
+      end
+    else
+      -- For non-alias messages, just add them as-is
+      table.insert(processed_messages, msg)
+    end
+
+    i = i + 1
+  end
+
+  return processed_messages, chat_config
 end
 
 return M
