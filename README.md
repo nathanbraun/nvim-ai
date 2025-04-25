@@ -5,15 +5,15 @@ LLM chats as text files inside Neovim.
 
 ## Features
 - Chat with any LLM inside any text file.
-- Persistant. Save conversations as text files. Pick them up later and continue
+- Persistent. Save conversations as text files. Pick them up later and continue
   chatting. View, edit and regenerate conversation history.
 - Works with OpenAI, Google, OpenRouter or locally with Ollama.
 - Embed local text files, websites or YouTube video transcripts (requires
   [Dumpling API](https://dumplingai.com) key).
 - Configurable provider, model, temperature and system prompt.
-- Ability to prove/verify conversations match LLM output without edits.
+- Sign conversations — i.e. prove/verify text matches LLM output without edits.
 - No language dependencies, written in Lua.
-- Asyncronous.
+- Asynchronous.
 - Auto topic/title detection.
 - Lightweight (it'll respect your current syntax rules) syntax and folding.
 
@@ -105,7 +105,7 @@ Briefly tell me about Neovim.
 ```
 
 If all is working well you should see a spinner and a note about generating the
-reponse/model info. When it's ready it'll insert the response (under an `<<<
+response/model info. When it's ready it'll insert the response (under an `<<<
 assistant` block) followed by another user prompt for you to follow up.
 
 ![First Conversation](images/first-convo.jpg)
@@ -206,7 +206,7 @@ directories) work too.
 
 ## >>> snapshot 
 When you submit your chat (`<leader>c` or `:NAIChat`) `reference` works by
-grabbing the *current* file contents and inserting it into the converstion
+grabbing the *current* file contents and inserting it into the conversation
 behind the scenes (so `nvim-ai` sends the file contents to the LLM even though
 it doesn't display it on the screen.
 
@@ -252,7 +252,7 @@ aliases = {
     ...,
     translate = {
       system =
-      "You are an interpretor. Translate any further text/user messages you recieve to Spanish. If the text is a question, don't answer it, just translate the question to Spanish.",
+      "You are an interpretor. Translate any further text/user messages you receive to Spanish. If the text is a question, don't answer it, just translate the question to Spanish.",
       user_prefix = "",
       config = {
         model = "openai/gpt-4o-mini",
@@ -365,8 +365,8 @@ friend:
 You are right, your friend is wrong.
 ```
 
-How do they know you didn't just write that? You're chatting with an LLM in
-your text editor, you could have typed anything!
+How do they know that's what the LLM really said? Maybe *you* typed it. You're
+chatting with an LLM in your text editor, you could have typed anything!
 
 Instead you can submit your question to the LLM with `:NAISignedChat` to
 "prove" a conversation is unaltered.
@@ -377,24 +377,27 @@ response immediately after getting a reply from the LLM. It inserts that hash
 into the buffer as a signature block.
 
 Separately, the `:NAIVerify` command hashes the full buffer, compares it to the
-signature, and displays some (virtual/diagnostic) "Verified" text if it
+signature, and displays the "Verified" text (as an extended mark) if it
 matches.
 
-As soon as the buffer is edited the "Verified" text disapears (since we can no
-longer gaurantee it matches) but you can check it again by running
-`:NAIVerify`.
+Also:
 
-The hashing algorithm will ignore previous signature blocks and blank lines,
-but other formatting changes count as differences and won't verify.
+- The hashing algorithm uses a persistent, secret key. This prevents the user
+  from simply editing the text in the buffer, then re-hashing it and tampering
+  with the signature themselves.
+- As soon as the buffer is edited the "Verified" text disappears (since we can
+  no longer guarantee it matches) but you can check it again by running
+  `:NAIVerify`.
+
+The hashing algorithm will ignore previous signature blocks and blank lines.
+Other formatting changes count as differences.
 
 ![Verified Chats](images/dispute.gif)
 
 ## Caveats
 
 Obviously this isn't perfect. Theoretically the user has control over the
-plugin and could edit the LLM's response before it's hashed. The user could
-also could hash the response they want, and put that in for the signature.
-Eventually maybe I'll fix the latter, but it's good enough for now.
+plugin and could edit the LLM's response before it's hashed.
 
 # Configuration
 nvim-ai can be configured with the setup function (defaults below):
@@ -509,7 +512,7 @@ tags: [ai]
   aliases = {
     translate = {
       system =
-      "You are an interpretor. Translate any further text/user messages you recieve to Spanish. If the text is a question, don't answer it, just translate the question to Spanish.",
+      "You are an interpretor. Translate any further text/user messages you receive to Spanish. If the text is a question, don't answer it, just translate the question to Spanish.",
       user_prefix = "",
       config = {
         model = "openai/gpt-4o-mini",

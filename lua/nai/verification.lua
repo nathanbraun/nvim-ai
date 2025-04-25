@@ -26,8 +26,46 @@ function M.debug_log(message, data)
   end
 end
 
+function M.get_verification_key()
+  local pepper_file = vim.fn.stdpath('data') .. '/nvim-ai/verification.key'
+
+  -- Check if the key file exists
+  if vim.fn.filereadable(pepper_file) == 1 then
+    -- Read the existing key
+    local lines = vim.fn.readfile(pepper_file)
+    if #lines > 0 then
+      return lines[1]
+    end
+  end
+
+  -- Generate a new key if none exists
+  math.randomseed(os.time())
+  local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  local new_pepper = ""
+  for i = 1, 32 do
+    local rand = math.random(#chars)
+    new_pepper = new_pepper .. chars:sub(rand, rand)
+  end
+
+  -- Ensure directory exists
+  vim.fn.mkdir(vim.fn.fnamemodify(pepper_file, ':h'), 'p')
+
+  -- Write the new key
+  vim.fn.writefile({ new_pepper }, pepper_file)
+
+  -- Set permissions to be readable only by the owner on Unix
+  if vim.fn.has('unix') == 1 then
+    vim.fn.system("chmod 600 " .. vim.fn.shellescape(pepper_file))
+  end
+
+  return new_pepper
+end
+
 -- Generate a hash for the given messages and response
-function M.generate_hash(messages, response, context)
+function M.generate_hash(messages, response, context, algorithm_version)
+  -- Default to v1 if no algorithm specified
+  algorithm_version = algorithm_version or "v1"
+
   -- Add a context parameter to identify which function is calling this
   context = context or "unknown"
   local constants = require('nai.constants')
@@ -104,52 +142,23 @@ function M.generate_hash(messages, response, context)
 
   M.debug_log("Hash input response", normalized_response:sub(1, 50) .. (normalized_response:len() > 50 and "..." or ""))
 
-  -- Only write debug files if debug mode is enabled
-  local config = require('nai.config')
-  if config.options.debug and config.options.debug.enabled then
-    -- Create a more accessible directory for output files
-    local output_dir = vim.fn.expand("~/.cache/nvim-ai/verification")
-    vim.fn.mkdir(output_dir, "p") -- Create directory if it doesn't exist
+  -- Get the verification key (pepper)
+  local verification_key = M.get_verification_key()
 
-    -- Generate a unique filename based on timestamp
-    local timestamp = os.time()
-    local output_file = output_dir .. "/hash_input_" .. context .. "_" .. timestamp .. ".txt"
+  -- Add the pepper to the content before hashing
+  content = content .. "\n" .. verification_key
 
-    local file = io.open(output_file, "w")
-    if file then
-      file:write(content)
-      file:close()
+  -- Hash with the specified algorithm
+  local hash = M.hash_with_algorithm(content, algorithm_version)
 
-      M.debug_log("Wrote hash input to file", output_file)
-      vim.notify("Wrote hash input to file: " .. output_file, vim.log.levels.INFO)
-    else
-      M.debug_log("Failed to write hash input to file", output_file)
-      vim.notify("Failed to write hash input to file: " .. output_file, vim.log.levels.ERROR)
-    end
+  return hash, algorithm_version
+end
 
-    -- Generate SHA-256 hash
-    local handle
-    if file then
-      handle = io.popen("sha256sum " .. vim.fn.shellescape(output_file))
-    else
-      -- If file writing failed, hash the content directly
-      local temp_file = os.tmpname()
-      local temp = io.open(temp_file, "w")
-      temp:write(content)
-      temp:close()
-      handle = io.popen("sha256sum " .. vim.fn.shellescape(temp_file))
-    end
+function M.hash_with_algorithm(content, algorithm_version)
+  algorithm_version = algorithm_version or "v1"
 
-    local hash_output = handle:read("*a")
-    handle:close()
-
-    -- Extract just the hash part (remove filename and whitespace)
-    local hash = hash_output:match("^([0-9a-f]+)")
-    M.debug_log("Generated hash", hash)
-
-    return hash
-  else
-    -- If debug mode is disabled, just hash the content directly without writing files
+  if algorithm_version == "v1" then
+    -- Use the existing SHA-256 approach
     local temp_file = os.tmpname()
     local temp = io.open(temp_file, "w")
     temp:write(content)
@@ -164,14 +173,35 @@ function M.generate_hash(messages, response, context)
 
     -- Extract just the hash part (remove filename and whitespace)
     local hash = hash_output:match("^([0-9a-f]+)")
-
     return hash
+  elseif algorithm_version == "v2" then
+    -- Example of a different algorithm (SHA-512)
+    local temp_file = os.tmpname()
+    local temp = io.open(temp_file, "w")
+    temp:write(content)
+    temp:close()
+
+    local handle = io.popen("sha512sum " .. vim.fn.shellescape(temp_file))
+    local hash_output = handle:read("*a")
+    handle:close()
+
+    -- Clean up the temporary file
+    os.remove(temp_file)
+
+    -- Extract just the hash part and take first 64 chars
+    local hash = hash_output:match("^([0-9a-f]+)")
+    return hash:sub(1, 64) -- Trim to same length as v1 for consistency
+  else
+    -- Unknown algorithm version, fall back to v1
+    M.debug_log("Unknown algorithm version: " .. algorithm_version .. ", falling back to v1")
+    return M.hash_with_algorithm(content, "v1")
   end
 end
 
 -- Format a signature line to be added to the buffer
-function M.format_signature(hash)
-  return "<<< signature " .. hash
+function M.format_signature(hash, algorithm_version)
+  algorithm_version = algorithm_version or "v1" -- Default to v1
+  return "<<< signature " .. algorithm_version .. ":" .. hash
 end
 
 function M.add_signature_after_response(bufnr, insertion_row, messages, response, force_signature)
@@ -195,10 +225,10 @@ function M.add_signature_after_response(bufnr, insertion_row, messages, response
   end
 
   -- Generate hash with context
-  local hash = M.generate_hash(clean_messages, response, "original_signature")
+  local hash, algorithm_version = M.generate_hash(clean_messages, response, "original_signature", "v1")
 
-  -- Format signature line
-  local signature_line = M.format_signature(hash)
+  -- Format signature line with algorithm version
+  local signature_line = M.format_signature(hash, algorithm_version)
 
   -- Check if there's already a signature line at or after the insertion point
   local line_count = vim.api.nvim_buf_line_count(bufnr)
@@ -268,13 +298,19 @@ function M.verify_single_response(bufnr, response_start_line, signature_line)
 
   -- Get the stored hash from the signature line
   local signature = vim.api.nvim_buf_get_lines(bufnr, signature_line, signature_line + 1, false)[1]
-  local stored_hash = signature:match("<<< signature ([0-9a-f]+)")
+  local algorithm_version, stored_hash = signature:match("<<< signature ([^:]+):([0-9a-f]+)")
 
   M.debug_log("Stored hash", stored_hash)
 
-  if not stored_hash then
-    M.debug_log("Invalid signature format")
-    return false, "Invalid signature format"
+  if not algorithm_version or not stored_hash then
+    -- Try the old format as fallback
+    stored_hash = signature:match("<<< signature ([0-9a-f]+)")
+    algorithm_version = "v1" -- Assume v1 for old format
+
+    if not stored_hash then
+      M.debug_log("Invalid signature format")
+      return false, "Invalid signature format"
+    end
   end
 
   -- Get all buffer content up to the response
@@ -316,8 +352,8 @@ function M.verify_single_response(bufnr, response_start_line, signature_line)
     end
   end
 
-  -- Generate expected hash with context
-  local expected_hash = M.generate_hash(filtered_messages, response, "verification")
+  -- Generate expected hash with context and the same algorithm version
+  local expected_hash = M.generate_hash(filtered_messages, response, "verification", algorithm_version)
   M.debug_log("Generated hash", expected_hash)
 
   -- Compare hashes

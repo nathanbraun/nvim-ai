@@ -1,3 +1,10 @@
+# 2.1.1 (2025-04-25)
+Features
+- Added persistent, "pepper" key to hashing algorithms to prevent users from
+  simply hashing the text they want + updating the signature.
+- Introduced versioned signatures in order to potentially use different hash
+  algorithms in the future.
+
 # 2.1.0 (2025-04-25)
 Features
 - Added ability to "sign"/verify chats. How it works:
@@ -5,7 +12,7 @@ Features
     from the LLM is hashed and added to the chat.
   - Immediately (and again when you enter `:NAIVerify` this hash is compared to
     the buffer to check whether there have been any changes.
-  - When buffer is edited at all, verification indicator dissapears. Type
+  - When buffer is edited at all, verification indicator disappears. Type
     `:NAIVerify` to recheck the file.
   - When comparing, ignores other signatures and blank lines.
 
