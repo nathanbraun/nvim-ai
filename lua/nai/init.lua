@@ -762,6 +762,46 @@ function M.expand_blocks(buffer_id)
     expanded_something = true
   end
 
+  -- Check for unexpanded tree blocks
+  local tree = require('nai.fileutils.tree')
+  if tree.has_unexpanded_tree_blocks(buffer_id) then
+    vim.notify("Expanding tree blocks", vim.log.levels.INFO)
+
+    -- Process lines in buffer to expand tree blocks
+    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+    local line_offset = 0
+
+    -- Find and expand tree blocks
+    for i, line in ipairs(lines) do
+      if vim.trim(line) == ">>> tree" then
+        -- This is an unexpanded tree block
+        local block_start = i - 1 + line_offset
+
+        vim.notify("Found tree block at line " .. block_start, vim.log.levels.DEBUG)
+
+        -- Find the end of the tree block (next >>> or <<<)
+        local block_end = #lines
+        for j = i + 1, #lines do
+          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+            block_end = j - 1 + line_offset
+            break
+          end
+        end
+
+        -- Expand the tree block directly in the buffer
+        local new_line_count = tree.expand_tree_in_buffer(buffer_id, block_start, block_end + 1)
+
+        -- Adjust line offset for any additional lines added
+        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+        -- Re-fetch buffer lines since they've changed
+        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      end
+    end
+
+    expanded_something = true
+  end
+
   -- Check for unexpanded crawl blocks
   local crawl = require('nai.fileutils.crawl')
   if crawl.has_unexpanded_crawl_blocks(buffer_id) then

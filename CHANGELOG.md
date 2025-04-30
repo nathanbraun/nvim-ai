@@ -1,3 +1,8 @@
+# 2.2.0 (2025-04-30)
+Features
+- add new tree block that will expand full, tree like directory structure given
+  some path
+
 # 2.1.1 (2025-04-25)
 Features
 - Added persistent, "pepper" key to hashing algorithms to prevent users from

@@ -124,6 +124,15 @@ function M.parse_chat_buffer(content, buffer_id)
       end
       current_message = { role = "user" }
       current_type = "youtube"
+    elseif line:match("^" .. vim.pesc(MARKERS.TREE)) then
+      -- Finish previous message if exists
+      if current_message then
+        current_message.content = table.concat(text_buffer, "\n")
+        table.insert(messages, current_message)
+        text_buffer = {}
+      end
+      current_message = { role = "user" }
+      current_type = "tree"
     elseif line:match("^" .. vim.pesc(MARKERS.ALIAS)) then
       -- Extract the alias name
       local alias_name = line:match("^" .. vim.pesc(MARKERS.ALIAS) .. "%s*(.+)$")
@@ -196,6 +205,9 @@ function M.parse_chat_buffer(content, buffer_id)
     elseif current_type == "crawl" then
       local crawl_module = require('nai.fileutils.crawl')
       current_message.content = crawl_module.process_crawl_block(text_buffer)
+    elseif current_type == "tree" then
+      local tree_module = require('nai.fileutils.tree')
+      current_message.content = tree_module.process_tree_block(text_buffer)
     elseif current_type == "scrape" then
       -- Special handling for scrape blocks
       -- In API requesting mode, we want to reference the content, not the command
@@ -255,6 +267,11 @@ end
 -- Format a new assistant message for the buffer
 function M.format_assistant_message(content)
   return "\n<<< assistant\n\n" .. content
+end
+
+-- In lua/nai/parser.lua
+function M.format_tree_block(content)
+  return "\n>>> tree\n" .. content
 end
 
 -- Format a new user message for the buffer

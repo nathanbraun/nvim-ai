@@ -52,6 +52,23 @@ end, {
   end
 })
 
+vim.api.nvim_create_user_command('NAITree', function()
+  local parser = require('nai.parser')
+  local buffer_id = vim.api.nvim_get_current_buf()
+
+  -- Create the user message template
+  local user_template = parser.format_tree_block("")
+  local user_lines = vim.split(user_template, "\n")
+
+  -- Add at the end of the buffer
+  vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, user_lines)
+
+  -- Position cursor on the last line
+  local line_count = vim.api.nvim_buf_line_count(buffer_id)
+  vim.api.nvim_win_set_cursor(0, { line_count, 0 })
+end, { desc = 'Add a new tree block' })
+
+
 vim.api.nvim_create_user_command('NAICrawl', function(opts)
   local parser = require('nai.parser')
   local url = opts.args
@@ -898,6 +915,28 @@ vim.api.nvim_create_user_command('NAISignedChat', function(opts)
     end)
   end
 end, { range = true, nargs = '?', desc = 'AI chat with forced verification signature and automatic verification' })
+
+vim.api.nvim_create_user_command('NAITreeTest', function()
+  local current_dir = vim.fn.getcwd()
+  vim.notify("Testing tree with directory: " .. current_dir, vim.log.levels.INFO)
+
+  -- Create a temporary buffer
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(bufnr)
+
+  -- Insert a tree block
+  vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, {
+    ">>> tree",
+    current_dir,
+    ""
+  })
+
+  -- Expand it
+  local tree = require('nai.fileutils.tree')
+  tree.expand_tree_in_buffer(bufnr, 0, 3)
+end, {
+  desc = 'Test tree functionality with current directory'
+})
 
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()

@@ -231,6 +231,45 @@ timestamp, like this:
 This way you can ask about the file, make changes etc and the LLM will better
 be able to follow what's going on.
 
+## >>> tree 
+You can get filesystem directory information using the `tree` block. It expands
+similarly to `snapshot` blocks and looks like this: 
+
+```
+>>> tree [2025-04-30 15:03:27]
+-- /Users/nathanbraun/.../fruit-example
+
+/Users/nathanbraun/.../fruit-example
+├── berries
+│   ├── blueberry
+│   │   ├── blueberry-info.txt
+│   │   └── list-of-varieties.txt
+│   └── strawberry
+│       ├── list-of-varieties.txt
+│       └── strawberry-info.txt
+├── citrus
+│   ├── lemon
+│   │   ├── lemon-info.txt
+│   │   └── list-of-varieties.txt
+│   └── orange
+│       ├── list-of-varieties.txt
+│       └── orange-info.txt
+├── fruit-code.py
+├── fruits.csv
+├── resources.txt
+└── tropical
+    ├── banana
+    │   ├── banana-info.txt
+    │   └── list-of-varieties.txt
+    └── pineapple
+        ├── list-of-varieties.txt
+        └── pineapple-info.txt
+10 directories, 15 files
+```
+
+Should be good for giving LLM context without necessarily having to pass whole
+files.
+
 ## >>> web
 You can get text data from simple websites using the `>>> web` block followed
 by a URL. Behind the scenes it uses curl and

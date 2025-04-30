@@ -29,6 +29,7 @@ M.defaults = {
     youtube = "<Leader>any",      -- Add YouTube block
     reference = "<Leader>anr",    -- Add reference block
     snapshot = "<Leader>ans",     -- Add snapshot block
+    tree = "<Leader>ant",         -- Add tree block
     crawl = "<Leader>anc",        -- Add snapshot block
   },
 
@@ -72,6 +73,8 @@ function M.apply_to_buffer(bufnr)
     { noremap = true, silent = true, desc = 'Add new user message' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.scrape, ':NAIScrape<CR>',
     { noremap = true, silent = true, desc = 'Add scrape block' })
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.tree, ':NAITree<CR>',
+    { noremap = true, silent = true, desc = 'Add directory tree block' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.web, ':NAIWeb<CR>',
     { noremap = true, silent = true, desc = 'Add web block' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.youtube, ':NAIYoutube<CR>',
