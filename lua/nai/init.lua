@@ -839,37 +839,38 @@ function M.expand_blocks(buffer_id)
   if tree.has_unexpanded_tree_blocks(buffer_id) then
     vim.notify("Expanding tree blocks", vim.log.levels.INFO)
 
-    -- Process lines in buffer to expand tree blocks
-    local line_offset = 0
+    -- Keep expanding tree blocks until none are left
+    while tree.has_unexpanded_tree_blocks(buffer_id) do
+      -- Get all lines in the buffer
+      local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
 
-    -- Find and expand tree blocks
-    for i, line in ipairs(lines) do
-      local actual_line_num = i - 1 + line_offset
+      -- Find the first unexpanded tree block
+      local block_start = nil
+      local block_end = nil
 
-      if vim.trim(line) == ">>> tree" and not is_ignored(actual_line_num) then
-        -- This is an unexpanded tree block
-        local block_start = actual_line_num
+      for i, line in ipairs(lines) do
+        if line == ">>> tree" then
+          block_start = i - 1
 
-        vim.notify("Found tree block at line " .. block_start, vim.log.levels.DEBUG)
-
-        -- Find the end of the tree block (next >>> or <<<)
-        local block_end = #lines
-        for j = i + 1, #lines do
-          local j_line_num = j - 1 + line_offset
-          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
-            block_end = j_line_num
-            break
+          -- Find the end of the block
+          block_end = #lines - 1
+          for j = i + 1, #lines do
+            if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
+              block_end = j - 2
+              break
+            end
           end
+
+          break -- Found the first block, stop searching
         end
+      end
 
-        -- Expand the tree block directly in the buffer
-        local new_line_count = tree.expand_tree_in_buffer(buffer_id, block_start, block_end + 1)
-
-        -- Adjust line offset for any additional lines added
-        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-        -- Re-fetch buffer lines since they've changed
-        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      if block_start ~= nil then
+        -- Expand this tree block
+        tree.expand_tree_in_buffer(buffer_id, block_start, block_end + 1)
+      else
+        -- No more tree blocks found, break the loop
+        break
       end
     end
 

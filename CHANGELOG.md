@@ -1,7 +1,10 @@
-# 2.3.0 (2025-04-30)
+# 2.3.0 (2025-05-06)
 Features
 - Added new `ignore` block. Any prompt/block within it will get treated as full
   text.
+
+Fixes
+- `tree` prompt works better (allows for multiple commands or directories).
 
 # 2.2.0 (2025-04-30)
 Features

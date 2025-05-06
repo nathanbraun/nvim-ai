@@ -52,21 +52,43 @@ end, {
   end
 })
 
-vim.api.nvim_create_user_command('NAITree', function()
+vim.api.nvim_create_user_command('NAITree', function(opts)
   local parser = require('nai.parser')
-  local buffer_id = vim.api.nvim_get_current_buf()
+  local tree = require('nai.fileutils.tree')
 
-  -- Create the user message template
-  local user_template = parser.format_tree_block("")
-  local user_lines = vim.split(user_template, "\n")
+  -- Parse arguments - could be multiple paths separated by spaces
+  local paths = {}
+  if opts.args and opts.args ~= "" then
+    -- Split the args on spaces, but handle quoted paths
+    for path_arg in opts.args:gmatch('[^%s"]+|"[^"]+') do
+      -- Remove quotes if present
+      path_arg = path_arg:gsub('^"(.+)"$', '%1')
+      table.insert(paths, path_arg)
+    end
+  end
 
-  -- Add at the end of the buffer
-  vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, user_lines)
+  -- If no paths provided, use current file's directory
+  if #paths == 0 then
+    table.insert(paths, vim.fn.expand('%:p:h'))
+  end
 
-  -- Position cursor on the last line
-  local line_count = vim.api.nvim_buf_line_count(buffer_id)
-  vim.api.nvim_win_set_cursor(0, { line_count, 0 })
-end, { desc = 'Add a new tree block' })
+  -- Create the tree block with multiple paths
+  local tree_block = tree.format_tree_block(paths)
+
+  -- Insert at cursor position
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)
+  local row = cursor_pos[1] - 1
+
+  vim.api.nvim_buf_set_lines(0, row, row, false, vim.split(tree_block, '\n'))
+
+  -- Position cursor after the block
+  local new_lines = vim.split(tree_block, '\n')
+  vim.api.nvim_win_set_cursor(0, { row + #new_lines, 0 })
+end, {
+  nargs = '*',
+  desc = 'Insert directory tree block',
+  complete = 'dir'
+})
 
 
 vim.api.nvim_create_user_command('NAICrawl', function(opts)
