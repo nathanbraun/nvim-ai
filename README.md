@@ -27,6 +27,7 @@ LLM chats as text files inside Neovim.
 - [Alias blocks](#>>>-alias-blocks)
 - [Dumpling AI](#dumpling-ai)
 - [Verifying Chats](#verifying-chats)
+- [Escaping chat markers](#escaping-chat-markers)
 - [Configuration](#configuration)
 
 ## Prerequisites
