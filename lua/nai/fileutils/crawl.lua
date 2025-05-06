@@ -366,10 +366,17 @@ end
 -- Check if there are unexpanded crawl blocks in the buffer
 function M.has_unexpanded_crawl_blocks(buffer_id)
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+  local constants = require('nai.constants')
+
+  -- Track if we're inside an ignore block
+  local in_ignored_block = false
 
   for _, line in ipairs(lines) do
-    -- Only match exact ">>> crawl" - not "crawling" or "crawled"
-    if vim.trim(line) == ">>> crawl" then
+    if line:match("^" .. vim.pesc(constants.MARKERS.IGNORE or "```ignore") .. "$") then
+      in_ignored_block = true
+    elseif in_ignored_block and line:match("^" .. vim.pesc(constants.MARKERS.IGNORE_END or "```") .. "$") then
+      in_ignored_block = false
+    elseif vim.trim(line) == ">>> crawl" then
       return true
     end
   end

@@ -16,7 +16,6 @@ end
 
 -- Create and expand a tree in the buffer
 function M.expand_tree_in_buffer(buffer_id, start_line, end_line)
-
   -- Get the tree block lines
   local lines = vim.api.nvim_buf_get_lines(buffer_id, start_line, end_line, false)
 
@@ -277,10 +276,17 @@ end
 -- Check if there are unexpanded tree blocks in buffer
 function M.has_unexpanded_tree_blocks(buffer_id)
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+  local constants = require('nai.constants')
 
-  for _, line in ipairs(lines) do
-    -- Trim whitespace and check for ">>> tree"
-    if vim.trim(line) == ">>> tree" then
+  -- Track if we're inside an ignore block
+  local in_ignored_block = false
+
+  for i, line in ipairs(lines) do
+    if line:match("^" .. vim.pesc(constants.MARKERS.IGNORE or "```ignore") .. "$") then
+      in_ignored_block = true
+    elseif in_ignored_block and line:match("^" .. vim.pesc(constants.MARKERS.IGNORE_END or "```") .. "$") then
+      in_ignored_block = false
+    elseif not in_ignored_block and vim.trim(line) == ">>> tree" then
       return true
     end
   end

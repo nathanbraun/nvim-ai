@@ -119,6 +119,13 @@ function M.apply_to_buffer(bufnr)
       else
         vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
       end
+    elseif line:match("^" .. vim.pesc(markers.IGNORE) .. "$") then
+      local line_length = #line
+      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
+    elseif line:match("^" .. vim.pesc(markers.IGNORE_END) .. "$") and
+        vim.api.nvim_buf_get_lines(bufnr, line_nr - 1, line_nr, false)[1]:match("^" .. vim.pesc(markers.IGNORE)) then
+      local line_length = #line
+      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
 
       -- Content start
     elseif line:match("^<<< content") then

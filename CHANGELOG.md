@@ -1,3 +1,8 @@
+# 2.3.0 (2025-04-30)
+Features
+- Added new `ignore` block. Any prompt/block within it will get treated as full
+  text.
+
 # 2.2.0 (2025-04-30)
 Features
 - add new tree block that will expand full, tree like directory structure given

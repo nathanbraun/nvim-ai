@@ -653,6 +653,7 @@ end
 function M.expand_blocks(buffer_id)
   buffer_id = buffer_id or vim.api.nvim_get_current_buf()
   local buffer_module = require('nai.buffer')
+  local constants = require('nai.constants')
 
   -- Debug info
   if config.options.debug and config.options.debug.enabled then
@@ -660,7 +661,7 @@ function M.expand_blocks(buffer_id)
   end
 
   -- Check if buffer is activated
-  local state = require('nai.state') -- Add this line
+  local state = require('nai.state')
   if not state.is_buffer_activated(buffer_id) then
     vim.notify("Buffer not activated for nvim-ai", vim.log.levels.INFO)
     return false
@@ -669,6 +670,42 @@ function M.expand_blocks(buffer_id)
   -- Track if any blocks were expanded
   local expanded_something = false
 
+  -- Get all buffer content
+  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+
+  -- First pass: identify ignore blocks
+  local ignore_ranges = {}
+  local in_ignored_block = false
+  local current_ignore_start = nil
+
+  for i, line in ipairs(lines) do
+    if line:match("^" .. vim.pesc(constants.MARKERS.IGNORE or "```ignore") .. "$") then
+      in_ignored_block = true
+      current_ignore_start = i - 1 -- Convert to 0-based index
+    elseif in_ignored_block and line:match("^" .. vim.pesc(constants.MARKERS.IGNORE_END or "```") .. "$") then
+      in_ignored_block = false
+      if current_ignore_start ~= nil then
+        table.insert(ignore_ranges, { start = current_ignore_start, finish = i - 1 })
+        current_ignore_start = nil
+      end
+    end
+  end
+
+  -- If we ended the file still inside an ignore block, close it
+  if in_ignored_block and current_ignore_start ~= nil then
+    table.insert(ignore_ranges, { start = current_ignore_start, finish = #lines - 1 })
+  end
+
+  -- Function to check if a line is inside any ignore range
+  local function is_ignored(line_num)
+    for _, range in ipairs(ignore_ranges) do
+      if line_num >= range.start and line_num <= range.finish then
+        return true
+      end
+    end
+    return false
+  end
+
   -- Check for unexpanded scrape blocks
   local scrape = require('nai.fileutils.scrape')
   if scrape.has_unexpanded_scrape_blocks(buffer_id) then
@@ -676,7 +713,38 @@ function M.expand_blocks(buffer_id)
       vim.notify("DEBUG: Found unexpanded scrape blocks", vim.log.levels.DEBUG)
     end
     vim.notify("Expanding scrape blocks", vim.log.levels.INFO)
-    scrape.expand_scrape_blocks_in_buffer(buffer_id)
+
+    local line_offset = 0
+
+    -- Find and expand scrape blocks
+    for i, line in ipairs(lines) do
+      local actual_line_num = i - 1 + line_offset
+
+      if line:match("^>>> scrape$") and not is_ignored(actual_line_num) then
+        -- This is a scrape block
+        local block_start = actual_line_num
+
+        -- Find the end of the scrape block (next >>> or <<<)
+        local block_end = #lines
+        for j = i + 1, #lines do
+          local j_line_num = j - 1 + line_offset
+          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
+            block_end = j_line_num
+            break
+          end
+        end
+
+        -- Expand the scrape block directly in the buffer
+        local new_line_count = scrape.expand_scrape_block(buffer_id, block_start, block_end + 1)
+
+        -- Adjust line offset for any additional lines added
+        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
+
+        -- Re-fetch buffer lines since they've changed
+        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      end
+    end
+
     expanded_something = true
   end
 
@@ -692,20 +760,22 @@ function M.expand_blocks(buffer_id)
     -- Process lines in buffer to expand snapshots
     vim.notify("Expanding snapshot blocks", vim.log.levels.INFO)
 
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
     local line_offset = 0
 
     -- Find and expand snapshot blocks
     for i, line in ipairs(lines) do
-      if vim.trim(line) == ">>> snapshot" then
+      local actual_line_num = i - 1 + line_offset
+
+      if vim.trim(line) == ">>> snapshot" and not is_ignored(actual_line_num) then
         -- This is an unexpanded snapshot
-        local block_start = i - 1 + line_offset
+        local block_start = actual_line_num
 
         -- Find the end of the snapshot block (next >>> or <<<)
         local block_end = #lines
         for j = i + 1, #lines do
-          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-            block_end = j - 1 + line_offset
+          local j_line_num = j - 1 + line_offset
+          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
+            block_end = j_line_num
             break
           end
         end
@@ -730,20 +800,22 @@ function M.expand_blocks(buffer_id)
     vim.notify("Expanding YouTube transcript blocks", vim.log.levels.INFO)
 
     -- Process lines in buffer to expand YouTube blocks
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
     local line_offset = 0
 
     -- Find and expand YouTube blocks
     for i, line in ipairs(lines) do
-      if line == ">>> youtube" then
+      local actual_line_num = i - 1 + line_offset
+
+      if line == ">>> youtube" and not is_ignored(actual_line_num) then
         -- This is an unexpanded YouTube block
-        local block_start = i - 1 + line_offset
+        local block_start = actual_line_num
 
         -- Find the end of the YouTube block (next >>> or <<<)
         local block_end = #lines
         for j = i + 1, #lines do
-          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-            block_end = j - 1 + line_offset
+          local j_line_num = j - 1 + line_offset
+          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
+            block_end = j_line_num
             break
           end
         end
@@ -768,22 +840,24 @@ function M.expand_blocks(buffer_id)
     vim.notify("Expanding tree blocks", vim.log.levels.INFO)
 
     -- Process lines in buffer to expand tree blocks
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
     local line_offset = 0
 
     -- Find and expand tree blocks
     for i, line in ipairs(lines) do
-      if vim.trim(line) == ">>> tree" then
+      local actual_line_num = i - 1 + line_offset
+
+      if vim.trim(line) == ">>> tree" and not is_ignored(actual_line_num) then
         -- This is an unexpanded tree block
-        local block_start = i - 1 + line_offset
+        local block_start = actual_line_num
 
         vim.notify("Found tree block at line " .. block_start, vim.log.levels.DEBUG)
 
         -- Find the end of the tree block (next >>> or <<<)
         local block_end = #lines
         for j = i + 1, #lines do
-          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-            block_end = j - 1 + line_offset
+          local j_line_num = j - 1 + line_offset
+          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
+            block_end = j_line_num
             break
           end
         end
@@ -808,20 +882,22 @@ function M.expand_blocks(buffer_id)
     vim.notify("Expanding crawl blocks", vim.log.levels.INFO)
 
     -- Process lines in buffer to expand crawl blocks
-    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
     local line_offset = 0
 
     -- Find and expand crawl blocks
     for i, line in ipairs(lines) do
-      if line == ">>> crawl" then
+      local actual_line_num = i - 1 + line_offset
+
+      if line == ">>> crawl" and not is_ignored(actual_line_num) then
         -- This is an unexpanded crawl block
-        local block_start = i - 1 + line_offset
+        local block_start = actual_line_num
 
         -- Find the end of the crawl block (next >>> or <<<)
         local block_end = #lines
         for j = i + 1, #lines do
-          if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-            block_end = j - 1 + line_offset
+          local j_line_num = j - 1 + line_offset
+          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
+            block_end = j_line_num
             break
           end
         end

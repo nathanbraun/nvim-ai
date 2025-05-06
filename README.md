@@ -438,6 +438,22 @@ Other formatting changes count as differences.
 Obviously this isn't perfect. Theoretically the user has control over the
 plugin and could edit the LLM's response before it's hashed.
 
+# Escaping Chat Markers
+
+If you need to include examples of chat markers in your messages without having
+them parsed as actual messages, use the `ignore` code block:
+
+    ```ignore
+    >>> user
+    This is an example prompt
+    
+    <<< assistant
+    This is an example response
+    ```
+
+Content within these blocks will be treated as regular text and won't be
+interpreted as message markers.
+
 # Configuration
 nvim-ai can be configured with the setup function (defaults below):
 
