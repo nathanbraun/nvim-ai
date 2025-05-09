@@ -146,8 +146,12 @@ end
 
 -- Deactivate a buffer
 function M.deactivate_buffer(bufnr)
-  -- Validate buffer (but don't return since we want to clean up anyway)
-  error_utils.validate_buffer(bufnr, "deactivate")
+  -- Skip if buffer is not valid
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    local state = require('nai.state')
+    state.deactivate_buffer(bufnr)
+    return
+  end
 
   local state = require('nai.state')
   local events = require('nai.events')
@@ -158,16 +162,14 @@ function M.deactivate_buffer(bufnr)
   -- Emit event
   events.emit('buffer:deactivate', bufnr)
 
-  -- Clear highlights only if buffer is valid
-  if vim.api.nvim_buf_is_valid(bufnr) then
-    vim.api.nvim_buf_clear_namespace(bufnr, M.overlay_ns, 0, -1)
-  end
+  -- Clear highlights
+  pcall(vim.api.nvim_buf_clear_namespace, bufnr, M.overlay_ns, 0, -1)
 
   -- Restore original folding
-  require('nai.folding').restore_original(bufnr)
+  pcall(function() require('nai.folding').restore_original(bufnr) end)
 
   -- Restore original mappings
-  require('nai.mappings').restore_original_mappings(bufnr)
+  pcall(function() require('nai.mappings').restore_original_mappings(bufnr) end)
 end
 
 -- Set up autocmd to check files when they're loaded

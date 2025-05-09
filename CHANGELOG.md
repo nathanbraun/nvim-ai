@@ -1,3 +1,7 @@
+# 2.3.1 (2025-05-09)
+Fixes
+- fix no such mapping error
+
 # 2.3.0 (2025-05-06)
 Features
 - Added new `ignore` block. Any prompt/block within it will get treated as full

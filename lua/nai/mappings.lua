@@ -150,12 +150,17 @@ end
 
 -- Add a function to restore original mappings
 function M.restore_original_mappings(bufnr)
+  -- Skip if buffer is not valid
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+
   -- Check if we have stored an original Ctrl+C mapping
   local success, original_ctrl_c = pcall(vim.api.nvim_buf_get_var, bufnr, "nai_original_ctrl_c")
 
   if success and original_ctrl_c then
     -- Restore the original mapping
-    vim.api.nvim_buf_set_keymap(bufnr,
+    pcall(vim.api.nvim_buf_set_keymap, bufnr,
       original_ctrl_c.mode,
       original_ctrl_c.lhs,
       original_ctrl_c.rhs,
@@ -166,9 +171,10 @@ function M.restore_original_mappings(bufnr)
         nowait = original_ctrl_c.nowait == 1
       })
   else
-    -- If no original mapping, just clear our mapping
-    vim.api.nvim_buf_del_keymap(bufnr, 'n', '<C-c>')
-    vim.api.nvim_buf_del_keymap(bufnr, 'i', '<C-c>')
+    -- If no original mapping, just clear our mapping if it exists
+    -- Use pcall to avoid errors if the mapping doesn't exist
+    pcall(vim.api.nvim_buf_del_keymap, bufnr, 'n', '<C-c>')
+    pcall(vim.api.nvim_buf_del_keymap, bufnr, 'i', '<C-c>')
   end
 end
 
