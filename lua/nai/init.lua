@@ -673,46 +673,12 @@ function M.expand_blocks(buffer_id)
   -- Get all buffer content
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
 
-  -- First pass: identify ignore blocks
-  local ignore_ranges = {}
-  local in_ignored_block = false
-  local current_ignore_start = nil
-
-  for i, line in ipairs(lines) do
-    if line:match("^" .. vim.pesc(constants.MARKERS.IGNORE or "```ignore") .. "$") then
-      in_ignored_block = true
-      current_ignore_start = i - 1 -- Convert to 0-based index
-    elseif in_ignored_block and line:match("^" .. vim.pesc(constants.MARKERS.IGNORE_END or "```") .. "$") then
-      in_ignored_block = false
-      if current_ignore_start ~= nil then
-        table.insert(ignore_ranges, { start = current_ignore_start, finish = i - 1 })
-        current_ignore_start = nil
-      end
-    end
-  end
-
-  -- If we ended the file still inside an ignore block, close it
-  if in_ignored_block and current_ignore_start ~= nil then
-    table.insert(ignore_ranges, { start = current_ignore_start, finish = #lines - 1 })
-  end
-
-  -- Function to check if a line is inside any ignore range
-  local function is_ignored(line_num)
-    for _, range in ipairs(ignore_ranges) do
-      if line_num >= range.start and line_num <= range.finish then
-        return true
-      end
-    end
-    return false
-  end
-
   -- Check for unexpanded scrape blocks
   local scrape = require('nai.fileutils.scrape')
   if scrape.has_unexpanded_scrape_blocks(buffer_id) then
     if config.options.debug and config.options.debug.enabled then
       vim.notify("DEBUG: Found unexpanded scrape blocks", vim.log.levels.DEBUG)
     end
-    vim.notify("Expanding scrape blocks", vim.log.levels.INFO)
 
     local line_offset = 0
 
@@ -720,7 +686,7 @@ function M.expand_blocks(buffer_id)
     for i, line in ipairs(lines) do
       local actual_line_num = i - 1 + line_offset
 
-      if line:match("^>>> scrape$") and not is_ignored(actual_line_num) then
+      if line:match("^>>> scrape$") then
         -- This is a scrape block
         local block_start = actual_line_num
 
@@ -728,7 +694,7 @@ function M.expand_blocks(buffer_id)
         local block_end = #lines
         for j = i + 1, #lines do
           local j_line_num = j - 1 + line_offset
-          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
+          if (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
             block_end = j_line_num
             break
           end
@@ -758,7 +724,6 @@ function M.expand_blocks(buffer_id)
   local snapshot = require('nai.fileutils.snapshot')
   if snapshot.has_unexpanded_snapshot_blocks(buffer_id) then
     -- Process lines in buffer to expand snapshots
-    vim.notify("Expanding snapshot blocks", vim.log.levels.INFO)
 
     local line_offset = 0
 
@@ -766,7 +731,7 @@ function M.expand_blocks(buffer_id)
     for i, line in ipairs(lines) do
       local actual_line_num = i - 1 + line_offset
 
-      if vim.trim(line) == ">>> snapshot" and not is_ignored(actual_line_num) then
+      if vim.trim(line) == ">>> snapshot" then
         -- This is an unexpanded snapshot
         local block_start = actual_line_num
 
@@ -774,7 +739,7 @@ function M.expand_blocks(buffer_id)
         local block_end = #lines
         for j = i + 1, #lines do
           local j_line_num = j - 1 + line_offset
-          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
+          if (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
             block_end = j_line_num
             break
           end
@@ -797,7 +762,6 @@ function M.expand_blocks(buffer_id)
   -- Check for unexpanded YouTube blocks
   local youtube = require('nai.fileutils.youtube')
   if youtube.has_unexpanded_youtube_blocks(buffer_id) then
-    vim.notify("Expanding YouTube transcript blocks", vim.log.levels.INFO)
 
     -- Process lines in buffer to expand YouTube blocks
     local line_offset = 0
@@ -806,7 +770,7 @@ function M.expand_blocks(buffer_id)
     for i, line in ipairs(lines) do
       local actual_line_num = i - 1 + line_offset
 
-      if line == ">>> youtube" and not is_ignored(actual_line_num) then
+      if line == ">>> youtube" then
         -- This is an unexpanded YouTube block
         local block_start = actual_line_num
 
@@ -814,7 +778,7 @@ function M.expand_blocks(buffer_id)
         local block_end = #lines
         for j = i + 1, #lines do
           local j_line_num = j - 1 + line_offset
-          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
+          if (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
             block_end = j_line_num
             break
           end
@@ -837,7 +801,6 @@ function M.expand_blocks(buffer_id)
   -- Check for unexpanded tree blocks
   local tree = require('nai.fileutils.tree')
   if tree.has_unexpanded_tree_blocks(buffer_id) then
-    vim.notify("Expanding tree blocks", vim.log.levels.INFO)
 
     -- Keep expanding tree blocks until none are left
     while tree.has_unexpanded_tree_blocks(buffer_id) do
@@ -880,7 +843,6 @@ function M.expand_blocks(buffer_id)
   -- Check for unexpanded crawl blocks
   local crawl = require('nai.fileutils.crawl')
   if crawl.has_unexpanded_crawl_blocks(buffer_id) then
-    vim.notify("Expanding crawl blocks", vim.log.levels.INFO)
 
     -- Process lines in buffer to expand crawl blocks
     local line_offset = 0
@@ -889,7 +851,7 @@ function M.expand_blocks(buffer_id)
     for i, line in ipairs(lines) do
       local actual_line_num = i - 1 + line_offset
 
-      if line == ">>> crawl" and not is_ignored(actual_line_num) then
+      if line == ">>> crawl" then
         -- This is an unexpanded crawl block
         local block_start = actual_line_num
 
@@ -897,7 +859,7 @@ function M.expand_blocks(buffer_id)
         local block_end = #lines
         for j = i + 1, #lines do
           local j_line_num = j - 1 + line_offset
-          if not is_ignored(j_line_num) and (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
+          if (lines[j]:match("^>>>") or lines[j]:match("^<<<")) then
             block_end = j_line_num
             break
           end

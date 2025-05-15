@@ -1,3 +1,8 @@
+# 2.3.2 (2025-05-15)
+Fixes
+- don't wrap snapshotted markdown
+- removed ignore block for now since it wasn't working right
+
 # 2.3.1 (2025-05-09)
 Fixes
 - fix no such mapping error

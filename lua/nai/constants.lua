@@ -15,8 +15,6 @@ M.MARKERS = {
   CRAWL = ">>> crawl",
   TREE = ">>> tree",
   ALIAS = ">>> alias:",
-  IGNORE = "```ignore",
-  IGNORE_END = "```",
 }
 
 M.AUTO_TITLE_INSTRUCTION =

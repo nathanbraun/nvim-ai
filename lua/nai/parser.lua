@@ -16,8 +16,6 @@ function M.parse_chat_buffer(content, buffer_id)
   local MARKERS = require('nai.constants').MARKERS
   local chat_config = {} -- Store conversation-specific config
 
-  local in_ignored_block = false
-
   for i, line in ipairs(lines) do
     -- Skip YAML header
     if line == "---" then
@@ -32,29 +30,6 @@ function M.parse_chat_buffer(content, buffer_id)
 
     -- Skip YAML header content
     if current_type == "yaml_header" then
-      goto continue
-    end
-
-    -- Check for ignore markers first - before any other processing
-    if line:match("^```ignore$") then
-      in_ignored_block = true
-      -- Add this line to the current message content if we're in a message
-      if current_message then
-        table.insert(text_buffer, line)
-      end
-      goto continue
-    elseif in_ignored_block and line:match("^```$") then
-      in_ignored_block = false
-      -- Add this line to the current message content if we're in a message
-      if current_message then
-        table.insert(text_buffer, line)
-      end
-      goto continue
-    elseif in_ignored_block then
-      -- We're in an ignored block, so add the line as-is to the current message
-      if current_message then
-        table.insert(text_buffer, line)
-      end
       goto continue
     end
 

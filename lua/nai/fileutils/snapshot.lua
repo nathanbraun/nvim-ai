@@ -122,16 +122,28 @@ function M.expand_snapshot_in_buffer(buffer_id, start_line, end_line)
 
       -- Add to results with proper formatting
       table.insert(result, file_header)
-      table.insert(result, "```" .. file_type)
 
-      -- Split the file content into lines and add them individually
-      local content_lines = vim.split(file_content, "\n")
-      for _, content_line in ipairs(content_lines) do
-        table.insert(result, content_line)
+      -- Special handling for markdown files - don't wrap in code blocks
+      if file_type == "markdown" then
+        -- Split the file content into lines and add them directly
+        local content_lines = vim.split(file_content, "\n")
+        for _, content_line in ipairs(content_lines) do
+          table.insert(result, content_line)
+        end
+      else
+        -- For non-markdown files, wrap in code blocks with syntax highlighting
+        table.insert(result, "```" .. file_type)
+
+        -- Split the file content into lines and add them individually
+        local content_lines = vim.split(file_content, "\n")
+        for _, content_line in ipairs(content_lines) do
+          table.insert(result, content_line)
+        end
+
+        -- Close the code block
+        table.insert(result, "```")
       end
 
-      -- Close the code block and add spacing
-      table.insert(result, "```")
       table.insert(result, "") -- Empty line between files
 
       ::continue_file::
