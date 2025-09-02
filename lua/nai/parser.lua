@@ -52,6 +52,16 @@ function M.parse_chat_buffer(content, buffer_id)
       end
       current_message = { role = "system" }
       current_type = "system"
+      -- In the parse_chat_buffer function in parser.lua, add handling for summary blocks
+    elseif line:match("^" .. vim.pesc(MARKERS.SUMMARY)) then
+      -- Finish previous message if exists
+      if current_message then
+        current_message.content = table.concat(text_buffer, "\n")
+        table.insert(messages, current_message)
+        text_buffer = {}
+      end
+      current_message = nil -- Summary isn't a message to be sent to the API
+      current_type = "summary"
     elseif line:match("^" .. vim.pesc(MARKERS.USER)) then
       -- Finish previous message if exists
       if current_message then
@@ -269,6 +279,10 @@ function M.format_assistant_message(content)
   return "\n<<< assistant\n\n" .. content
 end
 
+function M.format_summary_block(content)
+  return "\n>>> summary\n\n" .. content
+end
+
 -- In lua/nai/parser.lua
 function M.format_tree_block(content)
   return "\n>>> tree\n" .. content
@@ -303,6 +317,10 @@ end
 -- Format a reference block for the buffer
 function M.format_reference_block(content)
   return "\n>>> reference\n\n" .. content
+end
+
+function M.format_file_summary_block(filepath)
+  return "\n>>> file-summary\n\n" .. filepath
 end
 
 function M.format_youtube_block(url)
