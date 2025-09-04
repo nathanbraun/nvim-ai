@@ -1,3 +1,4 @@
+-- lua/nai/config.lua
 local M = {}
 
 local path = require('nai.utils.path')
@@ -15,7 +16,7 @@ M.defaults = {
   },
   default_system_prompt = "You are a general assistant.",
   active_provider = "openrouter", -- "openai", "openrouter", etc.
-  active_model = "anthropic/claude-sonnet-4",
+  active_model = "anthropic/claude-3.7-sonnet",
   mappings = {
     enabled = true,          -- Whether to apply default key mappings
     intercept_ctrl_c = true, -- New option to intercept Ctrl+C
@@ -41,9 +42,6 @@ M.defaults = {
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
       models = {
         "anthropic/claude-3.7-sonnet",
-        "anthropic/claude-sonnet-4",
-        "anthropic/claude-opus-4",
-        "google/gemini-2.5-flash-preview-05-20",
         "google/gemini-2.0-flash-001",
         "openai/gpt-4o",
         "openai/gpt-4o-mini",
@@ -91,15 +89,6 @@ tags: [ai]
 ---]],
     },
   },
-  summary = {
-    enabled = true,
-    provider = "openrouter",      -- Use active_provider if nil
-    model = "openai/gpt-4o-mini", -- Use a specific model (e.g., "gpt-3.5-turbo") or nil for active_model
-    prompt =
-    "Summarize the conversation so far, capturing key points, decisions, and questions. Be concise but comprehensive.",
-    max_tokens = 10000,
-    temperature = 0.3,
-  },
   tools = {
     dumpling = {
       base_endpoint = "https://app.dumplingai.com/api/v1/", -- Base endpoint for all Dumpling API calls
@@ -120,8 +109,6 @@ tags: [ai]
     content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
     placeholder = { fg = "#FFCC66", bold = true },     -- Golden yellow for placeholders
     signature = { fg = "#777777", italic = true },     -- Gray for signature lines
-    summary = { fg = "#FFBB66", bold = true },         -- Orange for summaries
-    file_summary = { fg = "#66BBFF", bold = true },    -- Blue for file summaries
   },
   aliases = {
     translate = {
@@ -160,7 +147,7 @@ Instructions:
     },
   },
   verification = {
-    enabled = false,           -- Whether to enable response verification
+    enabled = false,            -- Whether to enable response verification
     highlight_verified = true, -- Highlight verified responses
   },
   format_response = {
