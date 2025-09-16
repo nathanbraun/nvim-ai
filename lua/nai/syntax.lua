@@ -1,4 +1,3 @@
--- lua/nai/syntax.lua
 local M = {}
 
 -- Define highlight groups if they don't already exist
@@ -88,21 +87,21 @@ function M.apply_to_buffer(bufnr)
   -- Function to apply highlighting to a single line
   local function highlight_line(line_nr, line)
     -- User marker
-    if line:match("^" .. vim.pesc(markers.USER) .. "$") then
+    if line:match("^" .. (vim.pesc and vim.pesc(markers.USER) or markers.USER:gsub("([^%w])", "%%%1")) .. "$") then
       -- Get the full line length
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatUser", line_nr, 0, line_length)
 
       -- Assistant marker
-    elseif line:match("^" .. vim.pesc(markers.ASSISTANT) .. "$") then
+    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.ASSISTANT) or markers.ASSISTANT:gsub("([^%w])", "%%%1")) .. "$") then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatAssistant", line_nr, 0, line_length)
 
       -- System marker
-    elseif line:match("^" .. vim.pesc(markers.SYSTEM) .. "$") then
+    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.SYSTEM) or markers.SYSTEM:gsub("([^%w])", "%%%1")) .. "$") then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSystem", line_nr, 0, line_length)
-    elseif line:match("^" .. vim.pesc(markers.CONFIG) .. "$") then
+    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.CONFIG) or markers.CONFIG:gsub("([^%w])", "%%%1")) .. "$") then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
 
@@ -119,11 +118,11 @@ function M.apply_to_buffer(bufnr)
       else
         vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
       end
-    elseif line:match("^" .. vim.pesc(markers.IGNORE) .. "$") then
+    elseif markers.IGNORE and line:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE) or markers.IGNORE:gsub("([^%w])", "%%%1")) .. "$") then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
-    elseif line:match("^" .. vim.pesc(markers.IGNORE_END) .. "$") and
-        vim.api.nvim_buf_get_lines(bufnr, line_nr - 1, line_nr, false)[1]:match("^" .. vim.pesc(markers.IGNORE)) then
+    elseif markers.IGNORE_END and line:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE_END) or markers.IGNORE_END:gsub("([^%w])", "%%%1")) .. "$") and
+        vim.api.nvim_buf_get_lines(bufnr, line_nr - 1, line_nr, false)[1]:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE) or markers.IGNORE:gsub("([^%w])", "%%%1"))) then
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
 
@@ -132,6 +131,7 @@ function M.apply_to_buffer(bufnr)
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatContentStart", line_nr, 0, line_length)
     end
+    
     -- Add placeholder highlighting
     local placeholder_patterns = {
       "%%FILE_CONTENTS%%",
@@ -140,9 +140,12 @@ function M.apply_to_buffer(bufnr)
     }
 
     for _, pattern in ipairs(placeholder_patterns) do
-      local start_idx, end_idx = line:find(vim.pesc(pattern))
-      if start_idx then
-        vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatPlaceholder", line_nr, start_idx - 1, end_idx)
+      if pattern then  -- Add nil check
+        local escaped_pattern = vim.pesc and vim.pesc(pattern) or pattern:gsub("([^%w])", "%%%1")
+        local start_idx, end_idx = line:find(escaped_pattern)
+        if start_idx then
+          vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatPlaceholder", line_nr, start_idx - 1, end_idx)
+        end
       end
     end
   end

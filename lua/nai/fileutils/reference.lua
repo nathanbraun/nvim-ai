@@ -13,12 +13,83 @@ function M.expand_paths(path_pattern)
     vim.notify("DEBUG: Original path_pattern: " .. path_pattern, vim.log.levels.INFO)
   end
 
+  -- Check for wildcards, but be smarter about brackets
+  local has_wildcards = false
+  
+  -- Check for * and ? wildcards
+  if path_pattern:match("[*?]") then
+    has_wildcards = true
+  end
+  
+  -- Check for bracket wildcards (character classes), but not literal brackets
+  if path_pattern:match("%[") then
+    for bracket_content in path_pattern:gmatch("%[([^%]]+)%]") do
+      local is_char_class = false
+      
+      -- Check for ranges (a-z, 0-9, etc.)
+      if bracket_content:match("[%w]%-[%w]") then
+        is_char_class = true
+      end
+      
+      -- Check for negation patterns
+      if bracket_content:match("^[!^]") then
+        is_char_class = true
+      end
+      
+      -- Check for single character
+      if #bracket_content == 1 then
+        is_char_class = true
+      end
+      
+      -- For multi-character content without ranges or negation
+      if #bracket_content > 1 and not bracket_content:match("%-") and not bracket_content:match("^[!^]") then
+        -- Improved heuristic: 
+        -- Character classes tend to be short (2-4 chars) and either:
+        -- - All letters: [abc], [xyz] 
+        -- - All numbers: [123], [456]
+        -- - Mixed but short: [a1b]
+        -- 
+        -- Directory names tend to be longer and word-like:
+        -- - [id], [component], [slug], [userId], etc.
+        
+        if #bracket_content <= 4 then
+          -- Short patterns are likely character classes
+          -- But make an exception for common directory name patterns
+          local common_dir_patterns = {
+            "id", "slug", "key", "name", "type", "page", "tab"
+          }
+          
+          local is_common_dir = false
+          for _, pattern in ipairs(common_dir_patterns) do
+            if bracket_content == pattern then
+              is_common_dir = true
+              break
+            end
+          end
+          
+          if not is_common_dir then
+            is_char_class = true
+          end
+        else
+          -- Longer patterns (5+ chars) are almost certainly directory names
+          is_char_class = false
+        end
+      end
+      
+      if is_char_class then
+        has_wildcards = true
+        break
+      end
+    end
+  end
+
   -- If it doesn't contain wildcards, just return the expanded path
-  if not path_pattern:match("[*?%[%]]") then
+  if not has_wildcards then
     local expanded_path = path.expand(path_pattern)
     return { expanded_path }
   end
 
+  -- Rest of the function remains the same...
   -- Simple case: non-recursive wildcards (no **)
   if not path_pattern:match("**") then
     -- Just use vim's glob directly - it's reliable for simple patterns

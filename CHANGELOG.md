@@ -1,3 +1,7 @@
+# 2.3.3 (2025-09-16)
+Fixes
+- better handle directories/files with brackets in them
+
 # 2.3.2 (2025-05-15)
 Fixes
 - don't wrap snapshotted markdown
