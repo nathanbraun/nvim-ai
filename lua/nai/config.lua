@@ -16,7 +16,7 @@ M.defaults = {
   },
   default_system_prompt = "You are a general assistant.",
   active_provider = "openrouter", -- "openai", "openrouter", etc.
-  active_model = "anthropic/claude-sonnet-4",
+  active_model = "anthropic/claude-sonnet-4.5",
   mappings = {
     enabled = true,          -- Whether to apply default key mappings
     intercept_ctrl_c = true, -- New option to intercept Ctrl+C
@@ -42,6 +42,7 @@ M.defaults = {
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
       models = {
         "anthropic/claude-sonnet-4",
+        "anthropic/claude-sonnet-4.5",
         "anthropic/claude-3.7-sonnet",
         "google/gemini-2.0-flash-001",
         "openai/gpt-4o",
