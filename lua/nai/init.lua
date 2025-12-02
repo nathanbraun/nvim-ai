@@ -77,9 +77,9 @@ function M.reload()
     end
   end
 
-  local state = require('nai.state') -- Add this line
+  local state = require('nai.state')
   local current_buf = vim.api.nvim_get_current_buf()
-  if state.is_buffer_activated(buffer_id) then
+  if state.is_buffer_activated(current_buf) then
     require('nai.buffer').apply_syntax_overlay(current_buf)
   end
 
@@ -762,7 +762,6 @@ function M.expand_blocks(buffer_id)
   -- Check for unexpanded YouTube blocks
   local youtube = require('nai.fileutils.youtube')
   if youtube.has_unexpanded_youtube_blocks(buffer_id) then
-
     -- Process lines in buffer to expand YouTube blocks
     local line_offset = 0
 
@@ -801,7 +800,6 @@ function M.expand_blocks(buffer_id)
   -- Check for unexpanded tree blocks
   local tree = require('nai.fileutils.tree')
   if tree.has_unexpanded_tree_blocks(buffer_id) then
-
     -- Keep expanding tree blocks until none are left
     while tree.has_unexpanded_tree_blocks(buffer_id) do
       -- Get all lines in the buffer
@@ -843,7 +841,6 @@ function M.expand_blocks(buffer_id)
   -- Check for unexpanded crawl blocks
   local crawl = require('nai.fileutils.crawl')
   if crawl.has_unexpanded_crawl_blocks(buffer_id) then
-
     -- Process lines in buffer to expand crawl blocks
     local line_offset = 0
 
