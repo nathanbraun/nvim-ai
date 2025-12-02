@@ -108,12 +108,14 @@ function M.switch_provider(provider)
   vim.notify("Switched to " .. provider .. " provider", vim.log.levels.INFO)
 end
 
-function M.chat(opts, force_signature)
-  local parser = require('nai.parser')
-  local fileutils = require('nai.fileutils')
-  local buffer_id = vim.api.nvim_get_current_buf()
+-- ============================================================================
+-- Chat Function Components
+-- ============================================================================
+
+-- Validate buffer and handle activation
+local function validate_and_prepare_buffer(buffer_id)
   local buffer_module = require('nai.buffer')
-  local state = require('nai.state') -- Add this line
+  local state = require('nai.state')
 
   -- Force activation for this buffer if it contains user prompts
   local contains_chat_markers = buffer_module.detect_chat_markers(buffer_id)
@@ -124,40 +126,22 @@ function M.chat(opts, force_signature)
 
   -- Check if buffer is activated after our attempt
   if not state.is_buffer_activated(buffer_id) then
-    vim.notify("Buffer not activated, creating new chat...", vim.log.levels.INFO)
-    -- If not in an activated buffer, use the old behavior (create a new chat)
-    local text = ""
-    if opts.range > 0 then
-      text = utils.get_visual_selection()
-    end
-
-    local prompt = opts.args or ""
-    local user_input = prompt
-    if text ~= "" then
-      if prompt ~= "" then
-        user_input = prompt .. ":\n" .. text
-      else
-        user_input = text
-      end
-    end
-
-    if user_input == "" then
-      return M.new_chat()
-    else
-      return M.new_chat_with_content(user_input)
-    end
+    return false, "not_activated"
   end
 
-  -- Try to expand blocks first
+  return true, nil
+end
+
+-- Try to expand any unexpanded blocks in the buffer
+local function try_expand_blocks(buffer_id)
   local expanded = M.expand_blocks(buffer_id)
+  return expanded
+end
 
-  -- If blocks were expanded or are being processed, don't continue with chat
-  if expanded then
-    return
-  end
-
-  -- At this point, no unexpanded blocks were found, proceed with chat
-
+-- Parse buffer content into messages and config
+local function parse_buffer_content(buffer_id)
+  local parser = require('nai.parser')
+  
   -- Get all buffer content
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
   local buffer_content = table.concat(lines, "\n")
@@ -165,88 +149,51 @@ function M.chat(opts, force_signature)
   -- Parse buffer content into messages
   local messages, chat_config = parser.parse_chat_buffer(buffer_content, buffer_id)
 
+  -- Handle placeholder expansion
   local should_expand_placeholders
-
-  -- Check if expand_placeholders is explicitly set in chat_config
   if chat_config and chat_config.expand_placeholders ~= nil then
-    -- Use the chat-specific setting
     should_expand_placeholders = chat_config.expand_placeholders
   else
-    -- Fall back to global setting
     should_expand_placeholders = config.options.expand_placeholders
   end
 
-  if should_expand_placeholders then
-    if messages then
-      for _, msg in ipairs(messages) do
-        if msg.content and type(msg.content) == "string" then
-          msg.content = parser.replace_placeholders(msg.content, buffer_id)
-        end
+  if should_expand_placeholders and messages then
+    for _, msg in ipairs(messages) do
+      if msg.content and type(msg.content) == "string" then
+        msg.content = parser.replace_placeholders(msg.content, buffer_id)
       end
     end
   end
 
-  local needs_auto_title = false
+  return messages, chat_config
+end
 
-  if config.options.debug.auto_title then
-    vim.notify("needs_auto_title" .. tostring(needs_auto_title), vim.log.levels.DEBUG)
-  end
-
-  if config.options.chat_files.auto_title then
-    -- Check if there's a user-provided system message (not the default one)
-    local has_user_system_message = false
-    for i, line in ipairs(lines) do
-      if line:match("^>>> system$") then
-        -- Found a user-provided system message marker
-        has_user_system_message = true
-        break
-      end
-    end
-
-    if config.options.debug.auto_title then
-      vim.notify("has_user_system_message" .. tostring(has_user_system_message), vim.log.levels.DEBUG)
-    end
-
-    -- Only enable auto-title if there's no user-provided system message
-    if not has_user_system_message then
-      -- Look for "title: Untitled" in the YAML header
-      for i, line in ipairs(lines) do
-        if line:match("^title:%s*Untitled") then
-          needs_auto_title = true
-          break
-        end
-        -- Exit the loop if we're past the YAML header
-        if line == "---" and i > 1 then
-          break
-        end
-      end
-      if config.options.debug.auto_title then
-        vim.notify("needs_auto_title" .. tostring(needs_auto_title), vim.log.levels.DEBUG)
-      end
-    end
-  end
-
-  -- Then use throughout code:
-  if config.options.debug.auto_title then
-    vim.notify("needs_auto_title" .. tostring(needs_auto_title), vim.log.levels.DEBUG)
-  end
-
-  -- Check if we have a user message at the end
+-- Ensure there's a user message at the end, or prompt for one
+local function ensure_user_message(buffer_id, messages)
+  local parser = require('nai.parser')
+  
   local last_message = messages[#messages]
   if not last_message or last_message.role ~= "user" then
-    -- No user message, add one now
+    -- No user message, add template
     local user_template = parser.format_user_message("")
     local user_lines = vim.split(user_template, "\n")
     vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, user_lines)
 
-    -- Position cursor on the 3rd line of new user message (after the blank line)
+    -- Position cursor on the 3rd line of new user message
     local line_count = vim.api.nvim_buf_line_count(buffer_id)
     vim.api.nvim_win_set_cursor(0, { line_count, 0 })
 
-    -- Exit early - user needs to add their message
-    vim.notify("Please add your message first, then run NAIChat again", vim.log.levels.INFO)
-    return
+    return false, "Please add your message first, then run NAIChat again"
   end
+
+  return true, nil
+end
+
+-- Prepare the chat request (indicator, auto-title logic, etc)
+local function prepare_chat_request(buffer_id, messages, chat_config)
+  local parser = require('nai.parser')
+  local utils = require('nai.utils')
+  local state = require('nai.state')
 
   -- Position cursor at the end of the buffer
   local line_count = vim.api.nvim_buf_line_count(buffer_id)
@@ -256,7 +203,6 @@ function M.chat(opts, force_signature)
   local indicator = utils.indicators.create_assistant_placeholder(buffer_id, line_count)
 
   -- Register the indicator in state
-  local state = require('nai.state')
   local indicator_id = "indicator_" .. buffer_id .. "_" .. line_count
   state.register_indicator(indicator_id, indicator)
 
@@ -267,137 +213,242 @@ function M.chat(opts, force_signature)
     })
   end
 
-  -- Cancel any ongoing requests
-  if state.has_active_requests() then
-    M.cancel()
+  -- Check if we need auto-title
+  local needs_auto_title = false
+  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+
+  if config.options.chat_files.auto_title then
+    -- Check if there's a user-provided system message
+    local has_user_system_message = false
+    for i, line in ipairs(lines) do
+      if line:match("^>>> system$") then
+        has_user_system_message = true
+        break
+      end
+    end
+
+    -- Only enable auto-title if there's no user-provided system message
+    if not has_user_system_message then
+      for i, line in ipairs(lines) do
+        if line:match("^title:%s*Untitled") then
+          needs_auto_title = true
+          break
+        end
+        if line == "---" and i > 1 then
+          break
+        end
+      end
+    end
   end
 
   -- If we need auto-title, modify the system message
   if needs_auto_title then
-    -- Find the system message
     for i, msg in ipairs(messages) do
       if msg.role == "system" then
-        -- Append the title request to the system message
         msg.content = parser.get_system_prompt_with_title_request(true)
         break
       end
     end
   end
 
-  -- Call API
+  return {
+    indicator = indicator,
+    indicator_id = indicator_id,
+    needs_auto_title = needs_auto_title
+  }
+end
+
+-- Handle successful chat response
+local function handle_chat_response(buffer_id, request_data, response, messages, chat_config, force_signature)
+  local parser = require('nai.parser')
+  local fileutils = require('nai.fileutils')
+  local utils = require('nai.utils')
+  local state = require('nai.state')
+
+  local indicator = request_data.indicator
+  local indicator_id = request_data.indicator_id
+
+  -- Get the position where we need to replace the placeholder
+  local insertion_row = utils.indicators.remove(indicator)
+
+  -- Clear indicator from state
+  state.clear_indicator(indicator_id)
+
+  -- Extract title if present
+  local modified_response = response
+  local title_match = response:match("^Proposed Title:%s*(.-)[\r\n]")
+  if title_match then
+    modified_response = response:gsub("^Proposed Title:%s*.-%s*[\r\n]+", "")
+
+    -- Update the YAML frontmatter if we found a title
+    if title_match and title_match:len() > 0 then
+      local buffer_lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+      for i, line in ipairs(buffer_lines) do
+        if line:match("^title:%s*Untitled") then
+          buffer_lines[i] = "title: " .. title_match
+          vim.api.nvim_buf_set_lines(buffer_id, 0, -1, false, buffer_lines)
+          break
+        end
+      end
+    end
+  end
+
+  -- Apply formatting if enabled
+  if config.options.format_response and config.options.format_response.enabled then
+    modified_response = utils.format_with_gq(
+      modified_response,
+      config.options.format_response.wrap_width
+    )
+  end
+
+  -- Format response and append to buffer
+  local formatted_response = parser.format_assistant_message(modified_response)
+  local lines_to_append = vim.split(formatted_response, "\n")
+
+  -- Replace the placeholder with the actual content
+  local placeholder_height = indicator.end_row - indicator.start_row
+  vim.api.nvim_buf_set_lines(
+    buffer_id,
+    insertion_row,
+    insertion_row + placeholder_height,
+    false,
+    lines_to_append
+  )
+
+  -- Add verification signature if enabled
+  local verification = require('nai.verification')
+  verification.add_signature_after_response(
+    buffer_id,
+    insertion_row + #lines_to_append,
+    messages,
+    modified_response,
+    force_signature
+  )
+
+  -- Add new user message template
+  local new_user = parser.format_user_message("")
+  vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, vim.split(new_user, "\n"))
+
+  -- Auto-save if enabled
+  if config.options.chat_files.auto_save then
+    fileutils.save_chat_buffer(buffer_id)
+  end
+
+  -- Move cursor to end safely
+  local final_line_count = vim.api.nvim_buf_line_count(buffer_id)
+  local safe_pos = math.min(final_line_count, insertion_row + #lines_to_append)
+  
+  if vim.api.nvim_buf_is_valid(buffer_id) then
+    local current_buf = vim.api.nvim_get_current_buf()
+    if current_buf == buffer_id then
+      vim.api.nvim_win_set_cursor(0, { safe_pos, 0 })
+    end
+  end
+
+  vim.notify("AI response complete", vim.log.levels.INFO)
+end
+
+-- Handle chat error
+local function handle_chat_error(buffer_id, request_data, error_msg)
+  local utils = require('nai.utils')
+  local state = require('nai.state')
+
+  local indicator = request_data.indicator
+  local indicator_id = request_data.indicator_id
+
+  -- Get the position where we need to replace the placeholder
+  local insertion_row = utils.indicators.remove(indicator)
+
+  -- Clear indicator from state
+  state.clear_indicator(indicator_id)
+
+  -- Create error message
+  local error_lines = {
+    "",
+    "<<< assistant",
+    "",
+    "❌ Error: " .. error_msg,
+    "",
+  }
+
+  -- Replace placeholder with error message
+  local placeholder_height = indicator.end_row - indicator.start_row
+  vim.api.nvim_buf_set_lines(
+    buffer_id,
+    insertion_row,
+    insertion_row + placeholder_height,
+    false,
+    error_lines
+  )
+end
+
+function M.chat(opts, force_signature)
+  local buffer_id = vim.api.nvim_get_current_buf()
+  local state = require('nai.state')
+
+  -- Step 1: Validate and prepare buffer
+  local valid, err = validate_and_prepare_buffer(buffer_id)
+  if not valid then
+    if err == "not_activated" then
+      vim.notify("Buffer not activated, creating new chat...", vim.log.levels.INFO)
+      
+      -- Handle non-activated buffer (create new chat)
+      local text = ""
+      if opts.range > 0 then
+        text = require('nai.utils').get_visual_selection()
+      end
+
+      local prompt = opts.args or ""
+      local user_input = prompt
+      if text ~= "" then
+        if prompt ~= "" then
+          user_input = prompt .. ":\n" .. text
+        else
+          user_input = text
+        end
+      end
+
+      if user_input == "" then
+        return M.new_chat()
+      else
+        return M.new_chat_with_content(user_input)
+      end
+    end
+    return
+  end
+
+  -- Step 2: Try to expand blocks
+  local expanded = try_expand_blocks(buffer_id)
+  if expanded then
+    return -- Blocks were expanded, exit early
+  end
+
+  -- Step 3: Parse buffer content
+  local messages, chat_config = parse_buffer_content(buffer_id)
+
+  -- Step 4: Ensure user message exists
+  local has_user_msg, msg = ensure_user_message(buffer_id, messages)
+  if not has_user_msg then
+    vim.notify(msg, vim.log.levels.INFO)
+    return
+  end
+
+  -- Step 5: Prepare chat request
+  local request_data = prepare_chat_request(buffer_id, messages, chat_config)
+
+  -- Step 6: Cancel any ongoing requests
+  if state.has_active_requests() then
+    M.cancel()
+  end
+
+  -- Step 7: Make API call
   local request_handle = api.chat_request(
     messages,
     function(response)
-      -- Get the position where we need to replace the placeholder
-      local insertion_row = utils.indicators.remove(indicator)
-
-      -- Clear indicator from state
-      state.clear_indicator(indicator_id)
-
-      -- Extract title if present
-      local modified_response = response
-
-      -- Check if response starts with "Proposed Title:"
-      local title_match = response:match("^Proposed Title:%s*(.-)[\r\n]")
-      if title_match then
-        -- Remove the title line from the response
-        modified_response = response:gsub("^Proposed Title:%s*.-%s*[\r\n]+", "")
-
-        -- Update the YAML frontmatter if we found a title
-        if title_match and title_match:len() > 0 then
-          -- Get all buffer content
-          local buffer_lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-
-          -- Find and update the title line in the YAML header
-          for i, line in ipairs(buffer_lines) do
-            if line:match("^title:%s*Untitled") then
-              buffer_lines[i] = "title: " .. title_match
-              vim.api.nvim_buf_set_lines(buffer_id, 0, -1, false, buffer_lines)
-              break
-            end
-          end
-        end
-      end
-
-      -- Apply formatting if enabled
-      if config.options.format_response and config.options.format_response.enabled then
-        modified_response = utils.format_with_gq(
-          modified_response,
-          config.options.format_response.wrap_width
-        )
-      end
-
-      -- Format response and append to buffer
-      local formatted_response = parser.format_assistant_message(modified_response)
-      local lines_to_append = vim.split(formatted_response, "\n")
-
-      -- Replace the placeholder with the actual content
-      local placeholder_height = indicator.end_row - indicator.start_row
-      vim.api.nvim_buf_set_lines(
-        buffer_id,
-        insertion_row,
-        insertion_row + placeholder_height,
-        false,
-        lines_to_append
-      )
-
-      -- Add our verification code right after this:
-      -- Add verification signature if enabled
-      local verification = require('nai.verification')
-      verification.add_signature_after_response(buffer_id, insertion_row + #lines_to_append, messages, modified_response,
-        force_signature)
-
-      local is_new_chat = #messages <= 3 -- System message + 1 user message + 1 assistant message
-
-      local new_line_count = vim.api.nvim_buf_line_count(buffer_id)
-      local new_user = parser.format_user_message("")
-      vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, vim.split(new_user, "\n"))
-
-      -- Auto-save if enabled
-      if config.options.chat_files.auto_save then
-        fileutils.save_chat_buffer(buffer_id)
-      end
-
-      -- Move cursor to end safely
-      local final_line_count = vim.api.nvim_buf_line_count(buffer_id)
-      local safe_pos = math.min(final_line_count, insertion_row + #lines_to_append)
-      -- Check if buffer is still valid before setting cursor
-      if vim.api.nvim_buf_is_valid(buffer_id) then
-        -- Only set cursor if the window is still showing this buffer
-        local current_buf = vim.api.nvim_get_current_buf()
-        if current_buf == buffer_id then
-          vim.api.nvim_win_set_cursor(0, { safe_pos, 0 })
-        end
-      end
-
-      -- Notify completion
-      vim.notify("AI response complete", vim.log.levels.INFO)
+      handle_chat_response(buffer_id, request_data, response, messages, chat_config, force_signature)
     end,
     function(error_msg)
-      -- Get the position where we need to replace the placeholder
-      local insertion_row = utils.indicators.remove(indicator)
-
-      -- Clear indicator from state
-      state.clear_indicator(indicator_id)
-
-      -- Create error message
-      local error_lines = {
-        "",
-        "<<< assistant",
-        "",
-        "❌ Error: " .. error_msg,
-        "",
-      }
-
-      -- Replace placeholder with error message
-      local placeholder_height = indicator.end_row - indicator.start_row
-      vim.api.nvim_buf_set_lines(
-        buffer_id,
-        insertion_row,
-        insertion_row + placeholder_height,
-        false,
-        error_lines
-      )
+      handle_chat_error(buffer_id, request_data, error_msg)
     end,
     chat_config
   )
