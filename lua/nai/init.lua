@@ -374,7 +374,7 @@ function M.chat(opts, force_signature)
       vim.notify("AI response complete", vim.log.levels.INFO)
     end,
     function(error_msg)
-      -- Handle errors (same as before)
+      -- Get the position where we need to replace the placeholder
       local insertion_row = utils.indicators.remove(indicator)
 
       -- Clear indicator from state
@@ -398,9 +398,6 @@ function M.chat(opts, force_signature)
         false,
         error_lines
       )
-
-      -- Show error notification
-      vim.notify(error_msg, vim.log.levels.ERROR)
     end,
     chat_config
   )

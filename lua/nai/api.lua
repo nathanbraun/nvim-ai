@@ -171,6 +171,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
   local path = require('nai.utils.path')
   local is_windows = path.is_windows
 
+  -- Function to handle the API response
   local function process_response(obj)
     -- Check if this request was cancelled
     local state = require('nai.state')
@@ -180,8 +181,8 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     end
 
     local error_handler = require('nai.utils.error_handler')
-    local indicator_id = "indicator_" .. request_id
 
+    -- Error: Non-zero exit code
     if obj.code ~= 0 then
       error_handler.handle_request_error({
         request_id = request_id,
@@ -195,6 +196,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       return
     end
 
+    -- Error: Empty response
     local response = obj.stdout
     if not response or response == "" then
       error_handler.handle_request_error({
@@ -208,6 +210,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       return
     end
 
+    -- Error: Failed to parse JSON
     local success, parsed = pcall(vim.json.decode, response)
     if not success then
       error_handler.handle_request_error({
@@ -222,6 +225,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       return
     end
 
+    -- Error: API returned error object
     if parsed.error then
       error_handler.handle_api_error({
         response = response,
@@ -254,6 +258,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       end
     end
 
+    -- Success: Valid content received
     if content then
       -- Update state
       state.update_request(request_id, {
@@ -272,12 +277,14 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
         state.clear_request(request_id)
       end)
     else
+      -- Error: No valid content in response
       error_handler.handle_request_error({
         request_id = request_id,
-        error_msg = "No valid content in API response: " .. vim.inspect(parsed),
+        error_msg = "No valid content in API response",
         callback = on_error,
         context = {
-          provider = provider
+          provider = provider,
+          parsed_response = vim.inspect(parsed)
         }
       })
     end
@@ -403,23 +410,11 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
 end
 
 function M.cancel_request(handle)
+  local error_handler = require('nai.utils.error_handler')
+
   if handle and handle.request_id then
-    local state = require('nai.state')
-    local events = require('nai.events')
-
-    -- Update state
-    state.update_request(handle.request_id, {
-      status = 'cancelled',
-      end_time = os.time()
-    })
-
-    -- Emit event
-    events.emit('request:cancel', handle.request_id)
-
-    -- Clear request after a short delay (to allow event handlers to access it)
-    vim.defer_fn(function()
-      state.clear_request(handle.request_id)
-    end, 100)
+    -- Use standardized cancellation handler
+    error_handler.handle_request_cancellation(handle.request_id)
   end
 
   -- Attempt to terminate the process

@@ -4,12 +4,11 @@
 local M = {}
 local error_utils = require('nai.utils.error')
 
--- Handle request errors with consistent cleanup
--- This ensures state, indicators, and events are properly managed
+-- Handle API request errors with consistent state cleanup
+-- This handles state management and event emission
+-- Callers are responsible for UI cleanup (indicators, buffers)
 function M.handle_request_error(opts)
   local request_id = opts.request_id
-  local indicator_id = opts.indicator_id
-  local indicator = opts.indicator
   local error_msg = opts.error_msg
   local callback = opts.callback
   local context = opts.context or {}
@@ -30,32 +29,17 @@ function M.handle_request_error(opts)
     events.emit('request:error', request_id, error_msg)
   end
 
-  -- 3. Clean up indicator if it exists
-  if indicator then
-    local utils = require('nai.utils')
-    local insertion_row = utils.indicators.remove(indicator)
-    
-    -- Store insertion_row for callback
-    context.insertion_row = insertion_row
-    context.placeholder_height = indicator.end_row - indicator.start_row
-  end
-
-  -- 4. Clear indicator from state
-  if indicator_id then
-    state.clear_indicator(indicator_id)
-  end
-
-  -- 5. Schedule the error callback
+  -- 3. Schedule the error callback
   vim.schedule(function()
     -- Log the error
     error_utils.log(error_msg, error_utils.LEVELS.ERROR, context)
     
     -- Call the user's error callback
     if callback then
-      callback(error_msg, context)
+      callback(error_msg)
     end
 
-    -- 6. Clear request from state after callback completes
+    -- 4. Clear request from state after callback completes
     if request_id then
       state.clear_request(request_id)
     end
@@ -63,11 +47,7 @@ function M.handle_request_error(opts)
 end
 
 -- Handle cancellation with proper cleanup
-function M.handle_request_cancellation(opts)
-  local request_id = opts.request_id
-  local indicator_id = opts.indicator_id
-  local indicator = opts.indicator
-
+function M.handle_request_cancellation(request_id)
   local state = require('nai.state')
   local events = require('nai.events')
 
@@ -80,21 +60,8 @@ function M.handle_request_cancellation(opts)
 
     -- 2. Emit cancellation event
     events.emit('request:cancel', request_id)
-  end
 
-  -- 3. Clean up indicator
-  if indicator then
-    local utils = require('nai.utils')
-    utils.indicators.remove(indicator)
-  end
-
-  -- 4. Clear indicator from state
-  if indicator_id then
-    state.clear_indicator(indicator_id)
-  end
-
-  -- 5. Clear request from state after a short delay
-  if request_id then
+    -- 3. Clear request from state after a short delay
     vim.defer_fn(function()
       state.clear_request(request_id)
     end, 100)
@@ -106,8 +73,6 @@ function M.handle_api_error(opts)
   local response = opts.response
   local provider = opts.provider
   local request_id = opts.request_id
-  local indicator_id = opts.indicator_id
-  local indicator = opts.indicator
   local callback = opts.callback
 
   -- Parse and format the error message
@@ -116,8 +81,6 @@ function M.handle_api_error(opts)
   -- Use the standard request error handler
   M.handle_request_error({
     request_id = request_id,
-    indicator_id = indicator_id,
-    indicator = indicator,
     error_msg = error_msg,
     callback = callback,
     context = {
@@ -141,4 +104,3 @@ function M.validate_buffer_or_error(bufnr, operation, callback)
 end
 
 return M
-
