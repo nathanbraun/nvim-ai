@@ -43,8 +43,11 @@ M.defaults = {
       models = {
         "anthropic/claude-sonnet-4",
         "anthropic/claude-sonnet-4.5",
+        "anthropic/claude-opus-4.5",
         "anthropic/claude-3.7-sonnet",
         "google/gemini-2.0-flash-001",
+        "openai/o3",
+        "openai/gpt-5.1",
         "openai/gpt-4o",
         "openai/gpt-4o-mini",
         "perplexity/r1-1776",
