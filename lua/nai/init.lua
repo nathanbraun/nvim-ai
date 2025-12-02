@@ -141,7 +141,7 @@ end
 -- Parse buffer content into messages and config
 local function parse_buffer_content(buffer_id)
   local parser = require('nai.parser')
-  
+
   -- Get all buffer content
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
   local buffer_content = table.concat(lines, "\n")
@@ -171,7 +171,7 @@ end
 -- Ensure there's a user message at the end, or prompt for one
 local function ensure_user_message(buffer_id, messages)
   local parser = require('nai.parser')
-  
+
   local last_message = messages[#messages]
   if not last_message or last_message.role ~= "user" then
     -- No user message, add template
@@ -337,7 +337,7 @@ local function handle_chat_response(buffer_id, request_data, response, messages,
   -- Move cursor to end safely
   local final_line_count = vim.api.nvim_buf_line_count(buffer_id)
   local safe_pos = math.min(final_line_count, insertion_row + #lines_to_append)
-  
+
   if vim.api.nvim_buf_is_valid(buffer_id) then
     local current_buf = vim.api.nvim_get_current_buf()
     if current_buf == buffer_id then
@@ -391,7 +391,7 @@ function M.chat(opts, force_signature)
   if not valid then
     if err == "not_activated" then
       vim.notify("Buffer not activated, creating new chat...", vim.log.levels.INFO)
-      
+
       -- Handle non-activated buffer (create new chat)
       local text = ""
       if opts.range > 0 then
@@ -500,10 +500,6 @@ function M.cancel()
     -- Clear indicator from state
     state.clear_indicator(indicator_id)
   end
-
-  -- Reset the active_request variable directly
-  M.active_request = nil
-  M.active_indicator = nil
 
   if request_count > 0 then
     vim.notify("AI completion cancelled", vim.log.levels.INFO)
@@ -617,7 +613,8 @@ function M.new_chat_with_content(user_input)
   }
 
   -- Cancel any ongoing requests
-  if M.active_request then
+  local state = require('nai.state')
+  if state.has_active_requests() then
     M.cancel()
   end
 
@@ -661,8 +658,6 @@ function M.new_chat_with_content(user_input)
 
       -- Notify completion
       vim.notify("AI chat saved to " .. filename, vim.log.levels.INFO)
-      M.active_request = nil
-      M.active_indicator = nil
     end,
     function(error_msg)
       -- Handle errors (same as before)

@@ -1,13 +1,7 @@
 -- lua/nai/fileutils/scrape.lua
 local M = {}
 local config = require('nai.config')
-local utils = require('nai.utils')
-
--- Active scrape requests
-M.active_requests = {}
-
--- Create a namespace for our extmarks
-M.namespace_id = vim.api.nvim_create_namespace('nai_scrape_indicators')
+local block_processor = require('nai.fileutils.block_processor')
 
 -- Get Dumpling API key
 function M.get_api_key()
@@ -23,7 +17,6 @@ function M.get_api_key()
     return key
   end
 
-  -- If not found, notify user
   return nil
 end
 
@@ -41,7 +34,7 @@ function M.fetch_url(url, callback, on_error)
     if on_error then
       vim.schedule(function()
         on_error(
-          "Error: Dumpling API key not found. Please set DUMPLING_API_KEY environment variable or add it to your credentials file.")
+          "Dumpling API key not found. Please set DUMPLING_API_KEY environment variable or add it to your credentials file.")
       end)
     end
     return
@@ -89,7 +82,7 @@ function M.fetch_url(url, callback, on_error)
     if obj.code ~= 0 then
       if on_error then
         vim.schedule(function()
-          on_error("Error: curl request failed with code " .. obj.code)
+          on_error("curl request failed with code " .. obj.code)
         end)
       end
       return
@@ -99,7 +92,7 @@ function M.fetch_url(url, callback, on_error)
     if not response or response == "" then
       if on_error then
         vim.schedule(function()
-          on_error("Error: Empty response from API")
+          on_error("Empty response from API")
         end)
       end
       return
@@ -132,7 +125,7 @@ function M.fetch_url(url, callback, on_error)
     local max_content_length = dumpling_config.max_content_length or 100000
     if #content > max_content_length then
       content = string.sub(content, 1, max_content_length) ..
-          "\n\n[Content truncated due to large size]"
+          "\n[Content truncated due to large size]"
     end
 
     -- Schedule notification
@@ -152,261 +145,53 @@ end
 
 -- Function to handle expanding scrape blocks in naichat files
 function M.expand_scrape_block(buffer_id, start_line, end_line)
-  local config = require('nai.config')
-
-  -- Debug logging
-  if config.options.debug and config.options.debug.enabled then
-    vim.notify("DEBUG: expand_scrape_block called for lines " .. start_line .. " to " .. end_line, vim.log.levels.DEBUG)
-  end
-
-  -- Get the scrape block lines
-  local lines = vim.api.nvim_buf_get_lines(buffer_id, start_line, end_line, false)
-
-  -- Debug print lines
-  if config.options.debug and config.options.debug.enabled then
-    vim.notify("DEBUG: Scrape block content: " .. vim.inspect(lines), vim.log.levels.DEBUG)
-  end
-
-  -- Skip the first line which contains the scrape marker
-  local url = nil
-  for i = 2, #lines do
-    local line = lines[i]
-    if line:match("%S") then -- First non-empty line
-      url = line:gsub("%s+", "")
-      break
-    end
-  end
-
-  if not url or url == "" then
-    -- No URL found, insert error message
-    vim.api.nvim_buf_set_lines(
-      buffer_id,
-      start_line, end_line,
-      false,
-      {
-        ">>> scrape-error",
-        "❌ Error: No URL provided for scraping",
-        ""
-      }
-    )
-    return (end_line - start_line)
-  end
-
-  if config.options.debug and config.options.debug.enabled then
-    vim.notify("DEBUG: Found URL in scrape block: " .. url, vim.log.levels.DEBUG)
-  end
-
-  -- Change marker to show it's in progress
-  vim.api.nvim_buf_set_lines(
-    buffer_id,
-    start_line,
-    start_line + 1,
-    false,
-    { ">>> scraping" }
-  )
-
-  -- Create a spinner animation at the end of the block
-  local indicator = {
+  return block_processor.expand_async_block({
     buffer_id = buffer_id,
-    start_row = start_line,
-    end_row = end_line,
-    spinner_row = start_line + 2, -- Add spinner after URL
-    timer = nil
-  }
-
-  -- Insert spinner line
-  vim.api.nvim_buf_set_lines(
-    buffer_id,
-    start_line + 2,
-    start_line + 2,
-    false,
-    { "⏳ Fetching content..." }
-  )
-
-  -- Start the animation
-  local animation_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
-  local current_frame = 1
-
-  indicator.timer = vim.loop.new_timer()
-  indicator.timer:start(0, 120, vim.schedule_wrap(function()
-    -- Check if buffer still exists
-    if not vim.api.nvim_buf_is_valid(buffer_id) then
-      if indicator.timer then
-        indicator.timer:stop()
-        indicator.timer:close()
-        indicator.timer = nil
-      end
-      return
-    end
-
-    -- Update the spinner animation
-    local status_text = animation_frames[current_frame] .. " Fetching content from " .. url
-
-    -- Update the text in the buffer
-    vim.api.nvim_buf_set_lines(
-      buffer_id,
-      indicator.spinner_row,
-      indicator.spinner_row + 1,
-      false,
-      { status_text }
-    )
-
-    -- Move to the next animation frame
-    current_frame = (current_frame % #animation_frames) + 1
-  end))
-
-  -- Track this request
-  local request = {
-    buffer_id = buffer_id,
-    indicator = indicator,
     start_line = start_line,
     end_line = end_line,
-    url = url
-  }
-
-  -- Store in active requests
-  if not M.active_requests then
-    M.active_requests = {}
-  end
-  table.insert(M.active_requests, request)
-
-  -- Fetch the URL asynchronously
-  M.fetch_url(url,
-    function(title, content, url)
-      -- Remove request from active requests
-      for i, req in ipairs(M.active_requests) do
-        if req == request then
-          table.remove(M.active_requests, i)
-          break
-        end
-      end
-
-      -- Stop the timer
-      if indicator.timer then
-        indicator.timer:stop()
-        indicator.timer:close()
-        indicator.timer = nil
-      end
-
-      -- Check if buffer is still valid
-      if not vim.api.nvim_buf_is_valid(buffer_id) then
-        return
-      end
-
-      -- Format the result block
-      local content_lines = vim.split(content, "\n")
-
-      -- Build the result - changing scrape to scraped
-      local result_lines = {
-        ">>> scraped [" .. os.date("%Y-%m-%d %H:%M:%S") .. "]",
-        url,
-        "",
-        "## " .. title,
-        "_Source: " .. url .. "_",
-        ""
-      }
-
-      -- Add the content lines
-      for _, line in ipairs(content_lines) do
-        table.insert(result_lines, line)
-      end
-
-      -- Replace the placeholder with the result
-      vim.api.nvim_buf_set_lines(
-        buffer_id,
-        indicator.start_row,
-        math.max(indicator.end_row, indicator.start_row + 3), -- Ensure we get all lines with spinner
-        false,
-        result_lines
+    block_type = "scrape",
+    progress_marker = ">>> scraping",
+    completed_marker = ">>> scraped",
+    error_marker = ">>> scrape-error",
+    
+    -- Spinner message
+    spinner_message = function(url, options)
+      return "Fetching content from " .. url
+    end,
+    
+    -- Execute the scrape
+    execute = function(url, options, callback, on_error)
+      M.fetch_url(url, 
+        function(title, content, url)
+          callback({ title = title, content = content, url = url })
+        end,
+        on_error
       )
     end,
-    function(error_msg)
-      -- Remove request from active requests
-      for i, req in ipairs(M.active_requests) do
-        if req == request then
-          table.remove(M.active_requests, i)
-          break
-        end
-      end
-
-      -- Stop the timer
-      if indicator.timer then
-        indicator.timer:stop()
-        indicator.timer:close()
-        indicator.timer = nil
-      end
-
-      -- Check if buffer is still valid
-      if not vim.api.nvim_buf_is_valid(buffer_id) then
-        return
-      end
-
-      -- Format the error
-      local error_lines = {
-        ">>> scrape-error",
+    
+    -- Format the result
+    format_result = function(result, url, options)
+      local lines = block_processor.format_completed_header(
+        ">>> scraped",
         url,
-        "",
-        "❌ Error fetching URL: " .. url,
-        error_msg,
-        ""
-      }
-
-      -- Replace the placeholder with the error
-      vim.api.nvim_buf_set_lines(
-        buffer_id,
-        indicator.start_row,
-        math.max(indicator.end_row, indicator.start_row + 3),
-        false,
-        error_lines
+        nil, -- No options to display for scrape
+        nil  -- Use default timestamp
       )
-
-      -- Show error notification
-      vim.schedule(function()
-        vim.notify("Error scraping URL: " .. error_msg, vim.log.levels.ERROR)
-      end)
-    end
-  )
-
-  -- Return the changed number of lines in the placeholder
-  return 3 -- The marker line + url + spinner
-end
-
--- Expand all scrape blocks in a buffer
-function M.expand_scrape_blocks_in_buffer(buffer_id)
-  -- Guard against invalid buffer
-  if not vim.api.nvim_buf_is_valid(buffer_id) then
-    return
-  end
-
-  -- Get all buffer content
-  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-  local line_offset = 0
-
-  -- Find and expand scrape blocks
-  for i, line in ipairs(lines) do
-    if line:match("^>>> scrape$") then
-      -- This is a scrape block
-      local block_start = i - 1 + line_offset
-
-      -- Find the end of the scrape block (next >>> or <<<)
-      local block_end = #lines
-      for j = i + 1, #lines do
-        if lines[j]:match("^>>>") or lines[j]:match("^<<<") then
-          block_end = j - 1 + line_offset
-          break
-        end
+      
+      -- Add title and content
+      table.insert(lines, "## " .. result.title)
+      table.insert(lines, "_Source: " .. result.url .. "_")
+      table.insert(lines, "")
+      
+      -- Add content lines
+      local content_lines = vim.split(result.content, "\n")
+      for _, line in ipairs(content_lines) do
+        table.insert(lines, line)
       end
-
-      -- Expand the scrape block directly in the buffer
-      local new_line_count = M.expand_scrape_block(buffer_id, block_start, block_end + 1)
-
-      -- Adjust line offset for any additional lines added
-      line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-      -- Re-fetch buffer lines since they've changed
-      lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-    end
-  end
+      
+      return lines
+    end,
+  })
 end
 
 -- Check if there are unexpanded scrape blocks in the buffer
@@ -432,7 +217,36 @@ end
 
 -- Check if there are active scrape requests
 function M.has_active_requests()
-  return M.active_requests and #M.active_requests > 0
+  -- Check block_processor for any scrape-type requests
+  for request_id, request in pairs(block_processor.active_requests) do
+    if request.block_type == "scrape" then
+      return true
+    end
+  end
+  return false
+end
+
+-- Process scrape block for API requests (used by parser)
+function M.process_scrape_block(text_buffer)
+  -- In API requesting mode, we want to reference the content, not the command
+  local in_content_section = false
+  local content_lines = {}
+
+  for _, line in ipairs(text_buffer) do
+    if line:match("^<<< content%s+%[") then
+      in_content_section = true
+    elseif in_content_section then
+      table.insert(content_lines, line)
+    end
+  end
+
+  if #content_lines > 0 then
+    -- If we have content, use that
+    return table.concat(content_lines, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+  else
+    -- Otherwise, use the raw text
+    return table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
+  end
 end
 
 return M

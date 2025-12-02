@@ -1,5 +1,6 @@
 -- lua/nai/fileutils/youtube.lua
 local M = {}
+local block_processor = require('nai.fileutils.block_processor')
 
 -- Get Dumpling API key (reusing from scrape module)
 function M.get_api_key()
@@ -16,7 +17,7 @@ function M.fetch_transcript(video_url, options, callback, on_error)
     if on_error then
       vim.schedule(function()
         on_error(
-          "Error: Dumpling API key not found. Please set DUMPLING_API_KEY environment variable or add it to your credentials file.")
+          "Dumpling API key not found. Please set DUMPLING_API_KEY environment variable or add it to your credentials file.")
       end)
     end
     return
@@ -72,7 +73,7 @@ function M.fetch_transcript(video_url, options, callback, on_error)
     if obj.code ~= 0 then
       if on_error then
         vim.schedule(function()
-          on_error("Error: curl request failed with code " .. obj.code)
+          on_error("curl request failed with code " .. obj.code)
         end)
       end
       return
@@ -82,7 +83,7 @@ function M.fetch_transcript(video_url, options, callback, on_error)
     if not response or response == "" then
       if on_error then
         vim.schedule(function()
-          on_error("Error: Empty response from API")
+          on_error("Empty response from API")
         end)
       end
       return
@@ -126,7 +127,112 @@ function M.fetch_transcript(video_url, options, callback, on_error)
   return handle
 end
 
--- Process the YouTube block
+-- Function to handle expanding YouTube blocks in naichat files
+function M.expand_youtube_block(buffer_id, start_line, end_line)
+  return block_processor.expand_async_block({
+    buffer_id = buffer_id,
+    start_line = start_line,
+    end_line = end_line,
+    block_type = "youtube",
+    progress_marker = ">>> transcribing",
+    completed_marker = ">>> transcript",
+    error_marker = ">>> youtube-error",
+
+    -- Default options
+    default_options = {
+      include_timestamps = true,
+      timestamps_to_combine = 5,
+      preferred_language = "en"
+    },
+
+    -- Spinner message
+    spinner_message = function(url, options)
+      return "Fetching transcript from " .. url
+    end,
+
+    -- Validate URL
+    validate_target = function(url)
+      return url:match("youtube%.com") or url:match("youtu%.be")
+    end,
+
+    -- Execute the transcript fetch
+    execute = function(url, options, callback, on_error)
+      M.fetch_transcript(url, options,
+        function(transcript, language, video_url)
+          callback({
+            transcript = transcript,
+            language = language,
+            url = video_url,
+            options = options
+          })
+        end,
+        on_error
+      )
+    end,
+
+    -- Format the result
+    format_result = function(result, url, options)
+      local lines = block_processor.format_completed_header(
+        ">>> transcript",
+        url,
+        nil, -- We'll add options manually for better control
+        nil  -- Use default timestamp
+      )
+
+      -- Add options as comments if they differ from defaults
+      if not result.options.include_timestamps then
+        table.insert(lines, "-- timestamps: false")
+      end
+      if result.options.timestamps_to_combine ~= 5 then
+        table.insert(lines, "-- combine: " .. result.options.timestamps_to_combine)
+      end
+      if result.options.preferred_language ~= "en" then
+        table.insert(lines, "-- language: " .. result.options.preferred_language)
+      end
+
+      -- Add blank line if we added options
+      if lines[#lines]:match("^%-%-") then
+        table.insert(lines, "")
+      end
+
+      -- Add header
+      table.insert(lines, "## YouTube Transcript (" .. result.language .. ")")
+      table.insert(lines, "_Source: " .. result.url .. "_")
+      table.insert(lines, "")
+
+      -- Add transcript lines
+      local transcript_lines = vim.split(result.transcript, "\n ")
+      for _, line in ipairs(transcript_lines) do
+        table.insert(lines, line)
+      end
+
+      return lines
+    end,
+  })
+end
+
+-- Check if there are unexpanded YouTube blocks in the buffer
+function M.has_unexpanded_youtube_blocks(buffer_id)
+  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+  local constants = require('nai.constants')
+
+  -- Track if we're inside an ignore block
+  local in_ignored_block = false
+
+  for i, line in ipairs(lines) do
+    if line:match("^" .. vim.pesc(constants.MARKERS.IGNORE or "```ignore") .. "$") then
+      in_ignored_block = true
+    elseif in_ignored_block and line:match("^" .. vim.pesc(constants.MARKERS.IGNORE_END or "```") .. "$") then
+      in_ignored_block = false
+    elseif vim.trim(line) == ">>> youtube" then
+      return true
+    end
+  end
+
+  return false
+end
+
+-- Process the YouTube block for API requests (used by parser)
 function M.process_youtube_block(lines)
   -- For API requests, we'll process this synchronously
   -- This is similar to the web block processing
@@ -225,268 +331,26 @@ function M.process_youtube_block(lines)
 
     -- Format the response
     if transcript_fetched then
-      table.insert(result, string.format("==> YouTube Transcript (%s) <==\nVideo: %s\n\n%s",
+      table.insert(result, string.format("==> YouTube Transcript (%s) <==\n Video: \n%s",
         transcript_language, url, transcript_content))
     else
       table.insert(result,
-        string.format("==> YouTube Transcript Error <==\nVideo: %s\n\nFailed to fetch transcript", url))
+        string.format("==> YouTube Transcript Error <==\n Video: %s \n Failed to fetch transcript", url))
     end
   end
 
   -- Add additional text if any
   if #additional_text > 0 then
     table.insert(result, "")
-    table.insert(result, table.concat(additional_text, "\n"))
+    table.insert(result, table.concat(additional_text, "\n "))
   end
 
-  return table.concat(result, "\n\n")
-end
-
--- Function to handle expanding YouTube blocks in naichat files
-function M.expand_youtube_block(buffer_id, start_line, end_line)
-  -- Get the YouTube block lines
-  local lines = vim.api.nvim_buf_get_lines(buffer_id, start_line, end_line, false)
-
-  -- Skip the first line which contains the youtube marker
-  local url = nil
-  local options = {
-    include_timestamps = true,
-    timestamps_to_combine = 5,
-    preferred_language = "en"
-  }
-
-  -- Look for a URL in the block
-  for i = 2, #lines do
-    local line = lines[i]
-    -- Look for anything that resembles a URL
-    if line:match("https?://[%w%p]+") then
-      url = line:match("https?://[%w%p]+")
-      break
-    elseif line:match("^%s*--") then
-      -- Parse options
-      local option_name, option_value = line:match("^%s*--%s*(%w+)%s*:%s*(.+)$")
-      if option_name and option_value then
-        if option_name == "timestamps" then
-          options.include_timestamps = option_value:lower() == "true"
-        elseif option_name == "combine" then
-          options.timestamps_to_combine = tonumber(option_value) or 5
-        elseif option_name == "language" then
-          options.preferred_language = option_value
-        end
-      end
-    end
-  end
-
-  -- If still no URL found, check for youtube.com or youtu.be in any form
-  if not url then
-    for i = 2, #lines do
-      local line = lines[i]
-      if line:match("youtube%.com") or line:match("youtu%.be") then
-        url = line:gsub("%s+", "")
-        break
-      end
-    end
-  end
-
-  if not url or url == "" then
-    -- No URL found, insert error message
-    vim.api.nvim_buf_set_lines(
-      buffer_id,
-      start_line, end_line,
-      false,
-      {
-        ">>> youtube-error",
-        "❌ Error: No YouTube URL provided",
-        ""
-      }
-    )
-    return (end_line - start_line)
-  end
-
-  -- Change marker to show it's in progress
-  vim.api.nvim_buf_set_lines(
-    buffer_id,
-    start_line,
-    start_line + 1,
-    false,
-    { ">>> transcribing" }
-  )
-
-  -- Create a spinner animation at the end of the block
-  local indicator = {
-    buffer_id = buffer_id,
-    start_row = start_line,
-    end_row = end_line,
-    spinner_row = start_line + 2, -- Add spinner after URL
-    timer = nil
-  }
-
-  -- Insert spinner line
-  vim.api.nvim_buf_set_lines(
-    buffer_id,
-    start_line + 2,
-    start_line + 2,
-    false,
-    { "⏳ Fetching transcript..." }
-  )
-
-  -- Start the animation
-  local animation_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
-  local current_frame = 1
-
-  indicator.timer = vim.loop.new_timer()
-  indicator.timer:start(0, 120, vim.schedule_wrap(function()
-    -- Check if buffer still exists
-    if not vim.api.nvim_buf_is_valid(buffer_id) then
-      if indicator.timer then
-        indicator.timer:stop()
-        indicator.timer:close()
-        indicator.timer = nil
-      end
-      return
-    end
-
-    -- Update the spinner animation
-    local status_text = animation_frames[current_frame] .. " Fetching transcript from " .. url
-
-    -- Update the text in the buffer
-    vim.api.nvim_buf_set_lines(
-      buffer_id,
-      indicator.spinner_row,
-      indicator.spinner_row + 1,
-      false,
-      { status_text }
-    )
-
-    -- Move to the next animation frame
-    current_frame = (current_frame % #animation_frames) + 1
-  end))
-
-  -- Fetch the YouTube transcript asynchronously
-  M.fetch_transcript(url, options,
-    function(transcript, language, video_url)
-      -- Stop the timer
-      if indicator.timer then
-        indicator.timer:stop()
-        indicator.timer:close()
-        indicator.timer = nil
-      end
-
-      -- Check if buffer is still valid
-      if not vim.api.nvim_buf_is_valid(buffer_id) then
-        return
-      end
-
-      -- Format the transcript into lines
-      local transcript_lines = vim.split(transcript, "\n")
-
-      -- Build the result - changing youtube to transcript
-      local result_lines = {
-        ">>> transcript [" .. os.date("%Y-%m-%d %H:%M:%S") .. "]",
-        url
-      }
-
-      -- Add options as comments if they were changed from defaults
-      if not options.include_timestamps then
-        table.insert(result_lines, "-- timestamps: false")
-      end
-      if options.timestamps_to_combine ~= 5 then
-        table.insert(result_lines, "-- combine: " .. options.timestamps_to_combine)
-      end
-      if options.preferred_language ~= "en" then
-        table.insert(result_lines, "-- language: " .. options.preferred_language)
-      end
-
-      -- Add a blank line and header
-      table.insert(result_lines, "")
-      table.insert(result_lines, "## YouTube Transcript (" .. language .. ")")
-      table.insert(result_lines, "_Source: " .. url .. "_")
-      table.insert(result_lines, "")
-
-      -- Add the transcript lines
-      for _, line in ipairs(transcript_lines) do
-        table.insert(result_lines, line)
-      end
-
-      -- Replace the placeholder with the result
-      vim.api.nvim_buf_set_lines(
-        buffer_id,
-        indicator.start_row,
-        math.max(indicator.end_row, indicator.start_row + 3), -- Ensure we get all lines with spinner
-        false,
-        result_lines
-      )
-
-      -- Notify completion
-      vim.notify("YouTube transcript fetched successfully", vim.log.levels.INFO)
-    end,
-    function(error_msg)
-      -- Stop the timer
-      if indicator.timer then
-        indicator.timer:stop()
-        indicator.timer:close()
-        indicator.timer = nil
-      end
-
-      -- Check if buffer is still valid
-      if not vim.api.nvim_buf_is_valid(buffer_id) then
-        return
-      end
-
-      -- Format the error
-      local error_lines = {
-        ">>> youtube-error",
-        url,
-        "",
-        "❌ Error fetching YouTube transcript: " .. url,
-        error_msg,
-        ""
-      }
-
-      -- Replace the placeholder with the error
-      vim.api.nvim_buf_set_lines(
-        buffer_id,
-        indicator.start_row,
-        math.max(indicator.end_row, indicator.start_row + 3),
-        false,
-        error_lines
-      )
-
-      -- Show error notification
-      vim.schedule(function()
-        vim.notify("Error fetching YouTube transcript: " .. error_msg, vim.log.levels.ERROR)
-      end)
-    end
-  )
-
-  -- Return the changed number of lines in the placeholder
-  return 3 -- The marker line + url + spinner
-end
-
--- Check if there are unexpanded YouTube blocks in the buffer
-function M.has_unexpanded_youtube_blocks(buffer_id)
-  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-  local constants = require('nai.constants')
-
-  -- Track if we're inside an ignore block
-  local in_ignored_block = false
-
-  for i, line in ipairs(lines) do
-    if line:match("^" .. vim.pesc(constants.MARKERS.IGNORE or "```ignore") .. "$") then
-      in_ignored_block = true
-    elseif in_ignored_block and line:match("^" .. vim.pesc(constants.MARKERS.IGNORE_END or "```") .. "$") then
-      in_ignored_block = false
-    elseif vim.trim(line) == ">>> youtube" then
-      return true
-    end
-  end
-
-  return false
+  return table.concat(result, "\n ")
 end
 
 -- Format a youtube block for the buffer
 function M.format_youtube_block(url)
-  return "\n>>> youtube\n\n" .. url
+  return "\n >>> youtube " .. url
 end
 
 return M
