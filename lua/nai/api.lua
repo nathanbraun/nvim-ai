@@ -171,7 +171,6 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
   local path = require('nai.utils.path')
   local is_windows = path.is_windows
 
-  -- Function to handle the API response
   local function process_response(obj)
     -- Check if this request was cancelled
     local state = require('nai.state')
@@ -180,102 +179,57 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       return
     end
 
+    local error_handler = require('nai.utils.error_handler')
+    local indicator_id = "indicator_" .. request_id
+
     if obj.code ~= 0 then
-      -- Update state to error and clear the request
-      state.update_request(request_id, {
-        status = 'error',
-        end_time = os.time(),
-        error = "Request failed with code " .. obj.code
-      })
-
-      -- Emit event
-      events.emit('request:error', request_id, "Request failed with code " .. obj.code)
-
-      vim.schedule(function()
-        on_error(error_utils.log("Request failed with code " .. obj.code, error_utils.LEVELS.ERROR, {
+      error_handler.handle_request_error({
+        request_id = request_id,
+        error_msg = "Request failed with code " .. obj.code,
+        callback = on_error,
+        context = {
           provider = provider,
           endpoint = endpoint_url
-        }))
-
-        -- Clear request from state after callback completes
-        state.clear_request(request_id)
-      end)
+        }
+      })
       return
     end
 
     local response = obj.stdout
     if not response or response == "" then
-      -- Update state to error
-      state.update_request(request_id, {
-        status = 'error',
-        end_time = os.time(),
-        error = "Empty response from API"
-      })
-
-      -- Emit event
-      events.emit('request:error', request_id, "Empty response from API")
-
-      vim.schedule(function()
-        on_error(error_utils.log("Empty response from API", error_utils.LEVELS.ERROR, {
+      error_handler.handle_request_error({
+        request_id = request_id,
+        error_msg = "Empty response from API",
+        callback = on_error,
+        context = {
           provider = provider
-        }))
-
-        -- Clear request from state after callback completes
-        state.clear_request(request_id)
-      end)
+        }
+      })
       return
     end
 
     local success, parsed = pcall(vim.json.decode, response)
     if not success then
-      -- Update state to error
-      state.update_request(request_id, {
-        status = 'error',
-        end_time = os.time(),
-        error = "Failed to parse API response"
-      })
-
-      -- Emit event
-      events.emit('request:error', request_id, "Failed to parse API response")
-
-      vim.schedule(function()
-        on_error(error_utils.log("Failed to parse API response", error_utils.LEVELS.ERROR, {
+      error_handler.handle_request_error({
+        request_id = request_id,
+        error_msg = "Failed to parse API response",
+        callback = on_error,
+        context = {
           provider = provider,
           response_preview = string.sub(response, 1, 100)
-        }))
-
-        -- Clear request from state after callback completes
-        state.clear_request(request_id)
-      end)
+        }
+      })
       return
     end
 
     if parsed.error then
-      -- Update state to error
-      state.update_request(request_id, {
-        status = 'error',
-        end_time = os.time(),
-        error = "API error: " .. (parsed.error.message or "Unknown error")
+      error_handler.handle_api_error({
+        response = response,
+        provider = provider,
+        request_id = request_id,
+        callback = on_error,
+        endpoint = endpoint_url
       })
-
-      -- Emit event
-      events.emit('request:error', request_id, "API error")
-
-      vim.schedule(function()
-        -- For Google, the error format is different
-        if provider == "google" then
-          local error_message = parsed.error.message or "Unknown Google API error"
-          on_error(error_utils.log("Google API Error: " .. error_message, error_utils.LEVELS.ERROR, {
-            provider = provider,
-            error_detail = parsed.error
-          }))
-        else
-          on_error(error_utils.handle_api_error(response, provider))
-        end
-
-        -- Clear request from state after callback completes
-        state.clear_request(request_id)
-      end)
       return
     end
 
@@ -283,14 +237,10 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
     local content = nil
 
     if provider == "ollama" then
-      -- Ollama format handling with deferred logging
-      if parsed.message then
-        if parsed.message.content then
-          content = sanitize_content(parsed.message.content)
-        end
+      if parsed.message and parsed.message.content then
+        content = sanitize_content(parsed.message.content)
       end
     elseif provider == "google" then
-      -- Google format handling
       if parsed.candidates and #parsed.candidates > 0 and
           parsed.candidates[1].content and
           parsed.candidates[1].content.parts and
@@ -313,6 +263,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       })
 
       -- Emit event
+      local events = require('nai.events')
       events.emit('request:complete', request_id, content)
 
       vim.schedule(function()
@@ -321,20 +272,14 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
         state.clear_request(request_id)
       end)
     else
-      -- On error, update state and emit event
-      state.update_request(request_id, {
-        status = 'error',
-        end_time = os.time(),
-        error = "No valid content in API response"
+      error_handler.handle_request_error({
+        request_id = request_id,
+        error_msg = "No valid content in API response: " .. vim.inspect(parsed),
+        callback = on_error,
+        context = {
+          provider = provider
+        }
       })
-
-      events.emit('request:error', request_id, "No valid content in API response")
-
-      vim.schedule(function()
-        on_error("No valid content in API response: " .. vim.inspect(parsed))
-        -- Clear request from state after callback completes
-        state.clear_request(request_id)
-      end)
     end
   end
 
