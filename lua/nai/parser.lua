@@ -15,8 +15,26 @@ function M.parse_chat_buffer(content, buffer_id)
   local reference_fileutils = require('nai.fileutils.reference')
   local MARKERS = require('nai.constants').MARKERS
   local chat_config = {} -- Store conversation-specific config
+  local in_ignore_block = false
 
   for i, line in ipairs(lines) do
+    -- Check for ignore block markers first (before any other processing)
+    if line:match("^" .. vim.pesc(MARKERS.IGNORE)) then
+      in_ignore_block = true
+      goto continue
+    elseif line:match("^" .. vim.pesc(MARKERS.IGNORE_END)) then
+      in_ignore_block = false
+      goto continue
+    end
+
+    -- If we're inside an ignore block, add the line as plain text to current message
+    if in_ignore_block then
+      if current_message then
+        table.insert(text_buffer, line)
+      end
+      goto continue
+    end
+
     -- Skip YAML header
     if line == "---" then
       -- If we find a second '---', we're exiting the header
@@ -287,36 +305,36 @@ end
 
 -- In lua/nai/parser.lua
 function M.format_scrape_block(content)
-  return "\n>>> scrape\n\n" .. content
+  return "\n >>> scrape\n\n" .. content
 end
 
 -- Format a system message for the buffer
 function M.format_system_message(content)
-  return "\n>>> system\n\n" .. content
+  return "\n >>> system\n\n " .. content
 end
 
 -- Format a crawl block for the buffer
 function M.format_crawl_block(url)
-  return "\n>>> crawl\n\n" .. url .. "\n\n-- limit: 5\n-- depth: 2\n-- format: markdown"
+  return "\n >>> crawl \n\n" .. url .. "\n\n-- limit: 5\n-- depth: 2\n-- format: markdown"
 end
 
 -- Format a reference block for the buffer
 function M.format_reference_block(content)
-  return "\n>>> reference\n\n" .. content
+  return "\n >>> reference \n\n" .. content
 end
 
 function M.format_youtube_block(url)
-  return "\n>>> youtube\n\n" .. url
+  return "\n>>> youtube \n\n" .. url
 end
 
 -- Format a snapshot block for the buffer
 function M.format_snapshot(timestamp)
   local timestamp_str = timestamp or os.date("%Y-%m-%d %H:%M:%S")
-  return "\n>>> snapshot [" .. timestamp_str .. "]\n\n"
+  return "\n >>> snapshot [" .. timestamp_str .. "]\n\n"
 end
 
 function M.format_config_block(config_options)
-  local lines = { "\n>>> config\n" }
+  local lines = { "\n >>> config \n" }
 
   -- Add each option
   for key, value in pairs(config_options or {}) do

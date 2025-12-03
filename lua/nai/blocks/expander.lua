@@ -61,6 +61,7 @@ end
 -- Returns: number of blocks expanded, whether async requests are pending
 local function expand_block_type(buffer_id, processor)
   local config = require('nai.config')
+  local constants = require('nai.constants')
   local expanded_count = 0
 
   -- Check if there are unexpanded blocks of this type
@@ -74,9 +75,24 @@ local function expand_block_type(buffer_id, processor)
 
   local line_offset = 0
   local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+  local in_ignore_block = false
 
   -- Find and expand blocks
   for i, line in ipairs(lines) do
+    -- Check for ignore block markers
+    if line == constants.MARKERS.IGNORE or vim.trim(line) == constants.MARKERS.IGNORE then
+      in_ignore_block = true
+      goto continue
+    elseif line == constants.MARKERS.IGNORE_END or vim.trim(line) == constants.MARKERS.IGNORE_END then
+      in_ignore_block = false
+      goto continue
+    end
+
+    -- Skip processing if we're inside an ignore block
+    if in_ignore_block then
+      goto continue
+    end
+
     -- Check if this line matches the processor's marker
     local matches = false
     if type(processor.marker) == "string" then
@@ -105,6 +121,8 @@ local function expand_block_type(buffer_id, processor)
           vim.log.levels.ERROR)
       end
     end
+
+    ::continue::
   end
 
   -- Check if there are active async requests

@@ -105,6 +105,14 @@ function M.apply_to_buffer(bufnr)
       local line_length = #line
       vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
 
+      -- Ignore markers
+    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE) or markers.IGNORE:gsub("([^%w])", "%%%1")) .. "$") then
+      local line_length = #line
+      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
+    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE_END) or markers.IGNORE_END:gsub("([^%w])", "%%%1")) .. "$") then
+      local line_length = #line
+      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
+
       -- Signature line
     elseif line:match("^<<< signature") then
       local line_length = #line
@@ -118,13 +126,6 @@ function M.apply_to_buffer(bufnr)
       else
         vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
       end
-    elseif markers.IGNORE and line:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE) or markers.IGNORE:gsub("([^%w])", "%%%1")) .. "$") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
-    elseif markers.IGNORE_END and line:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE_END) or markers.IGNORE_END:gsub("([^%w])", "%%%1")) .. "$") and
-        vim.api.nvim_buf_get_lines(bufnr, line_nr - 1, line_nr, false)[1]:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE) or markers.IGNORE:gsub("([^%w])", "%%%1"))) then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
 
       -- Content start
     elseif line:match("^<<< content") then

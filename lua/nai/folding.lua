@@ -41,6 +41,10 @@ function M.get_fold_level(lnum)
     return ">1" -- Start a fold for system messages
   elseif line == ">>> config" then
     return ">1" -- Start a fold for config messages
+  elseif line == ">>> ignore" then
+    return ">2" -- Start a nested fold for ignore blocks
+  elseif line == "<<< ignore" then
+    return "<2" -- End the nested fold for ignore blocks
   end
 
   -- Check for special blocks (nested folding)
