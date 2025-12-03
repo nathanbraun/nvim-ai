@@ -5,33 +5,6 @@ local M = {}
 local config = require('nai.config')
 local error_utils = require('nai.utils.error')
 
--- Sanitize API response content to handle escape sequences and problematic patterns
-local function sanitize_content(content)
-  if not content or type(content) ~= "string" then
-    return content
-  end
-
-  -- Replace literal \n with actual newlines
-  content = content:gsub("\\n", "\n")
-
-  -- Replace other common escape sequences
-  content = content:gsub("\\t", "\t")
-  content = content:gsub("\\r", "\r")
-
-  -- Handle --- at the start of lines (YAML delimiter conflict)
-  -- Split into lines, process, and rejoin
-  local lines = vim.split(content, "\n")
-  for i, line in ipairs(lines) do
-    -- If line is exactly "---", prefix with space to prevent YAML parsing issues
-    if line:match("^%-%-%-$") then
-      lines[i] = " " .. line
-    end
-  end
-  content = table.concat(lines, "\n")
-
-  return content
-end
-
 -- Handle chat API request
 function M.chat_request(messages, on_complete, on_error, chat_config)
   -- Generate a unique request ID
@@ -242,19 +215,19 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
 
     if provider == "ollama" then
       if parsed.message and parsed.message.content then
-        content = sanitize_content(parsed.message.content)
+        content = parsed.message.content
       end
     elseif provider == "google" then
       if parsed.candidates and #parsed.candidates > 0 and
           parsed.candidates[1].content and
           parsed.candidates[1].content.parts and
           #parsed.candidates[1].content.parts > 0 then
-        content = sanitize_content(parsed.candidates[1].content.parts[1].text)
+        content = parsed.candidates[1].content.parts[1].text
       end
     else
       -- Standard OpenAI format
       if parsed.choices and #parsed.choices > 0 and parsed.choices[1].message then
-        content = sanitize_content(parsed.choices[1].message.content)
+        content = parsed.choices[1].message.content
       end
     end
 
