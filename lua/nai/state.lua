@@ -1,135 +1,204 @@
 -- lua/nai/state.lua
+-- Unified state management facade
+
+local RequestManager = require('nai.state.requests')
+local BufferManager = require('nai.state.buffers')
+local IndicatorManager = require('nai.state.indicators')
+local UIManager = require('nai.state.ui')
+
 local M = {
-  -- Track active API requests
-  active_requests = {},
+  -- Manager instances (created on init)
+  requests = nil,
+  buffers = nil,
+  indicators = nil,
+  ui = nil,
 
-  -- Track UI indicators
-  active_indicators = {},
-
-  -- Track activated buffers (migrated from buffer.lua)
-  activated_buffers = {},
-
-  -- General UI state
-  ui_state = {
-    is_processing = false,
-    current_provider = nil,
-    current_model = nil,
-  },
-
-  -- Chat context history (could be used for context management)
+  -- Chat history (kept simple for now, could be a manager later)
   chat_history = {},
 }
 
 -- Initialize state with config values
 function M.init(config_options)
-  M.ui_state.current_provider = config_options.active_provider
-  M.ui_state.current_model = config_options.providers[config_options.active_provider].model
+  -- Create manager instances
+  M.requests = RequestManager.new()
+  M.buffers = BufferManager.new()
+  M.indicators = IndicatorManager.new()
+  M.ui = UIManager.new(
+    config_options.active_provider,
+    config_options.providers[config_options.active_provider].model
+  )
 end
 
--- Register a new request
+-- ============================================================================
+-- Request Management (delegates to requests manager)
+-- ============================================================================
+
 function M.register_request(request_id, data)
-  M.active_requests[request_id] = data
-  M.ui_state.is_processing = true
-  return request_id
+  return M.requests:register(request_id, data)
 end
 
--- Update an existing request
 function M.update_request(request_id, updates)
-  if M.active_requests[request_id] then
-    for k, v in pairs(updates) do
-      M.active_requests[request_id][k] = v
-    end
-  end
+  return M.requests:update(request_id, updates)
 end
 
--- Clear a request
 function M.clear_request(request_id)
-  M.active_requests[request_id] = nil
-  M.ui_state.is_processing = vim.tbl_count(M.active_requests) > 0
+  return M.requests:clear(request_id)
 end
 
--- Register a buffer as activated
-function M.activate_buffer(bufnr)
-  M.activated_buffers[bufnr] = true
-end
-
--- Deactivate a buffer
-function M.deactivate_buffer(bufnr)
-  M.activated_buffers[bufnr] = nil
-end
-
--- Check if a buffer is activated
-function M.is_buffer_activated(bufnr)
-  return M.activated_buffers[bufnr] == true
-end
-
--- Register an indicator
-function M.register_indicator(indicator_id, data)
-  M.active_indicators[indicator_id] = data
-end
-
--- Clear an indicator
-function M.clear_indicator(indicator_id)
-  M.active_indicators[indicator_id] = nil
-end
-
--- Get all active requests
 function M.get_active_requests()
-  return M.active_requests
+  return M.requests:get_all()
 end
 
--- Check if there are any active requests
 function M.has_active_requests()
-  return vim.tbl_count(M.active_requests) > 0
+  return M.requests:has_active()
 end
 
--- Update current provider/model
-function M.set_current_provider(provider)
-  M.ui_state.current_provider = provider
+-- ============================================================================
+-- Buffer Management (delegates to buffers manager)
+-- ============================================================================
+
+function M.activate_buffer(bufnr)
+  return M.buffers:activate(bufnr)
 end
 
-function M.set_current_model(model)
-  M.ui_state.current_model = model
+function M.deactivate_buffer(bufnr)
+  return M.buffers:deactivate(bufnr)
 end
 
--- Get current provider/model
-function M.get_current_provider()
-  return M.ui_state.current_provider
-end
-
-function M.get_current_model()
-  return M.ui_state.current_model
-end
-
--- Debug state
-function M.debug()
-  return {
-    active_requests = vim.tbl_count(M.active_requests),
-    active_indicators = vim.tbl_count(M.active_indicators),
-    activated_buffers = vim.tbl_count(M.activated_buffers),
-    current_provider = M.ui_state.current_provider,
-    current_model = M.ui_state.current_model,
-    is_processing = M.ui_state.is_processing
-  }
+function M.is_buffer_activated(bufnr)
+  return M.buffers:is_activated(bufnr)
 end
 
 function M.get_activated_buffers()
-  return M.activated_buffers
+  return M.buffers:get_all()
 end
 
+-- ============================================================================
+-- Indicator Management (delegates to indicators manager)
+-- ============================================================================
+
+function M.register_indicator(indicator_id, data)
+  return M.indicators:register(indicator_id, data)
+end
+
+function M.clear_indicator(indicator_id)
+  return M.indicators:clear(indicator_id)
+end
+
+-- ============================================================================
+-- UI State Management (delegates to ui manager)
+-- ============================================================================
+
+function M.set_current_provider(provider)
+  return M.ui:set_provider(provider)
+end
+
+function M.set_current_model(model)
+  return M.ui:set_model(model)
+end
+
+function M.get_current_provider()
+  return M.ui:get_provider()
+end
+
+function M.get_current_model()
+  return M.ui:get_model()
+end
+
+-- ============================================================================
+-- Unified Operations (work across managers)
+-- ============================================================================
+
+-- Reset all processing state (requests + indicators + UI processing flag)
 function M.reset_processing_state()
-  -- Clear all active requests
-  M.active_requests = {}
+  M.requests:clear_all()
+  M.indicators:clear_all()
+  M.ui:set_processing(false)
 
-  -- Clear all indicators
-  M.active_indicators = {}
-
-  -- Reset processing flag
-  M.ui_state.is_processing = false
-
-  -- We don't clear activated_buffers as those should persist
+  -- Note: We don't clear activated_buffers as those should persist
 
   return true
+end
+
+-- Create a complete snapshot of all state
+function M.snapshot()
+  return {
+    requests = M.requests:snapshot(),
+    buffers = M.buffers:snapshot(),
+    indicators = M.indicators:snapshot(),
+    ui = M.ui:snapshot(),
+    chat_history = vim.deepcopy(M.chat_history)
+  }
+end
+
+-- Restore from a complete snapshot
+function M.restore(snapshot)
+  if type(snapshot) ~= 'table' then
+    return false, "Snapshot must be a table"
+  end
+
+  local success, err
+
+  if snapshot.requests then
+    success, err = M.requests:restore(snapshot.requests)
+    if not success then return false, "Failed to restore requests: " .. (err or "unknown") end
+  end
+
+  if snapshot.buffers then
+    success, err = M.buffers:restore(snapshot.buffers)
+    if not success then return false, "Failed to restore buffers: " .. (err or "unknown") end
+  end
+
+  if snapshot.indicators then
+    success, err = M.indicators:restore(snapshot.indicators)
+    if not success then return false, "Failed to restore indicators: " .. (err or "unknown") end
+  end
+
+  if snapshot.ui then
+    success, err = M.ui:restore(snapshot.ui)
+    if not success then return false, "Failed to restore UI: " .. (err or "unknown") end
+  end
+
+  if snapshot.chat_history then
+    M.chat_history = vim.deepcopy(snapshot.chat_history)
+  end
+
+  return true, nil
+end
+
+-- Debug state - aggregate info from all managers
+function M.debug()
+  return {
+    requests = M.requests:debug(),
+    buffers = M.buffers:debug(),
+    indicators = M.indicators:debug(),
+    ui = M.ui:debug(),
+    chat_history_entries = #M.chat_history
+  }
+end
+
+-- ============================================================================
+-- Subscriptions (convenience methods for cross-manager events)
+-- ============================================================================
+
+-- Subscribe to any request changes
+function M.subscribe_requests(callback)
+  return M.requests:subscribe(callback)
+end
+
+-- Subscribe to buffer activation changes
+function M.subscribe_buffers(callback)
+  return M.buffers:subscribe(callback)
+end
+
+-- Subscribe to provider changes
+function M.subscribe_provider(callback)
+  return M.ui:subscribe_provider(callback)
+end
+
+-- Subscribe to model changes
+function M.subscribe_model(callback)
+  return M.ui:subscribe_model(callback)
 end
 
 return M
