@@ -1,5 +1,11 @@
 local M = {}
 
+-- Helper function to escape pattern characters consistently
+local function escape_pattern(str)
+  -- Lua pattern special characters that need escaping
+  return str:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+end
+
 -- Define highlight groups if they don't already exist
 function M.define_highlight_groups()
   local config = require('nai.config')
@@ -68,6 +74,15 @@ function M.define_highlight_groups()
     italic = hl_config.placeholder and hl_config.placeholder.italic or false,
     underline = hl_config.placeholder and hl_config.placeholder.underline or false,
   }))
+
+  -- highlight group for spinner/status
+  vim.cmd(create_highlight_cmd("naichatSpinner", {
+    fg = hl_config.spinner and hl_config.spinner.fg or "#61AFEF",
+    bg = hl_config.spinner and hl_config.spinner.bg or "",
+    bold = hl_config.spinner and hl_config.spinner.bold or true,
+    italic = hl_config.spinner and hl_config.spinner.italic or false,
+    underline = hl_config.spinner and hl_config.spinner.underline or false,
+  }))
 end
 
 -- Apply our syntax highlighting to a buffer while preserving existing syntax
@@ -84,69 +99,71 @@ function M.apply_to_buffer(bufnr)
   -- Create a unique namespace for our overlay
   local ns_id = vim.api.nvim_create_namespace('nai_syntax_overlay')
 
+  -- Define marker-to-highlight mappings
+  -- This makes it easy to add/remove markers without duplicating code
+  local marker_highlights = {
+    { pattern = "^" .. escape_pattern(markers.USER) .. "$",       highlight = "naichatUser" },
+    { pattern = "^" .. escape_pattern(markers.ASSISTANT) .. "$",  highlight = "naichatAssistant" },
+    { pattern = "^" .. escape_pattern(markers.SYSTEM) .. "$",     highlight = "naichatSystem" },
+    { pattern = "^" .. escape_pattern(markers.CONFIG) .. "$",     highlight = "naichatSpecialBlock" },
+    { pattern = "^" .. escape_pattern(markers.SNAPSHOT) .. "$",   highlight = "naichatSpecialBlock" },
+    { pattern = "^" .. escape_pattern(markers.REFERENCE) .. "$",  highlight = "naichatSpecialBlock" },
+    { pattern = "^" .. escape_pattern(markers.IGNORE) .. "$",     highlight = "Comment" },
+    { pattern = "^" .. escape_pattern(markers.IGNORE_END) .. "$", highlight = "Comment" },
+    { pattern = "^<<< signature",                                 highlight = "naichatSignature" },
+    { pattern = "^<<< content",                                   highlight = "naichatContentStart" },
+  }
+
+  -- Placeholder patterns to highlight
+  local placeholder_patterns = {
+    "%%FILE_CONTENTS%%",
+    "${FILE_CONTENTS}",
+    "$FILE_CONTENTS"
+  }
+
   -- Function to apply highlighting to a single line
   local function highlight_line(line_nr, line)
-    -- User marker
-    if line:match("^" .. (vim.pesc and vim.pesc(markers.USER) or markers.USER:gsub("([^%w])", "%%%1")) .. "$") then
-      -- Get the full line length
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatUser", line_nr, 0, line_length)
+    -- Check for marker patterns
+    for _, marker_def in ipairs(marker_highlights) do
+      if line:match(marker_def.pattern) then
+        local line_length = #line
+        vim.api.nvim_buf_add_highlight(bufnr, ns_id, marker_def.highlight, line_nr, 0, line_length)
+        return -- Only one marker per line, so we can return early
+      end
+    end
 
-      -- Assistant marker
-    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.ASSISTANT) or markers.ASSISTANT:gsub("([^%w])", "%%%1")) .. "$") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatAssistant", line_nr, 0, line_length)
-
-      -- System marker
-    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.SYSTEM) or markers.SYSTEM:gsub("([^%w])", "%%%1")) .. "$") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSystem", line_nr, 0, line_length)
-    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.CONFIG) or markers.CONFIG:gsub("([^%w])", "%%%1")) .. "$") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
-
-      -- Ignore markers
-    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE) or markers.IGNORE:gsub("([^%w])", "%%%1")) .. "$") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
-    elseif line:match("^" .. (vim.pesc and vim.pesc(markers.IGNORE_END) or markers.IGNORE_END:gsub("([^%w])", "%%%1")) .. "$") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "Comment", line_nr, 0, line_length)
-
-      -- Signature line
-    elseif line:match("^<<< signature") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSignature", line_nr, 0, line_length)
-
-      -- Special blocks
-    elseif line:match("^>>> [a-z%-]+") then
+    -- Special handling for >>> blocks (with variable names)
+    if line:match("^>>> [a-z%-]+") then
       local line_length = #line
       if line:match("error") then
         vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatErrorBlock", line_nr, 0, line_length)
       else
         vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
       end
-
-      -- Content start
-    elseif line:match("^<<< content") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatContentStart", line_nr, 0, line_length)
+      return
     end
-    
-    -- Add placeholder highlighting
-    local placeholder_patterns = {
-      "%%FILE_CONTENTS%%",
-      "${FILE_CONTENTS}",
-      "$FILE_CONTENTS"
-    }
 
+    -- Highlight spinner/status lines
+    if line:match("^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⏳] ") then
+      local line_length = #line
+      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpinner", line_nr, 0, line_length)
+      return
+    end
+
+    -- Highlight "Using model:" lines
+    if line:match("^Using model:") then
+      local line_length = #line
+      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpinner", line_nr, 0, line_length)
+      return
+    end
+
+    -- Check for placeholders in the line
     for _, pattern in ipairs(placeholder_patterns) do
-      if pattern then  -- Add nil check
-        local escaped_pattern = vim.pesc and vim.pesc(pattern) or pattern:gsub("([^%w])", "%%%1")
-        local start_idx, end_idx = line:find(escaped_pattern)
-        if start_idx then
-          vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatPlaceholder", line_nr, start_idx - 1, end_idx)
-        end
+      local escaped_pattern = escape_pattern(pattern)
+      local start_idx, end_idx = line:find(escaped_pattern)
+      if start_idx then
+        vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatPlaceholder", line_nr, start_idx - 1, end_idx)
+        -- Note: We don't return here because a line could have multiple placeholders
       end
     end
   end

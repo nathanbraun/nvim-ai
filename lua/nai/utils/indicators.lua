@@ -10,6 +10,22 @@ local config = require('nai.config')
 -- Create a namespace for our extmarks
 M.namespace_id = vim.api.nvim_create_namespace('nvim_ai_indicators')
 
+-- Namespace for spinner highlights
+M.highlight_ns = vim.api.nvim_create_namespace('nai_spinner_highlight')
+
+-- Helper to apply spinner highlighting to a line
+local function highlight_spinner_line(buffer_id, row)
+  -- Ensure highlight groups exist
+  local syntax = require('nai.syntax')
+  syntax.define_highlight_groups()
+
+  -- Apply highlight to the entire line
+  local line = vim.api.nvim_buf_get_lines(buffer_id, row, row + 1, false)[1]
+  if line then
+    vim.api.nvim_buf_add_highlight(buffer_id, M.highlight_ns, "naichatSpinner", row, 0, #line)
+  end
+end
+
 -- Create an assistant placeholder that shows a proper format with animation
 function M.create_assistant_placeholder(buffer_id, row)
   -- Insert a properly formatted assistant placeholder
@@ -41,6 +57,9 @@ function M.create_assistant_placeholder(buffer_id, row)
     }
   }
 
+  -- Apply initial highlighting
+  highlight_spinner_line(buffer_id, spinner_row)
+
   -- Start the animation
   local animation_frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
   local current_frame = 1
@@ -69,6 +88,10 @@ function M.create_assistant_placeholder(buffer_id, row)
       status_text = status_text .. " | " .. indicator.stats.tokens .. " tokens"
     end
 
+    -- Temporarily disable TextChanged events to prevent triggering syntax re-highlighting
+    local eventignore = vim.o.eventignore
+    vim.o.eventignore = "TextChanged,TextChangedI"
+
     -- Update the text in the buffer
     vim.api.nvim_buf_set_lines(
       buffer_id,
@@ -77,6 +100,9 @@ function M.create_assistant_placeholder(buffer_id, row)
       false,
       { status_text }
     )
+
+    -- Apply highlighting to the spinner line
+    highlight_spinner_line(buffer_id, spinner_row)
 
     -- Model info line if we have model information
     local model_info = ""
@@ -111,7 +137,13 @@ function M.create_assistant_placeholder(buffer_id, row)
           { model_info }
         )
       end
+
+      -- Apply highlighting to the model info line
+      highlight_spinner_line(buffer_id, model_row)
     end
+
+    -- Restore eventignore
+    vim.o.eventignore = eventignore
 
     -- Move to the next animation frame
     current_frame = (current_frame % #animation_frames) + 1
@@ -146,6 +178,11 @@ function M.remove(indicator)
   local buffer_id = indicator.buffer_id
   local start_row = indicator.start_row
   local end_row = indicator.end_row
+
+  -- Clear our highlights
+  if vim.api.nvim_buf_is_valid(buffer_id) then
+    vim.api.nvim_buf_clear_namespace(buffer_id, M.highlight_ns, 0, -1)
+  end
 
   -- Return start row for replacement operations
   return start_row

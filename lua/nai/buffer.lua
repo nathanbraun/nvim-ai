@@ -3,6 +3,12 @@ local config = require('nai.config')
 local constants = require('nai.constants')
 local error_utils = require('nai.utils.error')
 
+-- Helper function to escape pattern characters consistently
+local function escape_pattern(str)
+  -- Lua pattern special characters that need escaping
+  return str:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+end
+
 -- Check if buffer contains chat markers
 function M.detect_chat_markers(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
@@ -19,7 +25,7 @@ function M.detect_chat_markers(bufnr)
   -- Check for presence of any markers
   for _, line in ipairs(lines) do
     for _, marker in pairs(markers) do
-      if line:match("^" .. vim.pesc(marker) .. "$") then
+      if line:match("^" .. escape_pattern(marker) .. "$") then
         return true
       end
     end
@@ -44,6 +50,15 @@ function M.should_activate_by_pattern(bufnr)
   return false
 end
 
+-- Apply syntax highlighting overlay to a buffer
+function M.apply_syntax_overlay(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  -- Just delegate to the syntax module - it handles everything
+  local syntax = require('nai.syntax')
+  syntax.apply_to_buffer(bufnr)
+end
+
 -- Activate the plugin for a buffer
 function M.activate_buffer(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
@@ -52,9 +67,6 @@ function M.activate_buffer(bufnr)
   if not error_utils.validate_buffer(bufnr, "activate") then
     return
   end
-
-  -- Debug info
-  local filename = vim.api.nvim_buf_get_name(bufnr)
 
   local state = require('nai.state')
   local events = require('nai.events')
@@ -68,18 +80,19 @@ function M.activate_buffer(bufnr)
   state.activate_buffer(bufnr)
 
   -- Emit event
+  local filename = vim.api.nvim_buf_get_name(bufnr)
   events.emit('buffer:activate', bufnr, filename)
 
   if config.options.mappings.enabled then
     require('nai.mappings').apply_to_buffer(bufnr)
   end
 
-  -- Explicitly apply syntax highlighting
+  -- Apply syntax highlighting
   if config.options.active_filetypes.enable_overlay then
     M.apply_syntax_overlay(bufnr)
   end
 
-  -- Always apply folding unless explicitly disabled
+  -- Apply folding unless explicitly disabled
   if config.options.active_filetypes.enable_folding ~= false then
     require('nai.folding').apply_to_buffer(bufnr)
 
@@ -107,7 +120,6 @@ function M.activate_buffer(bufnr)
 
   -- Schedule another application of syntax highlighting
   -- This helps with race conditions where filetype is set after activation
-  local state = require('nai.state') -- Add this line
   vim.defer_fn(function()
     if vim.api.nvim_buf_is_valid(bufnr) and state.is_buffer_activated(bufnr) then
       M.apply_syntax_overlay(bufnr)
@@ -124,24 +136,6 @@ function M.activate_buffer(bufnr)
       end
     end
   end, 100)
-end
-
--- Create syntax overlay namespace if it doesn't exist
-M.overlay_ns = vim.api.nvim_create_namespace('nai_overlay')
-
--- Apply syntax highlighting overlay to a buffer
-function M.apply_syntax_overlay(bufnr)
-  bufnr = bufnr or vim.api.nvim_get_current_buf()
-
-  -- Clear any existing overlay
-  vim.api.nvim_buf_clear_namespace(bufnr, M.overlay_ns, 0, -1)
-
-  -- Apply new syntax highlighting using our syntax module
-  local syntax = require('nai.syntax')
-  local ns_id = syntax.apply_to_buffer(bufnr)
-
-  -- Store the namespace ID for future reference
-  M.overlay_ns = ns_id
 end
 
 -- Deactivate a buffer
@@ -162,8 +156,9 @@ function M.deactivate_buffer(bufnr)
   -- Emit event
   events.emit('buffer:deactivate', bufnr)
 
-  -- Clear highlights
-  pcall(vim.api.nvim_buf_clear_namespace, bufnr, M.overlay_ns, 0, -1)
+  -- Clear highlights from the nai_syntax_overlay namespace
+  local ns_id = vim.api.nvim_create_namespace('nai_syntax_overlay')
+  pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns_id, 0, -1)
 
   -- Restore original folding
   pcall(function() require('nai.folding').restore_original(bufnr) end)
@@ -203,7 +198,6 @@ end
 function M.create_activation_command()
   vim.api.nvim_create_user_command('NAIActivate', function()
     local bufnr = vim.api.nvim_get_current_buf()
-    local filename = vim.api.nvim_buf_get_name(bufnr)
     local state = require('nai.state')
 
     -- Make sure the buffer isn't already activated
@@ -219,9 +213,6 @@ function M.create_activation_command()
     vim.api.nvim_buf_create_user_command(bufnr, 'NAIChat', function(opts)
       require('nai').chat(opts)
     end, { range = true, nargs = '?', desc = 'AI chat in current buffer' })
-
-    -- vim.api.nvim_buf_set_keymap(bufnr, 'n', '<Leader>r', ':NAIChat<CR>',
-    --   { noremap = true, silent = true, desc = 'Continue chat' })
   end, { desc = 'Activate NAI Chat for current buffer' })
 end
 
