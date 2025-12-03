@@ -249,4 +249,25 @@ function M.process_scrape_block(text_buffer)
   end
 end
 
+-- Register scrape processor with the expander
+local function register_with_expander()
+  local expander = require('nai.blocks.expander')
+  
+  expander.register_processor('scrape', {
+    marker = function(line)
+      return line == ">>> scrape"
+    end,
+    
+    has_unexpanded = M.has_unexpanded_scrape_blocks,
+    
+    expand = M.expand_scrape_block,
+    
+    -- Check for active async requests
+    has_active_requests = M.has_active_requests,
+  })
+end
+
+-- Auto-register when module is loaded
+register_with_expander()
+
 return M

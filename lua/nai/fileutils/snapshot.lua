@@ -193,4 +193,26 @@ function M.has_unexpanded_snapshot_blocks(buffer_id)
   return false
 end
 
+-- Register snapshot processor with the expander
+local function register_with_expander()
+  local expander = require('nai.blocks.expander')
+  
+  expander.register_processor('snapshot', {
+    marker = function(line)
+      return vim.trim(line) == ">>> snapshot"
+    end,
+    
+    has_unexpanded = M.has_unexpanded_snapshot_blocks,
+    
+    expand = M.expand_snapshot_in_buffer,
+    
+    -- No async requests for snapshots
+    has_active_requests = nil,
+  })
+end
+
+-- Auto-register when module is loaded
+register_with_expander()
+
+
 return M

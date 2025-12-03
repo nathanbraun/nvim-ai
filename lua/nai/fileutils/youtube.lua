@@ -353,4 +353,25 @@ function M.format_youtube_block(url)
   return "\n >>> youtube " .. url
 end
 
+-- Register YouTube processor with the expander
+local function register_with_expander()
+  local expander = require('nai.blocks.expander')
+
+  expander.register_processor('youtube', {
+    marker = function(line)
+      return vim.trim(line) == ">>> youtube"
+    end,
+
+    has_unexpanded = M.has_unexpanded_youtube_blocks,
+
+    expand = M.expand_youtube_block,
+
+    -- No active requests tracking for YouTube (handled internally by block_processor)
+    has_active_requests = nil,
+  })
+end
+
+-- Auto-register when module is loaded
+register_with_expander()
+
 return M

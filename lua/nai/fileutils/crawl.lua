@@ -243,4 +243,26 @@ function M.process_crawl_block(lines)
   return table.concat(lines, "\n")
 end
 
+-- Register crawl processor with the expander
+local function register_with_expander()
+  local expander = require('nai.blocks.expander')
+
+  expander.register_processor('crawl', {
+    marker = function(line)
+      return vim.trim(line) == ">>> crawl"
+    end,
+
+    has_unexpanded = M.has_unexpanded_crawl_blocks,
+
+    expand = M.expand_crawl_block,
+
+    -- Check for active async requests
+    has_active_requests = M.has_active_requests,
+  })
+end
+
+-- Auto-register when module is loaded
+register_with_expander()
+
+
 return M

@@ -109,8 +109,7 @@ function M.expand_tree_in_buffer(buffer_id, start_line, end_line)
             table.insert(result_lines, result)
           else
             -- Add the tree output
-            for line in result:gmatch("[^
-]+") do
+            for line in result:gmatch("[^\r\n]+") do
               table.insert(result_lines, line)
             end
           end
@@ -174,5 +173,26 @@ function M.format_tree_block(directory_paths, options)
 
   return block
 end
+
+-- Register tree processor with the expander
+local function register_with_expander()
+  local expander = require('nai.blocks.expander')
+  
+  expander.register_processor('tree', {
+    marker = function(line)
+      return line == ">>> tree"
+    end,
+    
+    has_unexpanded = M.has_unexpanded_tree_blocks,
+    
+    expand = M.expand_tree_in_buffer,
+    
+    -- No active requests tracking for tree (synchronous operation)
+    has_active_requests = nil,
+  })
+end
+
+-- Auto-register when module is loaded
+register_with_expander()
 
 return M
