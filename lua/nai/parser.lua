@@ -5,6 +5,20 @@ local M = {}
 
 local config = require('nai.config')
 
+-- Initialize registry and register core processors
+local registry = require('nai.parser.registry')
+registry.register('user', require('nai.parser.processors.user'))
+registry.register('assistant', require('nai.parser.processors.assistant'))
+registry.register('system', require('nai.parser.processors.system'))
+registry.register('tree', require('nai.parser.processors.tree'))
+registry.register('alias', require('nai.parser.processors.alias'))
+registry.register('reference', require('nai.parser.processors.reference'))
+registry.register('snapshot', require('nai.parser.processors.snapshot'))
+registry.register('web', require('nai.parser.processors.web'))
+registry.register('youtube', require('nai.parser.processors.youtube'))
+registry.register('crawl', require('nai.parser.processors.crawl'))
+registry.register('scrape', require('nai.parser.processors.scrape'))
+
 -- Parse chat buffer content into messages for API
 function M.parse_chat_buffer(content, buffer_id)
   local lines = vim.split(content, "\n")
@@ -12,7 +26,6 @@ function M.parse_chat_buffer(content, buffer_id)
   local current_message = nil
   local current_type = nil
   local text_buffer = {}
-  local reference_fileutils = require('nai.fileutils.reference')
   local MARKERS = require('nai.constants').MARKERS
   local chat_config = {} -- Store conversation-specific config
   local in_ignore_block = false
@@ -61,145 +74,60 @@ function M.parse_chat_buffer(content, buffer_id)
       end
       current_message = nil -- Config isn't a message
       current_type = "config"
-    elseif line:match("^" .. vim.pesc(MARKERS.SYSTEM)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "system" }
-      current_type = "system"
-    elseif line:match("^" .. vim.pesc(MARKERS.USER)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "user"
-    elseif line:match("^" .. vim.pesc(MARKERS.ASSISTANT)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "assistant" }
-      current_type = "assistant"
-    elseif line:match("^" .. vim.pesc(MARKERS.REFERENCE)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "reference"
-    elseif line:match("^" .. vim.pesc(MARKERS.SNAPSHOT)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "snapshot"
-    elseif line:match("^" .. vim.pesc(MARKERS.WEB)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "web"
-    elseif line:match("^" .. vim.pesc(MARKERS.CRAWL)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "crawl"
-    elseif line:match("^" .. vim.pesc(MARKERS.SCRAPE)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "scrape"
-    elseif line:match("^" .. vim.pesc(MARKERS.YOUTUBE)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "youtube"
-    elseif line:match("^" .. vim.pesc(MARKERS.TREE)) then
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-      current_message = { role = "user" }
-      current_type = "tree"
-    elseif line:match("^" .. vim.pesc(MARKERS.ALIAS)) then
-      -- Extract the alias name
-      local alias_name = line:match("^" .. vim.pesc(MARKERS.ALIAS) .. "%s*(.+)$")
-
-      -- Finish previous message if exists
-      if current_message then
-        current_message.content = table.concat(text_buffer, "\n")
-        table.insert(messages, current_message)
-        text_buffer = {}
-      end
-
-      -- Start a new user message for the content under the alias
-      current_message = {
-        role = "user",
-        _alias = alias_name -- Store the alias name for later processing
-      }
-      current_type = "alias"
-    elseif current_message then
-      -- Skip the first empty line after a marker
-      if #text_buffer == 0 and line == "" then
-        goto continue
-      end
-      table.insert(text_buffer, line)
-    elseif current_type == "config" then
-      -- Process config lines
-      if line ~= "" then -- Skip empty lines
-        local key, value = line:match("^%s*([%w_]+)%s*:%s*(.+)$")
-        if key and value then
-          -- Trim whitespace
-          value = value:gsub("^%s*(.-)%s*$", "%1")
-
-          -- Convert certain values
-          if key == "temperature" then
-            value = tonumber(value)
-          elseif key == "max_tokens" then
-            value = tonumber(value)
-          elseif key == "expand_placeholders" then
-            -- Convert string boolean to actual boolean
-            value = value:lower() == "true"
-            vim.notify("Setting expand_placeholders to: " .. tostring(value), vim.log.levels.DEBUG)
-          end
-
-          chat_config[key] = value
-        else
-          vim.notify("Failed to parse config line: " .. line, vim.log.levels.DEBUG)
+    else
+      -- Check if line matches any registered processor
+      local processor_name, processor = registry.match_line(line)
+      if processor_name then
+        -- Finish previous message if exists
+        if current_message then
+          current_message.content = table.concat(text_buffer, "\n")
+          table.insert(messages, current_message)
+          text_buffer = {}
         end
-      else
-        -- Empty line after config marker means end of config block
-        current_type = nil
+        current_message = { role = processor.role }
+
+        -- Handle special parsing (e.g., alias name extraction)
+        if processor.parse_line then
+          local extra_data = processor.parse_line(line)
+          for k, v in pairs(extra_data) do
+            current_message[k] = v
+          end
+        end
+
+        current_type = processor_name
+      elseif current_message then
+        -- Skip the first empty line after a marker
+        if #text_buffer == 0 and line == "" then
+          goto continue
+        end
+        table.insert(text_buffer, line)
+      elseif current_type == "config" then
+        -- Process config lines
+        if line ~= "" then -- Skip empty lines
+          local key, value = line:match("^%s*([%w_]+)%s*:%s*(.+)$")
+          if key and value then
+            -- Trim whitespace
+            value = value:gsub("^%s*(.-)%s*$", "%1")
+
+            -- Convert certain values
+            if key == "temperature" then
+              value = tonumber(value)
+            elseif key == "max_tokens" then
+              value = tonumber(value)
+            elseif key == "expand_placeholders" then
+              -- Convert string boolean to actual boolean
+              value = value:lower() == "true"
+              vim.notify("Setting expand_placeholders to: " .. tostring(value), vim.log.levels.DEBUG)
+            end
+
+            chat_config[key] = value
+          else
+            vim.notify("Failed to parse config line: " .. line, vim.log.levels.DEBUG)
+          end
+        else
+          -- Empty line after config marker means end of config block
+          current_type = nil
+        end
       end
     end
 
@@ -208,45 +136,10 @@ function M.parse_chat_buffer(content, buffer_id)
 
   -- Add the last message if there is one
   if current_message then
-    -- Special processing for reference blocks
-    if current_type == "reference" then
-      current_message.content = reference_fileutils.process_reference_block(text_buffer)
-    elseif current_type == "snapshot" then
-      local snapshot_module = require('nai.fileutils.snapshot')
-      current_message.content = snapshot_module.process_snapshot_block(text_buffer)
-    elseif current_type == "web" then
-      local web_module = require('nai.fileutils.web')
-      current_message.content = web_module.process_web_block(text_buffer)
-    elseif current_type == "youtube" then
-      local youtube_module = require('nai.fileutils.youtube')
-      current_message.content = youtube_module.process_youtube_block(text_buffer)
-    elseif current_type == "crawl" then
-      local crawl_module = require('nai.fileutils.crawl')
-      current_message.content = crawl_module.process_crawl_block(text_buffer)
-    elseif current_type == "tree" then
-      local tree_module = require('nai.fileutils.tree')
-      current_message.content = tree_module.process_tree_block(text_buffer)
-    elseif current_type == "scrape" then
-      -- Special handling for scrape blocks
-      -- In API requesting mode, we want to reference the content, not the command
-      local in_content_section = false
-      local content_lines = {}
-
-      for _, line in ipairs(text_buffer) do
-        if line:match("^<<< content%s+%[") then
-          in_content_section = true
-        elseif in_content_section then
-          table.insert(content_lines, line)
-        end
-      end
-
-      if #content_lines > 0 then
-        -- If we have content, use that
-        current_message.content = table.concat(content_lines, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
-      else
-        -- Otherwise, use the raw text
-        current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
-      end
+    -- Check if this message type has special content processing
+    local processor = registry.get(current_type)
+    if processor and processor.process_content then
+      current_message.content = processor.process_content(text_buffer)
     else
       current_message.content = table.concat(text_buffer, "\n"):gsub("^%s*(.-)%s*$", "%1") -- trim
     end
@@ -282,55 +175,57 @@ function M.parse_chat_buffer(content, buffer_id)
   return processed_messages, chat_config
 end
 
--- Format a new assistant message for the buffer
-function M.format_assistant_message(content)
-  return "\n<<< assistant\n\n" .. content
+-- Generic formatter that delegates to processors
+local function format_via_processor(processor_name, content)
+  local processor = registry.get(processor_name)
+  if processor then
+    return processor.format(content)
+  else
+    error("Unknown processor: " .. processor_name)
+  end
 end
 
--- In lua/nai/parser.lua
-function M.format_tree_block(content)
-  return "\n>>> tree\n" .. content
+-- Format a new assistant message for the buffer
+function M.format_assistant_message(content)
+  return format_via_processor('assistant', content)
 end
 
 -- Format a new user message for the buffer
 function M.format_user_message(content)
-  -- No leading newline for new chats, but keep it for continuing chats
-  return ">>> user\n\n" .. content
-end
-
--- In lua/nai/parser.lua
-function M.format_web_block(content)
-  return "\n>>> web\n\n" .. content
-end
-
--- In lua/nai/parser.lua
-function M.format_scrape_block(content)
-  return "\n >>> scrape\n\n" .. content
+  return format_via_processor('user', content)
 end
 
 -- Format a system message for the buffer
 function M.format_system_message(content)
-  return "\n >>> system\n\n " .. content
+  return format_via_processor('system', content)
 end
 
--- Format a crawl block for the buffer
+function M.format_tree_block(content)
+  return format_via_processor('tree', content)
+end
+
+function M.format_web_block(content)
+  return format_via_processor('web', content)
+end
+
+function M.format_scrape_block(content)
+  return format_via_processor('scrape', content)
+end
+
 function M.format_crawl_block(url)
-  return "\n >>> crawl \n\n" .. url .. "\n\n-- limit: 5\n-- depth: 2\n-- format: markdown"
+  return format_via_processor('crawl', url)
 end
 
--- Format a reference block for the buffer
 function M.format_reference_block(content)
-  return "\n >>> reference \n\n" .. content
+  return format_via_processor('reference', content)
 end
 
 function M.format_youtube_block(url)
-  return "\n>>> youtube \n\n" .. url
+  return format_via_processor('youtube', url)
 end
 
--- Format a snapshot block for the buffer
 function M.format_snapshot(timestamp)
-  local timestamp_str = timestamp or os.date("%Y-%m-%d %H:%M:%S")
-  return "\n >>> snapshot [" .. timestamp_str .. "]\n\n"
+  return format_via_processor('snapshot', timestamp)
 end
 
 function M.format_config_block(config_options)
