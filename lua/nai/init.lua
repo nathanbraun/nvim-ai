@@ -471,8 +471,10 @@ function M.cancel()
     state.clear_request(request_id)
   end
 
-  -- Handle indicators
-  for indicator_id, indicator in pairs(state.active_indicators) do
+  -- Handle indicators - use the manager's get_all method
+  local active_indicators = state.indicators:get_all()
+
+  for indicator_id, indicator in pairs(active_indicators) do
     -- Stop the timer if it exists
     if indicator.timer then
       indicator.timer:stop()
