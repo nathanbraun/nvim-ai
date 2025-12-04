@@ -13,16 +13,52 @@ M.namespace_id = vim.api.nvim_create_namespace('nvim_ai_indicators')
 -- Namespace for spinner highlights
 M.highlight_ns = vim.api.nvim_create_namespace('nai_spinner_highlight')
 
--- Helper to apply spinner highlighting to a line
+-- Helper to apply simple spinner highlighting to a line with number highlighting
 local function highlight_spinner_line(buffer_id, row)
   -- Ensure highlight groups exist
   local syntax = require('nai.syntax')
   syntax.define_highlight_groups()
-
-  -- Apply highlight to the entire line
+  
+  -- Apply simple highlight to the entire line
   local line = vim.api.nvim_buf_get_lines(buffer_id, row, row + 1, false)[1]
   if line then
-    vim.api.nvim_buf_add_highlight(buffer_id, M.highlight_ns, "naichatSpinner", row, 0, #line)
+    -- Just highlight the whole line with spinner text color
+    vim.api.nvim_buf_add_highlight(buffer_id, M.highlight_ns, "naichatSpinnerText", row, 0, #line)
+    
+    -- Highlight just the first character (spinner icon) with a brighter color
+    vim.api.nvim_buf_add_highlight(buffer_id, M.highlight_ns, "naichatSpinnerIcon", row, 0, 1)
+    
+    -- Find and highlight numbers (with optional 's' after)
+    local pos = 1
+    while pos <= #line do
+      local num_start, num_end = line:find("%d+s?", pos)
+      if num_start then
+        vim.api.nvim_buf_add_highlight(buffer_id, M.highlight_ns, "naichatSpinnerNumber", row, num_start - 1, num_end)
+        pos = num_end + 1
+      else
+        break
+      end
+    end
+  end
+end
+
+-- Helper to highlight model info line
+local function highlight_model_line(buffer_id, row)
+  -- Ensure highlight groups exist
+  local syntax = require('nai.syntax')
+  syntax.define_highlight_groups()
+  
+  local line = vim.api.nvim_buf_get_lines(buffer_id, row, row + 1, false)[1]
+  if line then
+    -- Highlight whole line as gray text first
+    vim.api.nvim_buf_add_highlight(buffer_id, M.highlight_ns, "naichatSpinnerText", row, 0, #line)
+    
+    -- Find the colon and highlight everything after it as model name
+    local colon_pos = line:find(":")
+    if colon_pos then
+      -- Highlight from after the colon (and space) to end of line in green
+      vim.api.nvim_buf_add_highlight(buffer_id, M.highlight_ns, "naichatSpinnerModel", row, colon_pos + 1, #line)
+    end
   end
 end
 
@@ -101,7 +137,7 @@ function M.create_assistant_placeholder(buffer_id, row)
       { status_text }
     )
 
-    -- Apply highlighting to the spinner line
+    -- Apply highlighting to the spinner line with number highlighting
     highlight_spinner_line(buffer_id, spinner_row)
 
     -- Model info line if we have model information
@@ -138,8 +174,8 @@ function M.create_assistant_placeholder(buffer_id, row)
         )
       end
 
-      -- Apply highlighting to the model info line
-      highlight_spinner_line(buffer_id, model_row)
+      -- Apply highlighting to model line with gray text and green model name
+      highlight_model_line(buffer_id, model_row)
     end
 
     -- Restore eventignore
@@ -215,7 +251,7 @@ function M.remove_legacy(indicator)
     if vim.api.nvim_buf_is_valid(indicator.buffer_id) then
       vim.api.nvim_buf_del_extmark(
         indicator.buffer_id,
-        M.namespace_id,
+        M.highlight_ns,
         indicator.mark_id
       )
     end

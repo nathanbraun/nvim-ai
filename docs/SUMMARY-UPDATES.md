@@ -6,6 +6,66 @@ Changes made since the main summaries were last generated. When updates in a mod
 > - SUMMARY.md
 
 ## 2025
+### Syntax Highlighting Cleanup and Spinner Enhancement - (2025-12-04)
+**Affects:** Syntax, Buffer Management, UI Indicators
+
+**Files Modified:**
+- `/Users/nathanbraun/code/github.com/nathanbraun/nvim-ai/lua/nai/syntax.lua`
+- `/Users/nathanbraun/code/github.com/nathanbraun/nvim-ai/lua/nai/buffer.lua`
+- `/Users/nathanbraun/code/github.com/nathanbraun/nvim-ai/lua/nai/utils/indicators.lua`
+
+**Purpose:**
+Cleaned up syntax highlighting system to be more maintainable and robust, and added granular color highlighting to the spinner/progress indicator for better visual feedback during AI responses.
+
+**Key Implementation Details:**
+
+1. **Syntax Module Refactoring:**
+   - Added consistent `escape_pattern()` helper function to replace inconsistent `vim.pesc` usage
+   - Converted marker highlighting from repetitive if/elseif blocks to data-driven approach using `marker_highlights` table
+   - Added highlighting for previously missing markers: `SNAPSHOT`, `REFERENCE`
+   - Fixed bug where empty string `""` for background colors caused Vim highlight errors - now uses `nil` and checks `opts.bg ~= ""`
+   - Added four new highlight groups for spinner components: `naichatSpinnerIcon`, `naichatSpinnerText`, `naichatSpinnerNumber`, `naichatSpinnerModel`
+
+2. **Buffer Module Simplification:**
+   - Removed duplicate namespace management (`M.overlay_ns` variable)
+   - Simplified `apply_syntax_overlay()` to delegate entirely to syntax module
+   - Fixed namespace cleanup in `deactivate_buffer()` to use correct namespace name
+   - Added consistent `escape_pattern()` helper for marker detection
+
+3. **Spinner Highlighting Enhancement:**
+   - Created separate namespace `M.highlight_ns` for spinner highlights to avoid conflicts
+   - Added `highlight_spinner_line()` function that applies multi-color highlighting:
+     - First character (animated icon): bright blue (`naichatSpinnerIcon`)
+     - Text content: subtle gray italic (`naichatSpinnerText`)
+     - Numbers with 's' suffix: orange (`naichatSpinnerNumber`) - highlights elapsed time and token counts
+   - Added `highlight_model_line()` function for model info line:
+     - "Using model:" label: gray
+     - Model name: green italic (`naichatSpinnerModel`)
+   - Set `eventignore = "TextChanged,TextChangedI"` during spinner updates to prevent triggering syntax re-highlighting and causing flicker
+
+**Integration Points:**
+- Syntax module defines highlight groups that indicators module uses
+- Buffer module calls syntax module for all highlighting operations
+- Indicators module temporarily disables text change events to prevent interference with buffer module's syntax autocmds
+
+**Design Decisions:**
+- **Data-driven marker highlighting:** Makes adding/removing markers trivial - just modify the `marker_highlights` table instead of adding new if/elseif blocks
+- **Separate spinner namespace:** Prevents spinner highlights from being cleared by buffer-level syntax updates
+- **Simple overlay approach:** Initially attempted complex character-by-character parsing for granular highlighting, but caused Vim freezing. Settled on simpler approach: highlight whole line first, then overlay specific elements (icon, numbers, model name). More performant and sufficient for visual needs.
+- **Pattern for numbers:** Using `%d+s?` to catch both raw numbers and time values with 's' suffix
+
+**Tradeoffs:**
+- Keeping vimwiki syntax interaction unchanged - syntax overlay approach means vimwiki can still interfere with markdown syntax in chat content (single `*` making unwanted italics, etc.). This is a known limitation but addressing it would require proper Vim syntax regions which is more complex. Decided to defer this for now.
+- Spinner highlighting is simple (whole line + overlays) rather than perfectly granular, but performance and stability are more important
+
+**Breaking Changes:**
+None - all changes are additive or internal refactoring
+
+**TODO/Follow-up:**
+- Consider implementing proper Vim syntax regions to better control vimwiki/markdown interaction within chat blocks
+- May want to make spinner colors user-configurable via config.lua highlights section
+- Could add more granular highlighting patterns if needed (e.g., highlight pipe separators differently)
+
 ### State Management Refactoring - Complete Rewrite with Validation and Snapshots - (2024-12-03)
 **Affects:** Core State Management, All Modules
 

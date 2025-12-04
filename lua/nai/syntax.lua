@@ -20,8 +20,8 @@ function M.define_highlight_groups()
       cmd = cmd .. " guifg=" .. opts.fg
     end
 
-    -- Add background color if specified
-    if opts.bg then
+    -- Add background color if specified (and not empty)
+    if opts.bg and opts.bg ~= "" then
       cmd = cmd .. " guibg=" .. opts.bg
     end
 
@@ -40,7 +40,8 @@ function M.define_highlight_groups()
       cmd = cmd .. " ctermfg=" .. opts.ctermfg
     end
 
-    if opts.ctermbg then
+    -- Add terminal background if specified (and not empty)
+    if opts.ctermbg and opts.ctermbg ~= "" then
       cmd = cmd .. " ctermbg=" .. opts.ctermbg
     end
 
@@ -69,19 +70,39 @@ function M.define_highlight_groups()
   -- highlight group for placeholders
   vim.cmd(create_highlight_cmd("naichatPlaceholder", {
     fg = hl_config.placeholder and hl_config.placeholder.fg or "#FFCC66",
-    bg = hl_config.placeholder and hl_config.placeholder.bg or "",
+    bg = hl_config.placeholder and hl_config.placeholder.bg or nil,
     bold = hl_config.placeholder and hl_config.placeholder.bold or true,
     italic = hl_config.placeholder and hl_config.placeholder.italic or false,
     underline = hl_config.placeholder and hl_config.placeholder.underline or false,
   }))
 
-  -- highlight group for spinner/status
-  vim.cmd(create_highlight_cmd("naichatSpinner", {
-    fg = hl_config.spinner and hl_config.spinner.fg or "#61AFEF",
-    bg = hl_config.spinner and hl_config.spinner.bg or "",
-    bold = hl_config.spinner and hl_config.spinner.bold or true,
-    italic = hl_config.spinner and hl_config.spinner.italic or false,
-    underline = hl_config.spinner and hl_config.spinner.underline or false,
+  -- highlight groups for spinner (more granular)
+  vim.cmd(create_highlight_cmd("naichatSpinnerIcon", {
+    fg = hl_config.spinner_icon and hl_config.spinner_icon.fg or "#61AFEF",
+    bg = hl_config.spinner_icon and hl_config.spinner_icon.bg or nil,
+    bold = hl_config.spinner_icon and hl_config.spinner_icon.bold or true,
+    italic = hl_config.spinner_icon and hl_config.spinner_icon.italic or false,
+  }))
+
+  vim.cmd(create_highlight_cmd("naichatSpinnerText", {
+    fg = hl_config.spinner_text and hl_config.spinner_text.fg or "#ABB2BF",
+    bg = hl_config.spinner_text and hl_config.spinner_text.bg or nil,
+    bold = hl_config.spinner_text and hl_config.spinner_text.bold or false,
+    italic = hl_config.spinner_text and hl_config.spinner_text.italic or true,
+  }))
+
+  vim.cmd(create_highlight_cmd("naichatSpinnerNumber", {
+    fg = hl_config.spinner_number and hl_config.spinner_number.fg or "#D19A66",
+    bg = hl_config.spinner_number and hl_config.spinner_number.bg or nil,
+    bold = hl_config.spinner_number and hl_config.spinner_number.bold or false,
+    italic = hl_config.spinner_number and hl_config.spinner_number.italic or false,
+  }))
+
+  vim.cmd(create_highlight_cmd("naichatSpinnerModel", {
+    fg = hl_config.spinner_model and hl_config.spinner_model.fg or "#98C379",
+    bg = hl_config.spinner_model and hl_config.spinner_model.bg or nil,
+    bold = hl_config.spinner_model and hl_config.spinner_model.bold or false,
+    italic = hl_config.spinner_model and hl_config.spinner_model.italic or true,
   }))
 end
 
@@ -102,16 +123,16 @@ function M.apply_to_buffer(bufnr)
   -- Define marker-to-highlight mappings
   -- This makes it easy to add/remove markers without duplicating code
   local marker_highlights = {
-    { pattern = "^" .. escape_pattern(markers.USER) .. "$",       highlight = "naichatUser" },
-    { pattern = "^" .. escape_pattern(markers.ASSISTANT) .. "$",  highlight = "naichatAssistant" },
-    { pattern = "^" .. escape_pattern(markers.SYSTEM) .. "$",     highlight = "naichatSystem" },
-    { pattern = "^" .. escape_pattern(markers.CONFIG) .. "$",     highlight = "naichatSpecialBlock" },
-    { pattern = "^" .. escape_pattern(markers.SNAPSHOT) .. "$",   highlight = "naichatSpecialBlock" },
-    { pattern = "^" .. escape_pattern(markers.REFERENCE) .. "$",  highlight = "naichatSpecialBlock" },
-    { pattern = "^" .. escape_pattern(markers.IGNORE) .. "$",     highlight = "Comment" },
+    { pattern = "^" .. escape_pattern(markers.USER) .. "$", highlight = "naichatUser" },
+    { pattern = "^" .. escape_pattern(markers.ASSISTANT) .. "$", highlight = "naichatAssistant" },
+    { pattern = "^" .. escape_pattern(markers.SYSTEM) .. "$", highlight = "naichatSystem" },
+    { pattern = "^" .. escape_pattern(markers.CONFIG) .. "$", highlight = "naichatSpecialBlock" },
+    { pattern = "^" .. escape_pattern(markers.SNAPSHOT) .. "$", highlight = "naichatSpecialBlock" },
+    { pattern = "^" .. escape_pattern(markers.REFERENCE) .. "$", highlight = "naichatSpecialBlock" },
+    { pattern = "^" .. escape_pattern(markers.IGNORE) .. "$", highlight = "Comment" },
     { pattern = "^" .. escape_pattern(markers.IGNORE_END) .. "$", highlight = "Comment" },
-    { pattern = "^<<< signature",                                 highlight = "naichatSignature" },
-    { pattern = "^<<< content",                                   highlight = "naichatContentStart" },
+    { pattern = "^<<< signature", highlight = "naichatSignature" },
+    { pattern = "^<<< content", highlight = "naichatContentStart" },
   }
 
   -- Placeholder patterns to highlight
@@ -140,20 +161,6 @@ function M.apply_to_buffer(bufnr)
       else
         vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpecialBlock", line_nr, 0, line_length)
       end
-      return
-    end
-
-    -- Highlight spinner/status lines
-    if line:match("^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⏳] ") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpinner", line_nr, 0, line_length)
-      return
-    end
-
-    -- Highlight "Using model:" lines
-    if line:match("^Using model:") then
-      local line_length = #line
-      vim.api.nvim_buf_add_highlight(bufnr, ns_id, "naichatSpinner", line_nr, 0, line_length)
       return
     end
 
