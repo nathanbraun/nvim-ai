@@ -29,6 +29,8 @@ function M.parse_chat_buffer(content, buffer_id)
   local MARKERS = require('nai.constants').MARKERS
   local chat_config = {} -- Store conversation-specific config
   local in_ignore_block = false
+  local yaml_header_processed = false
+  local has_content = false
 
   for i, line in ipairs(lines) do
     -- Check for ignore block markers first (before any other processing)
@@ -48,11 +50,12 @@ function M.parse_chat_buffer(content, buffer_id)
       goto continue
     end
 
-    -- Skip YAML header
-    if line == "---" then
+    -- Skip YAML header (only at the beginning of the file, before any content)
+    if line == "---" and not yaml_header_processed and not has_content then
       -- If we find a second '---', we're exiting the header
       if current_type == "yaml_header" then
         current_type = nil
+        yaml_header_processed = true
       else
         current_type = "yaml_header"
       end
@@ -66,6 +69,7 @@ function M.parse_chat_buffer(content, buffer_id)
 
     -- Process message markers
     if line:match("^" .. vim.pesc(MARKERS.CONFIG or ">>> config")) then
+      has_content = true -- We've encountered actual content
       -- Config block starts
       if current_message then
         current_message.content = table.concat(text_buffer, "\n")
@@ -78,6 +82,7 @@ function M.parse_chat_buffer(content, buffer_id)
       -- Check if line matches any registered processor
       local processor_name, processor = registry.match_line(line)
       if processor_name then
+        has_content = true -- We've encountered actual content
         -- Finish previous message if exists
         if current_message then
           current_message.content = table.concat(text_buffer, "\n")
