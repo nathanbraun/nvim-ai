@@ -1,4 +1,4 @@
-local config = require('nai.config') -- Add this line to properly import the config module
+local config = require('nai.config')
 
 -- lua/nai/mappings.lua
 local M = {}
@@ -30,16 +30,17 @@ M.defaults = {
     reference = "<Leader>anr",    -- Add reference block
     snapshot = "<Leader>ans",     -- Add snapshot block
     tree = "<Leader>ant",         -- Add tree block
-    crawl = "<Leader>anc",        -- Add snapshot block
+    crawl = "<Leader>anc",        -- Add crawl block
   },
 
   -- Settings
   settings = {
     select_model = "<Leader>am",    -- Select model
     toggle_provider = "<Leader>ap", -- Toggle provider
+    toggle_moltbot = "<Leader>ab",  -- Toggle moltbot
   },
 
-  -- Files (add this new section)
+  -- Files
   files = {
     browse = "<Leader>ao", -- Browse AI chat files
   }
@@ -47,6 +48,52 @@ M.defaults = {
 
 -- Store active mappings (will be populated from config)
 M.active = vim.deepcopy(M.defaults)
+
+-- Store the previous non-moltbot provider/model for toggling (MOVED HERE)
+M.previous_provider = nil
+M.previous_model = nil
+
+-- Toggle between moltbot and previous model
+function M.toggle_moltbot()
+  local state = require('nai.state')
+  local current_provider = config.options.active_provider
+  local current_model = config.options.active_model
+
+  if current_provider == "moltbot" then
+    -- Switch back to previous provider/model
+    if M.previous_provider and M.previous_model then
+      config.options.active_provider = M.previous_provider
+      config.options.active_model = M.previous_model
+      state.set_current_provider(M.previous_provider)
+      state.set_current_model(M.previous_model)
+
+      vim.notify(
+        string.format("Switched to %s/%s", M.previous_provider, M.previous_model),
+        vim.log.levels.INFO
+      )
+    else
+      vim.notify("No previous model to switch to", vim.log.levels.WARN)
+    end
+  else
+    -- Save current provider/model and switch to moltbot
+    M.previous_provider = current_provider
+    M.previous_model = current_model
+
+    -- Get the first moltbot model from config
+    local moltbot_config = config.options.providers.moltbot
+    local moltbot_model = moltbot_config.models and moltbot_config.models[1] or "main"
+
+    config.options.active_provider = "moltbot"
+    config.options.active_model = moltbot_model
+    state.set_current_provider("moltbot")
+    state.set_current_model(moltbot_model)
+
+    vim.notify(
+      string.format("Switched to moltbot/%s", moltbot_model),
+      vim.log.levels.INFO
+    )
+  end
+end
 
 -- Apply mappings to a buffer
 function M.apply_to_buffer(bufnr)
@@ -66,7 +113,7 @@ function M.apply_to_buffer(bufnr)
 
   -- re-verify commands
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.verify.reverify, ':NAIVerify<CR>',
-    { noremap = true, silent = true, desc = 'Expand special blocks' })
+    { noremap = true, silent = true, desc = 'Re-verify blocks' })
 
   -- Insert commands
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.user_message, ':NAIUser<CR>',
@@ -83,16 +130,19 @@ function M.apply_to_buffer(bufnr)
     { noremap = true, silent = true, desc = 'Add reference block' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.snapshot, ':NAISnapshot<CR>',
     { noremap = true, silent = true, desc = 'Add snapshot block' })
-
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.crawl, ':NAICrawl<CR>',
     { noremap = true, silent = true, desc = 'Add crawl block' })
 
   -- Settings
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.select_model, ':NAIModel<CR>',
     { noremap = true, silent = true, desc = 'Select model' })
-
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.toggle_provider, ':NAIProvider<CR>',
     { noremap = true, silent = true, desc = 'Select provider' })
+
+  -- NEW: Toggle moltbot mapping
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.toggle_moltbot,
+    [[<Cmd>lua require('nai.mappings').toggle_moltbot()<CR>]],
+    { noremap = true, silent = true, desc = 'Toggle moltbot' })
 
   -- Add the browse mapping
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.files.browse, ':NAIBrowse<CR>',

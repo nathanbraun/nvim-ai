@@ -99,7 +99,7 @@ function M.validate_config(config)
         if not valid then
           table.insert(errors, err)
         else
-          if not provider_config.endpoint then
+          if provider_name ~= "moltbot" and not provider_config.endpoint then
             table.insert(errors, "Config error: " .. provider_path .. ".endpoint is required")
           end
 
