@@ -11,7 +11,7 @@ local function validate_provider(provider)
     return false, "Provider must be a non-empty string"
   end
 
-  local valid_providers = { "openai", "openrouter", "ollama", "google" }
+  local valid_providers = { "openai", "openrouter", "ollama", "google", "moltbot" }
   for _, valid in ipairs(valid_providers) do
     if provider == valid then
       return true

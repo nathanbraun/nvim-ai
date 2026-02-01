@@ -85,7 +85,13 @@ function M.parse_chat_buffer(content, buffer_id)
         has_content = true -- We've encountered actual content
         -- Finish previous message if exists
         if current_message then
-          current_message.content = table.concat(text_buffer, "\n")
+          -- Check if previous message type has special content processing
+          local prev_processor = registry.get(current_type)
+          if prev_processor and prev_processor.process_content then
+            current_message.content = prev_processor.process_content(text_buffer)
+          else
+            current_message.content = table.concat(text_buffer, "\n")
+          end
           table.insert(messages, current_message)
           text_buffer = {}
         end
@@ -143,6 +149,7 @@ function M.parse_chat_buffer(content, buffer_id)
   if current_message then
     -- Check if this message type has special content processing
     local processor = registry.get(current_type)
+
     if processor and processor.process_content then
       current_message.content = processor.process_content(text_buffer)
     else
@@ -249,8 +256,8 @@ function M.format_config_block(config_options)
   return table.concat(lines, "\n")
 end
 
--- Generate a YAML header with auto title
-function M.generate_header(title)
+-- Generate a YAML header (without moltbot_session by default)
+function M.generate_header(title, moltbot_session)
   -- Get header configuration
   local header_config = config.options.chat_files.header or {}
 
@@ -265,7 +272,7 @@ function M.generate_header(title)
   -- If no title provided, use a placeholder
   title = title or "New Chat"
 
-  -- Get template from config or use default
+  -- Get template from config
   local template = header_config.template or [[---
 title: {title}
 date: {date}
@@ -273,7 +280,15 @@ tags: [ai]
 ---]]
 
   -- Replace variables in template
-  local header = template:gsub("{title}", title):gsub("{date}", date)
+  local header = template
+      :gsub("{title}", title)
+      :gsub("{date}", date)
+
+  -- Only add moltbot_session if explicitly provided
+  if moltbot_session then
+    -- Insert before the closing ---
+    header = header:gsub("\n---$", "\nmoltbot_session: " .. moltbot_session .. "\n---")
+  end
 
   return header
 end

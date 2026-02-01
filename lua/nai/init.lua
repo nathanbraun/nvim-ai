@@ -417,6 +417,16 @@ function M.chat(opts, force_signature)
     return
   end
 
+  -- Step 1.5: If using moltbot, ensure session key exists BEFORE parsing
+  local active_provider = config.options.active_provider
+  if active_provider == "moltbot" then
+    local gateway = require('nai.gateway')
+    gateway.get_session_key(buffer_id) -- This will insert if needed
+    -- Small delay to ensure buffer is updated
+    vim.cmd('redraw')
+  end
+
+
   -- Step 2: Try to expand blocks
   local expanded = try_expand_blocks(buffer_id)
   if expanded then
@@ -441,19 +451,65 @@ function M.chat(opts, force_signature)
     M.cancel()
   end
 
-  -- Step 7: Make API call
-  local request_handle = api.chat_request(
-    messages,
-    function(response)
-      handle_chat_response(buffer_id, request_data, response, messages, chat_config, force_signature)
-    end,
-    function(error_msg)
-      handle_chat_error(buffer_id, request_data, error_msg)
-    end,
-    chat_config
-  )
+  -- Step 7: Route to appropriate API based on active provider
+  local active_provider = config.options.active_provider
 
-  return request_handle
+  if active_provider == "moltbot" then
+    local gateway = require('nai.gateway')
+    local session_key = gateway.get_session_key(buffer_id) -- Now just reads it
+
+    -- Get the active model to determine which gateway config to use
+    local active_model = config.options.active_model
+
+    -- Streaming handler (accumulate and show final result)
+    local accumulated_response = ""
+
+    local function on_stream(chunk, is_final)
+      -- Safety: ensure chunk is a string
+      if type(chunk) ~= "string" then
+        chunk = tostring(chunk)
+      end
+
+      accumulated_response = accumulated_response .. chunk
+
+      if is_final then
+        -- Final response, handle normally
+        handle_chat_response(buffer_id, request_data, accumulated_response, messages, chat_config, force_signature)
+      end
+      -- Keep showing spinner while accumulating
+    end
+
+    -- Make gateway request
+    local request_handle = gateway.chat_send(
+      session_key,
+      messages,
+      on_stream,
+      function(response)
+        -- Already handled in on_stream
+      end,
+      function(error_msg)
+        handle_chat_error(buffer_id, request_data, error_msg)
+      end,
+      chat_config,
+      active_model -- Pass the model name to gateway
+    )
+
+    return request_handle
+  else
+    -- Use standard API for other providers
+    local request_handle = api.chat_request(
+      messages,
+      function(response)
+        handle_chat_response(buffer_id, request_data, response, messages, chat_config, force_signature)
+      end,
+      function(error_msg)
+        handle_chat_error(buffer_id, request_data, error_msg)
+      end,
+      chat_config
+    )
+
+    return request_handle
+  end
 end
 
 function M.cancel()
@@ -540,7 +596,7 @@ function M.new_chat()
   require('nai.buffer').activate_buffer(buffer_id)
 
   -- Generate header
-  local header = parser.generate_header("Untitled")
+  local header = parser.generate_header("Untitled", nil) -- Let it auto-generate
 
   -- Split header and add exactly what we want
   local header_lines = vim.split(header, "\n")
@@ -582,7 +638,7 @@ function M.new_chat_with_content(user_input)
   vim.bo.filetype = "naichat"
 
   -- Generate header
-  local header = parser.generate_header(title_text)
+  local header = parser.generate_header(title_text, nil) -- Let it auto-generate
   local header_lines = vim.split(header, "\n")
 
   -- Add user message right after header with exactly one blank line

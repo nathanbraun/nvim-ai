@@ -14,7 +14,7 @@ M.defaults = {
     enable_overlay = true,                         -- Enable syntax overlay
     enable_folding = true,                         -- Enable chat folding
   },
-  default_system_prompt = "You are a general assistant.",
+  default_system_prompt = "You are a general assistant. ",
   active_provider = "openrouter", -- "openai", "openrouter", etc.
   active_model = "anthropic/claude-sonnet-4.5",
   mappings = {
@@ -47,7 +47,7 @@ M.defaults = {
         "anthropic/claude-3.7-sonnet",
         "google/gemini-2.0-flash-001",
         "openai/o3",
-        "openai/gpt-5.1",
+        "openai/gpt-5.2",
         "openai/gpt-4o",
         "openai/gpt-4o-mini",
         "perplexity/r1-1776",
@@ -75,6 +75,14 @@ M.defaults = {
       endpoint = "http://localhost:11434/api/chat",
       models = {
         "llama3.2:latest",
+      },
+    },
+    moltbot = {
+      name = "Moltbot",
+      description = "Moltbot Gateway (OpenClaw agents)",
+      endpoint = nil, -- Uses WebSocket gateway
+      models = {
+        "main",       -- Default model name
       },
     },
   },
@@ -135,6 +143,35 @@ tags: [ai]
       "You are a testing expert. Generate comprehensive unit tests for the provided code, focusing on edge cases and full coverage.",
       user_prefix = "Generate tests for:",
     },
+    math = {
+      system =
+      [[
+You are a conversational partner for developing mathematical intuition and understanding.
+
+**Core principles:**
+- Focus on building intuition and conceptual understanding rather than just solving problems
+- Use plain language, analogies, and visual descriptions to clarify ideas
+- When discussing any topic, be aware of the "level of abstraction" we're working at (concrete examples vs. general principles vs. underlying philosophy, etc.)
+- Don't be afraid to jump up a level of abstraction initially, so we understand what/why we're doing and the context.
+- If I say things like "let's go up a level," "zoom out," "get more concrete," or "what's the bigger picture," understand I'm asking to shift perspective—more abstract, more concrete, broader context, or deeper detail
+- Help me navigate between these levels fluidly, making the connections explicit
+
+**Formatting:**
+- Use `$...$` for inline math, e.g., "the function $f(x) = x^2$ has a minimum at $x = 0$"
+- Use `$$...$$` for display/block equations, e.g.,
+$$\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}$$
+- *The formatting is important*. Use latex with $'s, *not* \[.
+
+**Style:**
+- Keep responses clear and conversational
+- Don't just do the work for me—guide my thinking
+- Ask clarifying questions when my question could be interpreted at different levels
+- Show how ideas connect across levels of abstraction
+        ]],
+      config = {
+        model = "openai/gpt-5.2",
+      }
+    },
     ["check-todo-list"] = {
       system =
       [[Your job is to evaluate a todo list and make sure everything is checked off.
@@ -152,7 +189,7 @@ Instructions:
     },
   },
   verification = {
-    enabled = false,            -- Whether to enable response verification
+    enabled = false,           -- Whether to enable response verification
     highlight_verified = true, -- Highlight verified responses
   },
   format_response = {
@@ -163,6 +200,28 @@ Instructions:
   debug = {
     enabled = false,
     auto_title = false,
+  },
+  moltbot = {
+    -- Default gateway config (used when model is "main" or not specified)
+    gateway_url = "wss://159.223.122.243",
+    auth_token = "7f70f8305fa480d6e61cbe254954d93fd226c4f2af0b40436904e0701329c37e",
+    session_prefix = "nvim",
+    auto_connect = true,
+
+    -- Optional: Additional gateway configs for other models
+    -- Users can add entries like:
+    -- gateways = {
+    --   dev = {
+    --     gateway_url = "ws://localhost:18789",
+    --     auth_token = "dev-token",
+    --     session_prefix = "nvim-dev",
+    --   },
+    --   prod = {
+    --     gateway_url = "wss://prod.example.com",
+    --     auth_token = "prod-token",
+    --     session_prefix = "nvim-prod",
+    --   },
+    -- }
   },
 }
 

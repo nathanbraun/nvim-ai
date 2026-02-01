@@ -25,7 +25,9 @@ function M.log(message, level, context)
 
   -- Log to Neovim's log
   if level >= M.LEVELS.ERROR then
-    vim.api.nvim_err_writeln("[nvim-ai] " .. message .. debug_info)
+    vim.schedule(function()
+      vim.notify("[nvim-ai] " .. message .. debug_info)
+    end)
   end
 
   -- Notify the user based on severity

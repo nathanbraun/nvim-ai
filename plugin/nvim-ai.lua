@@ -960,6 +960,31 @@ end, {
   desc = 'Test tree functionality with current directory'
 })
 
+-- Toggle moltbot mode
+vim.api.nvim_create_user_command('NAIMoltbot', function(opts)
+  local gateway = require('nai.gateway')
+  local config = require('nai.config')
+
+  if opts.args == "on" then
+    config.options.moltbot.enabled = true
+    gateway.connect()
+    vim.notify("Moltbot mode enabled", vim.log.levels.INFO)
+  elseif opts.args == "off" then
+    config.options.moltbot.enabled = false
+    gateway.disconnect()
+    vim.notify("Moltbot mode disabled", vim.log.levels.INFO)
+  elseif opts.args == "status" then
+    local status = config.options.moltbot.enabled and "enabled" or "disabled"
+    vim.notify("Moltbot mode: " .. status, vim.log.levels.INFO)
+  else
+    vim.notify("Usage: :NAIMoltbot on|off|status", vim.log.levels.ERROR)
+  end
+end, {
+  nargs = 1,
+  complete = function()
+    return { "on", "off", "status" }
+  end
+})
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()
