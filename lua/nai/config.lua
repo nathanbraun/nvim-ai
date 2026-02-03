@@ -15,7 +15,7 @@ M.defaults = {
     enable_folding = true,                         -- Enable chat folding
   },
   default_system_prompt = "You are a general assistant. ",
-  active_provider = "openrouter", -- "openai", "openrouter", etc.
+  active_provider = "openrouter", -- "openai", "openrouter", "openclaw", etc.
   active_model = "anthropic/claude-sonnet-4.5",
   mappings = {
     enabled = true,          -- Whether to apply default key mappings
@@ -77,13 +77,28 @@ M.defaults = {
         "llama3.2:latest",
       },
     },
-    moltbot = {
-      name = "Moltbot",
-      description = "Moltbot Gateway (OpenClaw agents)",
-      endpoint = nil, -- Uses WebSocket gateway
-      models = {
-        "main",       -- Default model name
+    openclaw = {
+      name = "OpenClaw",
+      description = "OpenClaw Gateway",
+      endpoint = nil, -- Uses HTTP gateway instead
+      gateways = {
+        {
+          name = "prax",
+          gateway_url = "https://praxs-mac-mini.tail2864a8.ts.net",
+          thinking_level = nil,
+          timeout_ms = 300000,
+        },
+        {
+          name = "local",
+          gateway_url = "http://localhost:18789",
+          thinking_level = nil,
+          timeout_ms = 300000,
+        },
       },
+      models = {
+        "openclaw/prax",
+        "openclaw/local",
+      }
     },
   },
   chat_files = {
@@ -201,28 +216,6 @@ Instructions:
     enabled = false,
     auto_title = false,
   },
-  moltbot = {
-    -- Default gateway config (used when model is "main" or not specified)
-    gateway_url = "wss://159.223.122.243",
-    auth_token = "7f70f8305fa480d6e61cbe254954d93fd226c4f2af0b40436904e0701329c37e",
-    session_prefix = "nvim",
-    auto_connect = true,
-
-    -- Optional: Additional gateway configs for other models
-    -- Users can add entries like:
-    -- gateways = {
-    --   dev = {
-    --     gateway_url = "ws://localhost:18789",
-    --     auth_token = "dev-token",
-    --     session_prefix = "nvim-dev",
-    --   },
-    --   prod = {
-    --     gateway_url = "wss://prod.example.com",
-    --     auth_token = "prod-token",
-    --     session_prefix = "nvim-prod",
-    --   },
-    -- }
-  },
 }
 
 -- Current configuration (will be populated by setup)
@@ -257,6 +250,11 @@ end
 
 -- Function to get API key for a specific provider
 function M.get_api_key(provider)
+  -- OpenClaw doesn't need an API key
+  if provider == "openclaw" then
+    return "local"
+  end
+
   if provider == "ollama" then
     -- Check if endpoint is not localhost
     local endpoint = M.options.providers.ollama.endpoint
@@ -272,33 +270,33 @@ function M.get_api_key(provider)
       if credentials.ollama then
         return credentials.ollama
       end
-    elseif provider == "google" then
-      -- Try environment variable first
-      local key = vim.env.GOOGLE_API_KEY
-      if key and key ~= "" then
-        return key
-      end
-
-      -- Try credentials file
-      local credentials = read_credentials()
-      if credentials.google then
-        return credentials.google
-      end
-
-      -- For backward compatibility, try old token files
-      local token_file = vim.fn.expand("~/.config/google.token")
-      if vim.fn.filereadable(token_file) == 1 then
-        local lines = vim.fn.readfile(token_file)
-        if #lines > 0 then
-          key = vim.fn.trim(lines[1])
-          if key ~= "" then
-            return key
-          end
-        end
-      end
     else
       -- Return a dummy key for local instances that don't need auth
       return "local"
+    end
+  elseif provider == "google" then
+    -- Try environment variable first
+    local key = vim.env.GOOGLE_API_KEY
+    if key and key ~= "" then
+      return key
+    end
+
+    -- Try credentials file
+    local credentials = read_credentials()
+    if credentials.google then
+      return credentials.google
+    end
+
+    -- For backward compatibility, try old token files
+    local token_file = vim.fn.expand("~/.config/google.token")
+    if vim.fn.filereadable(token_file) == 1 then
+      local lines = vim.fn.readfile(token_file)
+      if #lines > 0 then
+        key = vim.fn.trim(lines[1])
+        if key ~= "" then
+          return key
+        end
+      end
     end
   end
 

@@ -16,6 +16,170 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
   -- Get the provider's base config
   local provider_config = config.options.providers[provider] or config.get_provider_config()
 
+  -- ==========================================================================
+  -- OpenClaw path (HTTP-based gateway)
+  -- ==========================================================================
+  if provider == "openclaw" then
+    local openclaw = require('nai.openclaw')
+    local state = require('nai.state')
+    local events = require('nai.events')
+
+    -- Get the model (e.g., "openclaw/prax") and extract gateway name
+    local model = chat_config and chat_config.model or config.options.active_model
+    local gateway_name = model:match("^openclaw/(.+)$")
+
+    if not gateway_name then
+      vim.schedule(function()
+        on_error("Invalid openclaw model format: " .. (model or "nil") .. ". Expected 'openclaw/gateway_name'")
+      end)
+      return
+    end
+
+    -- Find the gateway config
+    local gateway_config = nil
+    if provider_config.gateways then
+      for _, gw in ipairs(provider_config.gateways) do
+        if gw.name == gateway_name then
+          gateway_config = gw
+          break
+        end
+      end
+    end
+
+    if not gateway_config then
+      vim.schedule(function()
+        on_error("Gateway '" .. gateway_name .. "' not found in openclaw configuration")
+      end)
+      return
+    end
+
+    -- Get the last user message to send
+    local user_message = nil
+    for i = #messages, 1, -1 do
+      if messages[i].role == "user" then
+        user_message = messages[i].content
+        break
+      end
+    end
+
+    if not user_message or user_message == "" then
+      vim.schedule(function()
+        on_error("No user message found")
+      end)
+      return
+    end
+
+    -- Get session key for current buffer
+    local buffer_id = vim.api.nvim_get_current_buf()
+    local session_key = openclaw.get_session_key(buffer_id)
+
+    -- Check for active request on this session
+    if openclaw.has_active_request(session_key) then
+      vim.schedule(function()
+        on_error("Request already in progress. Use :NAICancel to abort.")
+      end)
+      return
+    end
+
+    -- Register this request in state
+    state.register_request(request_id, {
+      id = request_id,
+      type = 'chat',
+      status = 'pending',
+      start_time = os.time(),
+      provider = provider,
+      model = model,
+      gateway = gateway_name,
+      session_key = session_key,
+    })
+
+    -- Emit event
+    events.emit('request:start', request_id, provider, model)
+
+    -- Track response for streaming
+    local accumulated_response = ""
+    local request_completed = false
+
+    local function on_stream(chunk, is_final)
+      if request_completed then return end
+
+      if type(chunk) == "string" and chunk ~= "" then
+        accumulated_response = accumulated_response .. chunk
+      end
+
+      if is_final then
+        request_completed = true
+      end
+    end
+
+    local function on_complete_wrapper(final_text)
+      if request_completed and accumulated_response == "" then
+        return -- Already handled
+      end
+      request_completed = true
+
+      local response = final_text or accumulated_response
+
+      -- Update state
+      state.update_request(request_id, {
+        status = 'completed',
+        end_time = os.time(),
+        response = response
+      })
+
+      -- Emit event
+      events.emit('request:complete', request_id, response)
+
+      vim.schedule(function()
+        on_complete(response)
+        -- Clear request from state after callback completes
+        state.clear_request(request_id)
+      end)
+    end
+
+    local function on_error_wrapper(error_msg)
+      if request_completed then return end
+      request_completed = true
+
+      -- Update state
+      state.update_request(request_id, {
+        status = 'error',
+        end_time = os.time(),
+        error = error_msg
+      })
+
+      -- Emit event
+      events.emit('request:error', request_id, error_msg)
+
+      vim.schedule(function()
+        on_error(error_msg)
+        -- Clear request from state
+        state.clear_request(request_id)
+      end)
+    end
+
+    -- Send via OpenClaw HTTP endpoint
+    local run_id = openclaw.chat_send(
+      session_key,
+      user_message,
+      gateway_config,
+      on_stream,
+      on_complete_wrapper,
+      on_error_wrapper
+    )
+
+    return {
+      handle = request_id,
+      terminate = function()
+        openclaw.cancel(session_key, gateway_config.gateway_url)
+      end
+    }
+  end
+
+  -- ==========================================================================
+  -- Standard API path (OpenAI, OpenRouter, Google, Ollama)
+  -- ==========================================================================
+
   local api_key = config.get_api_key(provider)
 
   if not api_key then
@@ -24,6 +188,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       local error_request_id = "error_" .. tostring(os.time()) .. "_" .. tostring(math.random(10000))
 
       -- Register and immediately update the request state
+      local state = require('nai.state')
       state.register_request(error_request_id, {
         id = error_request_id,
         type = 'chat',
@@ -35,6 +200,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
       })
 
       -- Emit event
+      local events = require('nai.events')
       events.emit('request:error', error_request_id, "API key not found")
 
       on_error("API key not found for " .. provider)

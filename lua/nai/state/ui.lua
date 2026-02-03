@@ -11,7 +11,7 @@ local function validate_provider(provider)
     return false, "Provider must be a non-empty string"
   end
 
-  local valid_providers = { "openai", "openrouter", "ollama", "google", "moltbot" }
+  local valid_providers = { "openai", "openrouter", "ollama", "google", "openclaw" }
   for _, valid in ipairs(valid_providers) do
     if provider == valid then
       return true
@@ -35,7 +35,9 @@ function M.new(initial_provider, initial_model)
     _store = Store.new({
       current_provider = initial_provider,
       current_model = initial_model,
-      is_processing = false
+      is_processing = false,
+      last_non_openclaw_provider = nil,
+      last_non_openclaw_model = nil
     })
   }
 
@@ -44,6 +46,17 @@ function M.new(initial_provider, initial_model)
     local valid, err = validate_provider(provider)
     if not valid then
       return false, err
+    end
+
+    -- Save current state as last non-openclaw if switching away from non-openclaw
+    local current_provider = self:get_provider()
+    local current_model = self:get_model()
+
+    if current_provider and current_provider ~= "openclaw" then
+      self._store:set("last_non_openclaw_provider", current_provider)
+      if current_model then
+        self._store:set("last_non_openclaw_model", current_model)
+      end
     end
 
     return self._store:set("current_provider", provider)
@@ -65,12 +78,38 @@ function M.new(initial_provider, initial_model)
       return false, err
     end
 
+    -- Save current state as last non-openclaw if current provider is not openclaw
+    local current_provider = self:get_provider()
+
+    if current_provider and current_provider ~= "openclaw" then
+      self._store:set("last_non_openclaw_provider", current_provider)
+      self._store:set("last_non_openclaw_model", model)
+    end
+
     return self._store:set("current_model", model)
   end
 
   -- Get current model
   function manager:get_model()
     local model, err = self._store:get("current_model")
+    if err then
+      return nil, err
+    end
+    return model, nil
+  end
+
+  -- Get last non-openclaw provider
+  function manager:get_last_non_openclaw_provider()
+    local provider, err = self._store:get("last_non_openclaw_provider")
+    if err then
+      return nil, err
+    end
+    return provider, nil
+  end
+
+  -- Get last non-openclaw model
+  function manager:get_last_non_openclaw_model()
+    local model, err = self._store:get("last_non_openclaw_model")
     if err then
       return nil, err
     end
@@ -124,7 +163,9 @@ function M.new(initial_provider, initial_model)
     return {
       current_provider = self:get_provider(),
       current_model = self:get_model(),
-      is_processing = self:is_processing()
+      is_processing = self:is_processing(),
+      last_non_openclaw_provider = self:get_last_non_openclaw_provider(),
+      last_non_openclaw_model = self:get_last_non_openclaw_model()
     }
   end
 

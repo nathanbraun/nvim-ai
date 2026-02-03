@@ -616,6 +616,11 @@ end, {
   end
 })
 
+-- Toggle between openclaw and last non-openclaw provider
+vim.api.nvim_create_user_command('NAIToggleOpenClaw', function()
+  require('nai').toggle_openclaw()
+end, { desc = "Toggle between OpenClaw and last non-OpenClaw provider" })
+
 -- Test command
 vim.api.nvim_create_user_command('NAITest', function(opts)
   local group = opts.args

@@ -52,16 +52,20 @@ function M.setup(opts)
 
   -- Check if API key is configured for the active provider
   local provider = config.options.active_provider
-  local api_key = config.get_api_key(provider)
 
-  if not api_key then
-    vim.defer_fn(function()
-      vim.notify(
-        "No API key found for " .. provider .. ".\n" ..
-        "Please set your API key with :NAISetKey " .. provider,
-        vim.log.levels.WARN
-      )
-    end, 1000) -- Delay to ensure it's seen after startup
+  -- Skip API key check for openclaw
+  if provider ~= "openclaw" then
+    local api_key = config.get_api_key(provider)
+
+    if not api_key then
+      vim.defer_fn(function()
+        vim.notify(
+          "No API key found for " .. provider .. ".\n" ..
+          "Please set your API key with :NAISetKey " .. provider,
+          vim.log.levels.WARN
+        )
+      end, 1000) -- Delay to ensure it's seen after startup
+    end
   end
 
   -- Additional setup if needed
@@ -89,8 +93,8 @@ end
 
 -- Function to switch between providers
 function M.switch_provider(provider)
-  if provider ~= "openai" and provider ~= "openrouter" and provider ~= "ollama" then
-    vim.notify("Invalid provider. Use 'openai', 'openrouter', or 'ollama'", vim.log.levels.ERROR)
+  if provider ~= "openai" and provider ~= "openrouter" and provider ~= "ollama" and provider ~= "openclaw" then
+    vim.notify("Invalid provider. Use 'openai', 'openrouter', 'ollama', or 'openclaw'", vim.log.levels.ERROR)
     return
   end
 
@@ -106,6 +110,54 @@ function M.switch_provider(provider)
   end
 
   vim.notify("Switched to " .. provider .. " provider", vim.log.levels.INFO)
+end
+
+-- Function to toggle between openclaw and last non-openclaw provider
+function M.toggle_openclaw()
+  local config = require('nai.config')
+  local state = require('nai.state')
+
+  local current_provider = state.get_current_provider()
+
+  if current_provider == "openclaw" then
+    -- Switch to last non-openclaw provider
+    local last_provider = state.ui:get_last_non_openclaw_provider()
+    local last_model = state.ui:get_last_non_openclaw_model()
+
+    -- Fallback to config defaults if no previous non-openclaw state
+    if not last_provider then
+      last_provider = config.options.active_provider
+      if last_provider == "openclaw" then
+        -- If config default is also openclaw, use openrouter as final fallback
+        last_provider = "openrouter"
+      end
+    end
+
+    if not last_model then
+      last_model = config.options.active_model
+    end
+
+    -- Update config and state
+    config.options.active_provider = last_provider
+    config.options.active_model = last_model
+    state.set_current_provider(last_provider)
+    state.set_current_model(last_model)
+
+    vim.notify("Switched to " .. last_provider .. " (" .. last_model .. ")", vim.log.levels.INFO)
+  else
+    -- Switch to openclaw (first gateway)
+    local openclaw_config = config.options.providers.openclaw
+    local first_gateway = openclaw_config.gateways[1]
+    local openclaw_model = "openclaw/" .. first_gateway.name
+
+    -- Update config and state
+    config.options.active_provider = "openclaw"
+    config.options.active_model = openclaw_model
+    state.set_current_provider("openclaw")
+    state.set_current_model(openclaw_model)
+
+    vim.notify("Switched to openclaw (" .. openclaw_model .. ")", vim.log.levels.INFO)
+  end
 end
 
 -- ============================================================================
@@ -417,16 +469,6 @@ function M.chat(opts, force_signature)
     return
   end
 
-  -- Step 1.5: If using moltbot, ensure session key exists BEFORE parsing
-  local active_provider = config.options.active_provider
-  if active_provider == "moltbot" then
-    local gateway = require('nai.gateway')
-    gateway.get_session_key(buffer_id) -- This will insert if needed
-    -- Small delay to ensure buffer is updated
-    vim.cmd('redraw')
-  end
-
-
   -- Step 2: Try to expand blocks
   local expanded = try_expand_blocks(buffer_id)
   if expanded then
@@ -451,65 +493,19 @@ function M.chat(opts, force_signature)
     M.cancel()
   end
 
-  -- Step 7: Route to appropriate API based on active provider
-  local active_provider = config.options.active_provider
+  -- Step 7: Make API request (all providers now go through api.lua)
+  local request_handle = api.chat_request(
+    messages,
+    function(response)
+      handle_chat_response(buffer_id, request_data, response, messages, chat_config, force_signature)
+    end,
+    function(error_msg)
+      handle_chat_error(buffer_id, request_data, error_msg)
+    end,
+    chat_config
+  )
 
-  if active_provider == "moltbot" then
-    local gateway = require('nai.gateway')
-    local session_key = gateway.get_session_key(buffer_id) -- Now just reads it
-
-    -- Get the active model to determine which gateway config to use
-    local active_model = config.options.active_model
-
-    -- Streaming handler (accumulate and show final result)
-    local accumulated_response = ""
-
-    local function on_stream(chunk, is_final)
-      -- Safety: ensure chunk is a string
-      if type(chunk) ~= "string" then
-        chunk = tostring(chunk)
-      end
-
-      accumulated_response = accumulated_response .. chunk
-
-      if is_final then
-        -- Final response, handle normally
-        handle_chat_response(buffer_id, request_data, accumulated_response, messages, chat_config, force_signature)
-      end
-      -- Keep showing spinner while accumulating
-    end
-
-    -- Make gateway request
-    local request_handle = gateway.chat_send(
-      session_key,
-      messages,
-      on_stream,
-      function(response)
-        -- Already handled in on_stream
-      end,
-      function(error_msg)
-        handle_chat_error(buffer_id, request_data, error_msg)
-      end,
-      chat_config,
-      active_model -- Pass the model name to gateway
-    )
-
-    return request_handle
-  else
-    -- Use standard API for other providers
-    local request_handle = api.chat_request(
-      messages,
-      function(response)
-        handle_chat_response(buffer_id, request_data, response, messages, chat_config, force_signature)
-      end,
-      function(error_msg)
-        handle_chat_error(buffer_id, request_data, error_msg)
-      end,
-      chat_config
-    )
-
-    return request_handle
-  end
+  return request_handle
 end
 
 function M.cancel()

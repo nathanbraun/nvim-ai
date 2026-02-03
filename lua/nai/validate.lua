@@ -29,7 +29,8 @@ function M.validate_config(config)
 
   -- Check active_provider
   if config.active_provider then
-    local valid, err = M.check_enum(config.active_provider, { "openai", "openrouter", "ollama", "google" },
+    local valid, err = M.check_enum(config.active_provider, 
+      { "openai", "openrouter", "ollama", "google", "openclaw" },
       "active_provider")
     if not valid then
       table.insert(errors, err)
@@ -47,6 +48,13 @@ function M.validate_config(config)
           if not string.match(config.active_model, "^[^/]+/[^/]+$") then
             table.insert(errors, string.format(
               "Config error: active_model '%s' should follow the format 'provider/model' for OpenRouter provider",
+              config.active_model
+            ))
+          end
+        elseif config.active_provider == "openclaw" then
+          if not string.match(config.active_model, "^openclaw/[^/]+$") then
+            table.insert(errors, string.format(
+              "Config error: active_model '%s' should follow the format 'openclaw/gateway_name' for OpenClaw provider",
               config.active_model
             ))
           end
@@ -99,8 +107,39 @@ function M.validate_config(config)
         if not valid then
           table.insert(errors, err)
         else
-          if provider_name ~= "moltbot" and not provider_config.endpoint then
-            table.insert(errors, "Config error: " .. provider_path .. ".endpoint is required")
+          -- Special handling for openclaw provider
+          if provider_name == "openclaw" then
+            -- Validate gateways structure
+            if provider_config.gateways then
+              local valid, err = M.check_type(provider_config.gateways, "table", provider_path .. ".gateways")
+              if not valid then
+                table.insert(errors, err)
+              else
+                -- Validate each gateway
+                for i, gateway in ipairs(provider_config.gateways) do
+                  local gateway_path = provider_path .. ".gateways[" .. i .. "]"
+                  
+                  if not gateway.name then
+                    table.insert(errors, "Config error: " .. gateway_path .. ".name is required")
+                  end
+                  
+                  if not gateway.gateway_url then
+                    table.insert(errors, "Config error: " .. gateway_path .. ".gateway_url is required")
+                  end
+                  
+                  if gateway.timeout_ms and type(gateway.timeout_ms) ~= "number" then
+                    table.insert(errors, "Config error: " .. gateway_path .. ".timeout_ms must be a number")
+                  end
+                end
+              end
+            else
+              table.insert(errors, "Config error: " .. provider_path .. ".gateways is required for openclaw provider")
+            end
+          else
+            -- Standard provider validation (non-openclaw)
+            if not provider_config.endpoint then
+              table.insert(errors, "Config error: " .. provider_path .. ".endpoint is required")
+            end
           end
 
           -- Check models format based on provider
@@ -119,12 +158,22 @@ function M.validate_config(config)
                     ))
                   end
                 end
+              elseif provider_name == "openclaw" then
+                -- Validate openclaw model format
+                for i, model in ipairs(provider_config.models) do
+                  if not string.match(model, "^openclaw/[^/]+$") then
+                    table.insert(errors, string.format(
+                      "Config error: %s.models[%d] = '%s' should follow the format 'openclaw/gateway_name' for OpenClaw",
+                      provider_path, i, model
+                    ))
+                  end
+                end
               elseif provider_name ~= "openrouter" then
                 -- For non-OpenRouter providers, models should NOT contain a slash
                 for i, model in ipairs(provider_config.models) do
                   if string.match(model, "/") then
                     table.insert(errors, string.format(
-                      "Config error: active_model '%s' should not be in format 'provider/model' for %s provider, just 'model'",
+                      "Config error: %s.models[%d] = '%s' should not be in format 'provider/model' for %s provider, just 'model'",
                       provider_path, i, model, provider_name
                     ))
                   end
@@ -133,24 +182,26 @@ function M.validate_config(config)
             end
           end
 
-          -- Check types of common fields
-          if provider_config.temperature ~= nil then
-            local valid, err = M.check_type(provider_config.temperature, "number", provider_path .. ".temperature")
-            if not valid then
-              table.insert(errors, err)
-            elseif provider_config.temperature < 0 or provider_config.temperature > 2 then
-              table.insert(errors, "Config error: " .. provider_path ..
-                ".temperature should be between 0 and 2")
+          -- Check types of common fields (skip for openclaw)
+          if provider_name ~= "openclaw" then
+            if provider_config.temperature ~= nil then
+              local valid, err = M.check_type(provider_config.temperature, "number", provider_path .. ".temperature")
+              if not valid then
+                table.insert(errors, err)
+              elseif provider_config.temperature < 0 or provider_config.temperature > 2 then
+                table.insert(errors, "Config error: " .. provider_path ..
+                  ".temperature should be between 0 and 2")
+              end
             end
-          end
 
-          if provider_config.max_tokens ~= nil then
-            local valid, err = M.check_type(provider_config.max_tokens, "number", provider_path .. ".max_tokens")
-            if not valid then
-              table.insert(errors, err)
-            elseif provider_config.max_tokens <= 0 then
-              table.insert(errors, "Config error: " .. provider_path ..
-                ".max_tokens should be greater than 0")
+            if provider_config.max_tokens ~= nil then
+              local valid, err = M.check_type(provider_config.max_tokens, "number", provider_path .. ".max_tokens")
+              if not valid then
+                table.insert(errors, err)
+              elseif provider_config.max_tokens <= 0 then
+                table.insert(errors, "Config error: " .. provider_path ..
+                  ".max_tokens should be greater than 0")
+              end
             end
           end
         end
