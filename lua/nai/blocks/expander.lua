@@ -8,7 +8,7 @@ M.processors = {}
 
 -- Register a block processor
 -- processor should have:
---   - marker: string (e.g., ">>> scrape")
+--   - marker: string or function(line) -> boolean (e.g., ">>> scrape")
 --   - has_unexpanded: function(buffer_id) -> boolean
 --   - expand: function(buffer_id, start_line, end_line) -> new_line_count
 --   - has_active_requests: function() -> boolean (optional)
@@ -63,66 +63,87 @@ local function expand_block_type(buffer_id, processor)
   local config = require('nai.config')
   local constants = require('nai.constants')
   local expanded_count = 0
+  local max_iterations = 100  -- Safety limit to prevent infinite loops
+  local iteration = 0
 
-  -- Check if there are unexpanded blocks of this type
-  if not processor.has_unexpanded(buffer_id) then
-    return 0, false
-  end
-
-  if config.options.debug and config.options.debug.enabled then
-    vim.notify("DEBUG: Found unexpanded blocks for: " .. processor.marker, vim.log.levels.DEBUG)
-  end
-
-  local line_offset = 0
-  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-  local in_ignore_block = false
-
-  -- Find and expand blocks
-  for i, line in ipairs(lines) do
-    -- Check for ignore block markers
-    if line == constants.MARKERS.IGNORE or vim.trim(line) == constants.MARKERS.IGNORE then
-      in_ignore_block = true
-      goto continue
-    elseif line == constants.MARKERS.IGNORE_END or vim.trim(line) == constants.MARKERS.IGNORE_END then
-      in_ignore_block = false
-      goto continue
+  -- Keep expanding until no more unexpanded blocks found
+  while processor.has_unexpanded(buffer_id) and iteration < max_iterations do
+    iteration = iteration + 1
+    
+    if config.options.debug and config.options.debug.enabled then
+      local marker_str = type(processor.marker) == "function" and "function" or processor.marker
+      vim.notify(string.format("DEBUG: Iteration %d for %s", iteration, marker_str), vim.log.levels.DEBUG)
     end
 
-    -- Skip processing if we're inside an ignore block
-    if in_ignore_block then
-      goto continue
-    end
+    -- Fetch fresh buffer lines for each iteration
+    local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+    local in_ignore_block = false
+    local found_and_expanded = false
 
-    -- Check if this line matches the processor's marker
-    local matches = false
-    if type(processor.marker) == "string" then
-      matches = (line == processor.marker or vim.trim(line) == processor.marker)
-    elseif type(processor.marker) == "function" then
-      matches = processor.marker(line)
-    end
-
-    if matches then
-      local block_start, block_end = find_block_boundaries(lines, i, line_offset)
-
-      -- Expand the block
-      local success, new_line_count = pcall(processor.expand, buffer_id, block_start, block_end + 1)
-
-      if success then
-        expanded_count = expanded_count + 1
-
-        -- Adjust line offset for any additional lines added
-        line_offset = line_offset + (new_line_count - (block_end - block_start + 1))
-
-        -- Re-fetch buffer lines since they've changed
-        lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-      else
-        -- Log error but continue processing other blocks
-        vim.notify("Error expanding block at line " .. block_start .. ": " .. tostring(new_line_count),
-          vim.log.levels.ERROR)
+    -- Find and expand the first unexpanded block
+    for i, line in ipairs(lines) do
+      -- Check for ignore block markers
+      if line == constants.MARKERS.IGNORE or vim.trim(line) == constants.MARKERS.IGNORE then
+        in_ignore_block = true
+        goto continue
+      elseif line == constants.MARKERS.IGNORE_END or vim.trim(line) == constants.MARKERS.IGNORE_END then
+        in_ignore_block = false
+        goto continue
       end
+
+      -- Skip processing if we're inside an ignore block
+      if in_ignore_block then
+        goto continue
+      end
+
+      -- Check if this line matches the processor's marker
+      local matches = false
+      if type(processor.marker) == "string" then
+        matches = (line == processor.marker or vim.trim(line) == processor.marker)
+      elseif type(processor.marker) == "function" then
+        matches = processor.marker(line)
+      end
+
+      if matches then
+        local block_start, block_end = find_block_boundaries(lines, i, 0)
+
+        -- Expand the block
+        local success, new_line_count = pcall(processor.expand, buffer_id, block_start, block_end + 1)
+
+        if success then
+          expanded_count = expanded_count + 1
+          found_and_expanded = true
+          
+          if config.options.debug and config.options.debug.enabled then
+            vim.notify(string.format("DEBUG: Expanded block at line %d", block_start), vim.log.levels.DEBUG)
+          end
+          
+          -- Break inner loop to restart from beginning with fresh buffer state
+          break
+        else
+          -- Log error but continue processing other blocks
+          vim.notify("Error expanding block at line " .. block_start .. ": " .. tostring(new_line_count),
+            vim.log.levels.ERROR)
+        end
+      end
+
+      ::continue::
     end
 
-    ::continue::
+    -- If we didn't find any block to expand, we're done
+    if not found_and_expanded then
+      break
+    end
+  end
+
+  -- Warn if we hit the iteration limit
+  if iteration >= max_iterations then
+    local marker_str = type(processor.marker) == "function" and "function" or processor.marker
+    vim.notify(
+      string.format("Warning: Hit maximum iterations (%d) for %s. Some blocks may not have expanded.", 
+        max_iterations, marker_str),
+      vim.log.levels.WARN
+    )
   end
 
   -- Check if there are active async requests

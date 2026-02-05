@@ -241,6 +241,10 @@ vim.api.nvim_create_user_command('NAIModel', function()
   require('nai.tools.picker').select_model()
 end, { nargs = 0, desc = 'Select LLM model' })
 
+vim.api.nvim_create_user_command('NAIOpenClawModel', function()
+  require('nai.tools.picker').select_openclaw_model()
+end, { desc = "Select OpenClaw model" })
+
 vim.api.nvim_create_user_command('NAIRefreshHighlights', function()
   require('nai.syntax').define_highlight_groups()
 

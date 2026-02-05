@@ -328,4 +328,126 @@ function M.has_active_request(session_key)
   return M.active_jobs[session_key] ~= nil
 end
 
+--- Fetch available models from OpenClaw Gateway
+--- @param gateway_url string Gateway URL
+--- @param callback function Callback: function(ok: boolean, result: table|string)
+---   On success: result = { primary = string|nil, fallbacks = string[], models = ModelInfo[] }
+---   On error: result = error message string
+function M.fetch_models(gateway_url, callback)
+  gateway_url = gateway_url or 'http://localhost:18789'
+
+  vim.fn.jobstart({
+    'curl', '-s', '-f', '--max-time', '10',
+    '-X', 'GET',
+    gateway_url .. '/nvim/models',
+    '-H', 'Accept: application/json',
+  }, {
+    stdout_buffered = true,
+    on_stdout = function(_, data)
+      local response = table.concat(data, '')
+      if response ~= '' then
+        local ok, json = pcall(vim.json.decode, response)
+        if ok and json then
+          vim.schedule(function()
+            callback(true, json)
+          end)
+          return
+        end
+      end
+      vim.schedule(function()
+        callback(false, 'Invalid response from gateway')
+      end)
+    end,
+    on_stderr = function(_, data)
+      local stderr = table.concat(data, '\n'):gsub('^%s*', ''):gsub('%s*$', '')
+      if stderr ~= '' then
+        local config = require('nai.config')
+        if config.options.debug and config.options.debug.enabled then
+          vim.schedule(function()
+            vim.notify('OpenClaw models stderr: ' .. stderr, vim.log.levels.DEBUG)
+          end)
+        end
+      end
+    end,
+    on_exit = function(_, code)
+      if code ~= 0 then
+        vim.schedule(function()
+          callback(false, 'Failed to fetch models (exit code ' .. code .. ')')
+        end)
+      end
+    end,
+  })
+end
+
+--- Set the model for a session by sending /model directive
+--- @param session_key string Session identifier
+--- @param model string Model to set (e.g., "anthropic/claude-sonnet-4" or alias)
+--- @param gateway_config table Gateway configuration
+--- @param callback function Callback: function(ok: boolean, error: string|nil)
+function M.set_model(session_key, model, gateway_config, callback)
+  local gateway_url = gateway_config.gateway_url or 'http://localhost:18789'
+  local timeout_ms = gateway_config.timeout_ms or 30000
+
+  -- Send /model as a directive-only message
+  local message = '/model ' .. model
+
+  local completed = false
+
+  local request_body = vim.json.encode({
+    sessionKey = session_key,
+    message = message,
+    senderId = 'nvim:' .. vim.fn.getpid(),
+    timeoutMs = timeout_ms,
+  })
+
+  vim.fn.jobstart({
+    'curl',
+    '-s',
+    '-N',
+    '-X', 'POST',
+    gateway_url .. '/nvim/chat',
+    '-H', 'Content-Type: application/json',
+    '-H', 'Accept: text/event-stream',
+    '-d', request_body,
+  }, {
+    stdout_buffered = false,
+    on_stdout = function(_, data)
+      if completed then return end
+
+      for _, line in ipairs(data) do
+        -- Check for final or error events
+        if line:match('^event:%s*final') or line:match('^event:%s*error') then
+          completed = true
+        end
+      end
+    end,
+    on_exit = function(_, code)
+      vim.schedule(function()
+        if code == 0 then
+          callback(true, nil)
+        else
+          callback(false, 'Failed to set model (exit code ' .. code .. ')')
+        end
+      end)
+    end,
+  })
+end
+
+--- Get the current OpenClaw model for a buffer
+--- @param buffer_id number Buffer number
+--- @return string|nil model The current model or nil if not set
+function M.get_current_model(buffer_id)
+  buffer_id = buffer_id or vim.api.nvim_get_current_buf()
+  return vim.b[buffer_id] and vim.b[buffer_id].openclaw_model
+end
+
+--- Set the current OpenClaw model for a buffer (local tracking)
+--- @param buffer_id number Buffer number
+--- @param model string Model identifier
+function M.set_current_model(buffer_id, model)
+  buffer_id = buffer_id or vim.api.nvim_get_current_buf()
+  vim.b[buffer_id] = vim.b[buffer_id] or {}
+  vim.b[buffer_id].openclaw_model = model
+end
+
 return M

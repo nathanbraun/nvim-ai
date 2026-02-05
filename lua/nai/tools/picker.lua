@@ -512,6 +512,254 @@ function M.show_unified_model_picker_simple(models, current_provider, current_mo
   return true
 end
 
+--- Select an OpenClaw model
+function M.select_openclaw_model()
+  local config = require('nai.config')
+  local openclaw = require('nai.openclaw')
+
+  -- Get the current gateway config
+  local openclaw_config = config.options.providers.openclaw
+  if not openclaw_config or not openclaw_config.gateways or #openclaw_config.gateways == 0 then
+    vim.notify("No OpenClaw gateways configured", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Use the first gateway (or we could add gateway selection later)
+  local gateway = openclaw_config.gateways[1]
+  local gateway_url = gateway.gateway_url
+
+  vim.notify("Fetching models from OpenClaw...", vim.log.levels.INFO)
+
+  openclaw.fetch_models(gateway_url, function(ok, result)
+    if not ok then
+      vim.notify("Failed to fetch OpenClaw models: " .. tostring(result), vim.log.levels.ERROR)
+      return
+    end
+
+    local models = result.models or {}
+    if #models == 0 then
+      vim.notify("No models available from OpenClaw", vim.log.levels.WARN)
+      return
+    end
+
+    -- Get current model for display
+    local buffer_id = vim.api.nvim_get_current_buf()
+    local current_model = openclaw.get_current_model(buffer_id)
+
+    -- Format models for picker
+    local picker_items = {}
+    for _, model in ipairs(models) do
+      local display = model.key
+
+      -- Add aliases if present
+      if model.aliases and #model.aliases > 0 then
+        display = display .. " (" .. table.concat(model.aliases, ", ") .. ")"
+      end
+
+      -- Add tags
+      if model.tags and #model.tags > 0 then
+        display = display .. " [" .. table.concat(model.tags, ", ") .. "]"
+      end
+
+      -- Mark current
+      if current_model and model.key == current_model then
+        display = display .. " (current)"
+      end
+
+      table.insert(picker_items, {
+        display = display,
+        value = model.key,
+        aliases = model.aliases or {},
+        tags = model.tags or {},
+        ordinal = model.key,
+      })
+    end
+
+    -- Show picker
+    M.show_openclaw_model_picker(picker_items, gateway, current_model)
+  end)
+end
+
+--- Show the OpenClaw model picker with fallbacks
+function M.show_openclaw_model_picker(models, gateway_config, current_model)
+  -- Try snacks first
+  local has_snacks, _ = pcall(require, 'snacks')
+  if has_snacks then
+    return M.show_openclaw_model_picker_snacks(models, gateway_config, current_model)
+  end
+
+  -- Try telescope next
+  local has_telescope, _ = pcall(require, 'telescope')
+  if has_telescope then
+    return M.show_openclaw_model_picker_telescope(models, gateway_config, current_model)
+  end
+
+  -- Try fzf-lua last
+  local has_fzf_lua, _ = pcall(require, 'fzf-lua')
+  if has_fzf_lua then
+    return M.show_openclaw_model_picker_fzf_lua(models, gateway_config, current_model)
+  end
+
+  -- Fallback to simple UI
+  return M.show_openclaw_model_picker_simple(models, gateway_config, current_model)
+end
+
+--- Handle OpenClaw model selection
+local function handle_openclaw_model_selection(model_key, gateway_config)
+  local openclaw = require('nai.openclaw')
+  local buffer_id = vim.api.nvim_get_current_buf()
+  local session_key = openclaw.get_session_key(buffer_id)
+
+  vim.notify("Setting model to " .. model_key .. "...", vim.log.levels.INFO)
+
+  openclaw.set_model(session_key, model_key, gateway_config, function(ok, err)
+    if ok then
+      -- Track locally
+      openclaw.set_current_model(buffer_id, model_key)
+      vim.notify("OpenClaw model set to " .. model_key, vim.log.levels.INFO)
+    else
+      vim.notify("Failed to set model: " .. tostring(err), vim.log.levels.ERROR)
+    end
+  end)
+end
+
+--- Snacks implementation for OpenClaw model picker
+function M.show_openclaw_model_picker_snacks(models, gateway_config, current_model)
+  local Snacks = require('snacks')
+
+  local finder = function()
+    local items = {}
+    for i, model in ipairs(models) do
+      table.insert(items, {
+        idx = i,
+        text = model.display,
+        value = model.value,
+        ordinal = model.ordinal,
+        preview = {
+          text = "Model: " .. model.value ..
+              "\nAliases: " .. (model.aliases and #model.aliases > 0 and table.concat(model.aliases, ", ") or "none") ..
+              "\nTags: " .. (model.tags and #model.tags > 0 and table.concat(model.tags, ", ") or "none") ..
+              "\n\nStatus: " .. (model.value == current_model and "Current model" or "Available"),
+          ft = "markdown"
+        }
+      })
+    end
+    return items
+  end
+
+  Snacks.picker.pick({
+    finder = finder,
+    format = function(item)
+      return { { item.text } }
+    end,
+    title = "Select OpenClaw Model",
+    preview = "preview",
+    confirm = function(picker, item)
+      picker:close()
+      if item then
+        handle_openclaw_model_selection(item.value, gateway_config)
+      end
+    end
+  })
+
+  return true
+end
+
+--- Telescope implementation for OpenClaw model picker
+function M.show_openclaw_model_picker_telescope(models, gateway_config, current_model)
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
+  local pickers = require("telescope.pickers")
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+
+  pickers.new({}, {
+    prompt_title = "Select OpenClaw Model",
+    finder = finders.new_table {
+      results = models,
+      entry_maker = function(entry)
+        return {
+          value = entry.value,
+          display = entry.display,
+          ordinal = entry.ordinal,
+        }
+      end
+    },
+    sorter = conf.generic_sorter({}),
+    attach_mappings = function(prompt_bufnr, map)
+      actions.select_default:replace(function()
+        local selection = action_state.get_selected_entry()
+        actions.close(prompt_bufnr)
+
+        if selection then
+          handle_openclaw_model_selection(selection.value, gateway_config)
+        end
+      end)
+      return true
+    end,
+    layout_strategy = "center",
+    layout_config = {
+      width = 0.6,
+      height = 0.5,
+    },
+  }):find()
+
+  return true
+end
+
+--- fzf-lua implementation for OpenClaw model picker
+function M.show_openclaw_model_picker_fzf_lua(models, gateway_config, current_model)
+  local fzf_lua = require('fzf-lua')
+
+  local items = {}
+  local item_map = {}
+  for _, model in ipairs(models) do
+    table.insert(items, model.display)
+    item_map[model.display] = model
+  end
+
+  fzf_lua.fzf_exec(items, {
+    prompt = "Select OpenClaw Model> ",
+    actions = {
+      ["default"] = function(selected)
+        if selected and #selected > 0 then
+          local selected_display = selected[1]
+          local model = item_map[selected_display]
+          if model then
+            handle_openclaw_model_selection(model.value, gateway_config)
+          end
+        end
+      end
+    }
+  })
+
+  return true
+end
+
+--- Simple fallback for OpenClaw model picker
+function M.show_openclaw_model_picker_simple(models, gateway_config, current_model)
+  local items = {}
+  for _, model in ipairs(models) do
+    table.insert(items, {
+      name = model.display,
+      value = model.value,
+    })
+  end
+
+  vim.ui.select(items, {
+    prompt = "Select OpenClaw Model",
+    format_item = function(item)
+      return item.name
+    end
+  }, function(choice)
+    if choice then
+      handle_openclaw_model_selection(choice.value, gateway_config)
+    end
+  end)
+
+  return true
+end
+
 function M.browse_files()
   -- Get the notes directory from config
   local config = require('nai.config')
@@ -634,7 +882,7 @@ end
 -- Implementation for browsing with Snacks
 function M.show_file_browser_snacks(items)
   local Snacks = require('snacks')
-  
+
   -- Pre-load file contents for previews to avoid issues
   for _, item in ipairs(items) do
     if item.value and vim.fn.filereadable(item.value) == 1 then
@@ -648,7 +896,7 @@ function M.show_file_browser_snacks(items)
           if count >= 30 then break end
         end
         file:close()
-        
+
         -- Create a proper preview object as per Snacks documentation
         item.preview = {
           text = table.concat(lines, "\n"),
@@ -667,7 +915,7 @@ function M.show_file_browser_snacks(items)
       }
     end
   end
-  
+
   -- Use Snacks picker with the proper layout configuration
   Snacks.picker.pick({
     finder = function() return items end,
@@ -678,12 +926,12 @@ function M.show_file_browser_snacks(items)
     -- Use the item.preview property (Snacks will handle this automatically)
     -- Don't specify a preview function - let Snacks use the item.preview property
     preview = "preview", -- This tells Snacks to use the item.preview property
-    
+
     -- Use a layout that shows the preview on the right
     layout = {
       preset = "default", -- This preset has the preview on the right
     },
-    
+
     confirm = function(picker, item)
       picker:close()
       if item and item.value then
@@ -691,7 +939,7 @@ function M.show_file_browser_snacks(items)
       end
     end
   })
-  
+
   return true
 end
 
