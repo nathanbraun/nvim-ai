@@ -2,6 +2,23 @@
 local M = {}
 
 function M.select_model()
+  local config = require('nai.config')
+  local current_provider = config.options.active_provider
+
+  if current_provider == "openclaw" then
+    -- OpenClaw context - show OpenClaw model picker with switch option
+    local buffer_id = vim.api.nvim_get_current_buf()
+    local openclaw = require('nai.openclaw')
+    local session_key = openclaw.get_session_key(buffer_id)
+    M.select_model_openclaw_context(buffer_id, session_key)
+  else
+    -- Traditional context - show provider/gateway picker
+    M.select_model_traditional()
+  end
+end
+
+--- Traditional model selection (non-OpenClaw context)
+function M.select_model_traditional()
   -- Get configuration
   local config = require('nai.config')
   local current_provider = config.options.active_provider
@@ -106,7 +123,8 @@ function M.select_model()
           local display_name = provider_prefix .. " │ " .. model_id
 
           table.insert(all_models, {
-            display = display_name .. (model_id == current_model and current_provider == "ollama" and " (current)" or ""),
+            display = display_name ..
+                (model_id == current_model and current_provider == "ollama" and " (current)" or ""),
             value = model_id,
             provider = "ollama",
             ordinal = "ollama " .. model_id -- For sorting
@@ -1078,6 +1096,313 @@ function M.show_file_browser_simple(items)
   }, function(choice)
     if choice and choice.value then
       vim.cmd("edit " .. vim.fn.fnameescape(choice.value))
+    end
+  end)
+
+  return true
+end
+
+--- OpenClaw session context model selection
+--- @param buffer_id number Buffer ID
+--- @param session_key string OpenClaw session key
+function M.select_model_openclaw_context(buffer_id, session_key)
+  local config = require('nai.config')
+  local openclaw = require('nai.openclaw')
+  local current_provider = config.options.active_provider
+  local current_model = config.options.active_model
+
+  -- Get current gateway from session or active_model
+  local gateway_name = nil
+  if current_provider == "openclaw" and current_model then
+    gateway_name = current_model:match("^openclaw/(.+)$")
+  end
+
+  -- Find gateway config
+  local gateway_config = nil
+  local openclaw_config = config.options.providers.openclaw
+  if gateway_name and openclaw_config.gateways then
+    for _, gw in ipairs(openclaw_config.gateways) do
+      if gw.name == gateway_name then
+        gateway_config = gw
+        break
+      end
+    end
+  end
+
+  if not gateway_config then
+    vim.notify("Could not determine OpenClaw gateway, showing traditional picker", vim.log.levels.WARN)
+    M.select_model_traditional()
+    return
+  end
+
+  -- Fetch OpenClaw models
+  vim.notify("Fetching OpenClaw models...", vim.log.levels.INFO)
+  openclaw.fetch_models(gateway_config.gateway_url, function(ok, result)
+    if not ok then
+      vim.notify("Failed to fetch OpenClaw models: " .. tostring(result) ..
+        "\nShowing traditional picker only", vim.log.levels.WARN)
+      vim.schedule(function()
+        M.select_model_traditional()
+      end)
+      return
+    end
+
+    local models = result.models or {}
+    if #models == 0 then
+      vim.notify("No OpenClaw models available, showing traditional picker", vim.log.levels.WARN)
+      vim.schedule(function()
+        M.select_model_traditional()
+      end)
+      return
+    end
+
+    -- Format OpenClaw models for picker
+    local picker_items = {}
+    local current_openclaw_model = openclaw.get_current_model(buffer_id)
+
+    -- Add "Switch Provider" option at the top
+    table.insert(picker_items, {
+      display = "→ Switch Provider/Gateway...",
+      value = "__switch_provider__",
+      ordinal = "aaa_switch", -- Sort to top
+      is_switch_provider = true
+    })
+
+    -- Add divider
+    table.insert(picker_items, {
+      display = "───────────────────────────────────────",
+      is_divider = true,
+      ordinal = "aaa_divider"
+    })
+
+    -- Add OpenClaw models
+    for _, model in ipairs(models) do
+      local display = model.key
+      if model.aliases and #model.aliases > 0 then
+        display = display .. " (" .. table.concat(model.aliases, ", ") .. ")"
+      end
+      if model.tags and #model.tags > 0 then
+        display = display .. " [" .. table.concat(model.tags, ", ") .. "]"
+      end
+
+      if current_openclaw_model and model.key == current_openclaw_model then
+        display = display .. " (current)"
+      end
+
+      table.insert(picker_items, {
+        display = display,
+        value = model.key,
+        aliases = model.aliases or {},
+        tags = model.tags or {},
+        ordinal = model.key,
+      })
+    end
+
+    -- Show picker
+    vim.schedule(function()
+      M.show_openclaw_model_picker(picker_items, gateway_config, current_openclaw_model)
+    end)
+  end)
+end
+
+--- Show the OpenClaw model picker with fallbacks
+function M.show_openclaw_model_picker(models, gateway_config, current_model)
+  -- Try snacks first
+  local has_snacks, _ = pcall(require, 'snacks')
+  if has_snacks then
+    return M.show_openclaw_model_picker_snacks(models, gateway_config, current_model)
+  end
+
+  -- Try telescope next
+  local has_telescope, _ = pcall(require, 'telescope')
+  if has_telescope then
+    return M.show_openclaw_model_picker_telescope(models, gateway_config, current_model)
+  end
+
+  -- Try fzf-lua last
+  local has_fzf_lua, _ = pcall(require, 'fzf-lua')
+  if has_fzf_lua then
+    return M.show_openclaw_model_picker_fzf_lua(models, gateway_config, current_model)
+  end
+
+  -- Fallback to simple UI
+  return M.show_openclaw_model_picker_simple(models, gateway_config, current_model)
+end
+
+--- Handle OpenClaw model selection
+local function handle_openclaw_model_selection(model_key, gateway_config)
+  -- Check if user wants to switch provider
+  if model_key == "__switch_provider__" then
+    require('nai.tools.picker').select_model_traditional()
+    return
+  end
+
+  local openclaw = require('nai.openclaw')
+  local buffer_id = vim.api.nvim_get_current_buf()
+  local session_key = openclaw.get_session_key(buffer_id)
+
+  vim.notify("Setting model to " .. model_key .. "...", vim.log.levels.INFO)
+
+  openclaw.set_model(session_key, model_key, gateway_config, function(ok, err)
+    if ok then
+      -- Track locally
+      openclaw.set_current_model(buffer_id, model_key)
+      vim.notify("OpenClaw model set to " .. model_key, vim.log.levels.INFO)
+    else
+      vim.notify("Failed to set model: " .. tostring(err), vim.log.levels.ERROR)
+    end
+  end)
+end
+
+--- Snacks implementation for OpenClaw model picker
+function M.show_openclaw_model_picker_snacks(models, gateway_config, current_model)
+  local Snacks = require('snacks')
+
+  local finder = function()
+    local items = {}
+    for i, model in ipairs(models) do
+      local preview_text
+      if model.is_divider then
+        preview_text = "Section divider"
+      elseif model.is_switch_provider then
+        preview_text =
+        "Open the traditional provider/model picker\n\nSelect this to switch away from OpenClaw to another provider."
+      else
+        preview_text = "Model: " .. model.value ..
+            "\nAliases: " .. (model.aliases and #model.aliases > 0 and table.concat(model.aliases, ", ") or "none") ..
+            "\nTags: " .. (model.tags and #model.tags > 0 and table.concat(model.tags, ", ") or "none") ..
+            "\n\nStatus: " .. (model.value == current_model and "Current model" or "Available")
+      end
+
+      table.insert(items, {
+        idx = i,
+        text = model.display,
+        value = model.value,
+        ordinal = model.ordinal,
+        is_divider = model.is_divider,
+        is_switch_provider = model.is_switch_provider,
+        preview = {
+          text = preview_text,
+          ft = "markdown"
+        }
+      })
+    end
+    return items
+  end
+
+  Snacks.picker.pick({
+    finder = finder,
+    format = function(item)
+      return { { item.text } }
+    end,
+    title = "Select OpenClaw Model",
+    preview = "preview",
+    confirm = function(picker, item)
+      picker:close()
+      if item and not item.is_divider then
+        handle_openclaw_model_selection(item.value, gateway_config)
+      end
+    end
+  })
+
+  return true
+end
+
+--- Telescope implementation for OpenClaw model picker
+function M.show_openclaw_model_picker_telescope(models, gateway_config, current_model)
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
+  local pickers = require("telescope.pickers")
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+
+  pickers.new({}, {
+    prompt_title = "Select OpenClaw Model",
+    finder = finders.new_table {
+      results = models,
+      entry_maker = function(entry)
+        return {
+          value = entry.value,
+          display = entry.display,
+          ordinal = entry.ordinal,
+          is_divider = entry.is_divider,
+          is_switch_provider = entry.is_switch_provider,
+        }
+      end
+    },
+    sorter = conf.generic_sorter({}),
+    attach_mappings = function(prompt_bufnr, map)
+      actions.select_default:replace(function()
+        local selection = action_state.get_selected_entry()
+        actions.close(prompt_bufnr)
+
+        if selection and not selection.is_divider then
+          handle_openclaw_model_selection(selection.value, gateway_config)
+        end
+      end)
+      return true
+    end,
+    layout_strategy = "center",
+    layout_config = {
+      width = 0.6,
+      height = 0.5,
+    },
+  }):find()
+
+  return true
+end
+
+--- fzf-lua implementation for OpenClaw model picker
+function M.show_openclaw_model_picker_fzf_lua(models, gateway_config, current_model)
+  local fzf_lua = require('fzf-lua')
+
+  local items = {}
+  local item_map = {}
+  for _, model in ipairs(models) do
+    table.insert(items, model.display)
+    item_map[model.display] = model
+  end
+
+  fzf_lua.fzf_exec(items, {
+    prompt = "Select OpenClaw Model> ",
+    actions = {
+      ["default"] = function(selected)
+        if selected and #selected > 0 then
+          local selected_display = selected[1]
+          local model = item_map[selected_display]
+          if model and not model.is_divider then
+            handle_openclaw_model_selection(model.value, gateway_config)
+          end
+        end
+      end
+    }
+  })
+
+  return true
+end
+
+--- Simple fallback for OpenClaw model picker
+function M.show_openclaw_model_picker_simple(models, gateway_config, current_model)
+  -- Filter out dividers
+  local items = {}
+  for _, model in ipairs(models) do
+    if not model.is_divider then
+      table.insert(items, {
+        name = model.display,
+        value = model.value,
+        is_switch_provider = model.is_switch_provider,
+      })
+    end
+  end
+
+  vim.ui.select(items, {
+    prompt = "Select OpenClaw Model",
+    format_item = function(item)
+      return item.name
+    end
+  }, function(choice)
+    if choice then
+      handle_openclaw_model_selection(choice.value, gateway_config)
     end
   end)
 

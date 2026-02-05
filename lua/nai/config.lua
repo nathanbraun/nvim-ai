@@ -41,10 +41,8 @@ M.defaults = {
       max_tokens = 10000,
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
       models = {
-        "anthropic/claude-sonnet-4",
         "anthropic/claude-sonnet-4.5",
         "anthropic/claude-opus-4.5",
-        "anthropic/claude-3.7-sonnet",
         "google/gemini-2.0-flash-001",
         "openai/o3",
         "openai/gpt-5.2",

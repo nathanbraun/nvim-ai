@@ -6,6 +6,29 @@ Changes made since the main summaries were last generated. When updates in a mod
 > - SUMMARY.md
 
 ## 2026
+### Unified Model Picker with OpenClaw Context Awareness - (2026-02-05)
+**Affects:** Model Selection, OpenClaw Integration
+
+**Files Changed:**
+- `lua/nai/tools/picker.lua` - (modified) Added context-aware model selection based on active provider
+
+**Purpose:** Enables seamless switching between traditional providers and OpenClaw models within a single `:NAIModel` command, while providing an escape hatch to switch providers when in OpenClaw mode.
+
+**Implementation:** The `select_model()` function now checks `config.options.active_provider` to determine context. If `active_provider == "openclaw"`, it calls `select_model_openclaw_context()` which fetches available models from the current gateway and displays them with a "→ Switch Provider/Gateway..." option at the top (followed by divider). Selecting this option calls `select_model_traditional()` to show the standard provider/model picker. If `active_provider` is not openclaw, it directly shows the traditional picker. The `select_model_traditional()` function was extracted from the original `select_model()` to enable reuse. All picker implementations (snacks, telescope, fzf-lua, simple) handle the special `__switch_provider__` value and dividers appropriately.
+
+**New Dependencies:** None
+
+**Breaking Changes:** None - behavior is additive. `:NAIModel` now adapts to context but maintains backward compatibility.
+
+**Related Files:**
+- `lua/nai/openclaw.lua` - Provides `fetch_models()`, `get_session_key()`, `set_model()` functions
+- `lua/nai/config.lua` - Source of `active_provider` state
+- `plugin/nvim-ai.lua` - `:NAIModel` and `:NAIOpenClawModel` commands (both still functional)
+
+**TODO/Follow-up:**
+- Consider removing `:NAIOpenClawModel` command if redundant (currently kept for explicit model-only switching)
+- Could add gateway selection if user has multiple OpenClaw gateways configured (currently uses first/active gateway)
+
 ### OpenClaw Model Selection Integration - (2026-02-05)
 **Affects:** OpenClaw Integration, Tools/Picker
 
