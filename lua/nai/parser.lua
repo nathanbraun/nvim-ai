@@ -14,10 +14,6 @@ registry.register('tree', require('nai.parser.processors.tree'))
 registry.register('alias', require('nai.parser.processors.alias'))
 registry.register('reference', require('nai.parser.processors.reference'))
 registry.register('snapshot', require('nai.parser.processors.snapshot'))
-registry.register('web', require('nai.parser.processors.web'))
-registry.register('youtube', require('nai.parser.processors.youtube'))
-registry.register('crawl', require('nai.parser.processors.crawl'))
-registry.register('scrape', require('nai.parser.processors.scrape'))
 
 -- Parse chat buffer content into messages for API
 function M.parse_chat_buffer(content, buffer_id)
@@ -216,24 +212,8 @@ function M.format_tree_block(content)
   return format_via_processor('tree', content)
 end
 
-function M.format_web_block(content)
-  return format_via_processor('web', content)
-end
-
-function M.format_scrape_block(content)
-  return format_via_processor('scrape', content)
-end
-
-function M.format_crawl_block(url)
-  return format_via_processor('crawl', url)
-end
-
 function M.format_reference_block(content)
   return format_via_processor('reference', content)
-end
-
-function M.format_youtube_block(url)
-  return format_via_processor('youtube', url)
 end
 
 function M.format_snapshot(timestamp)

@@ -6,6 +6,69 @@ Changes made since the main summaries were last generated. When updates in a mod
 > - SUMMARY.md
 
 ## 2026
+### Web Features Extracted to nvim-dumpling Plugin - (2026-02-05)
+**Affects:** Core plugin architecture, web content gathering
+
+**Files Changed:**
+- `lua/nai/fileutils/scrape.lua` - (deleted) Moved to nvim-dumpling
+- `lua/nai/fileutils/crawl.lua` - (deleted) Moved to nvim-dumpling
+- `lua/nai/fileutils/youtube.lua` - (deleted) Moved to nvim-dumpling
+- `lua/nai/fileutils/web.lua` - (deleted) Moved to nvim-dumpling
+- `lua/nai/parser/processors/scrape.lua` - (deleted) Moved to nvim-dumpling
+- `lua/nai/parser/processors/crawl.lua` - (deleted) Moved to nvim-dumpling
+- `lua/nai/parser/processors/youtube.lua` - (deleted) Moved to nvim-dumpling
+- `lua/nai/parser/processors/web.lua` - (deleted) Moved to nvim-dumpling
+- `lua/nai/constants.lua` - (modified) Removed WEB, SCRAPE, YOUTUBE, CRAWL markers
+- `lua/nai/config.lua` - (modified) Removed tools.dumpling section and get_dumpling_api_key()
+- `lua/nai/parser.lua` - (modified) Removed web-related processor registrations and format functions
+- `plugin/nvim-ai.lua` - (modified) Removed NAIScrape, NAICrawl, NAIYoutube, NAIWeb, NAIExpandScrape commands; added deprecation stubs
+
+**Purpose:** Reduce plugin bloat by extracting rarely-used web content gathering features (Dumpling API integration) into a separate optional plugin, improving maintainability and conceptual clarity of nvim-ai's core chat functionality.
+
+**Implementation:** Created new `nvim-dumpling` plugin (separate repository) that contains all web scraping, crawling, YouTube transcript, and simple web fetching features. The new plugin can work standalone or integrate with nvim-ai by detecting its presence and registering processors/expanders with nvim-ai's registry system. Deprecation stubs in nvim-ai provide helpful migration messages pointing users to the new plugin. The `block_processor.lua` utility was copied (not moved) to nvim-dumpling to avoid cross-plugin dependencies, as it's still used by nvim-ai's snapshot/tree/reference features.
+
+**New Dependencies:** None for nvim-ai (features removed). nvim-dumpling requires Dumpling API key for scrape/crawl/youtube features.
+
+**Breaking Changes:** Users relying on `:NAIScrape`, `:NAICrawl`, `:NAIYoutube`, `:NAIWeb` commands will see deprecation warnings. Migration: Install nvim-dumpling plugin and use new commands (`:DumpScrape`, `:DumpCrawl`, `:DumpYoutube`, `:DumpWeb`). Existing chat files with `>>> scrape`, `>>> crawl`, etc. blocks will not expand unless nvim-dumpling is installed.
+
+**Related Files:**
+- `lua/nai/fileutils/block_processor.lua` - Still used by nvim-ai for snapshot/tree/reference expansion
+- `lua/nai/blocks/expander.lua` - Registry system that nvim-dumpling integrates with
+- `lua/nai/parser/registry.lua` - Message processor registry that nvim-dumpling uses
+- nvim-dumpling plugin repository: https://github.com/nathanbraun/nvim-dumpling
+
+**TODO/Follow-up:**
+- Test nvim-dumpling integration with nvim-ai in real usage
+- Consider whether to remove deprecation stubs after a few release cycles
+- Update nvim-ai README to mention nvim-dumpling as optional extension
+- Verify all existing chat files with web blocks still work when nvim-dumpling is installed
+
+### Tree Command Ignore Pattern Support - (2026-02-05)
+**Affects:** fileutils/tree, plugin commands
+
+**Files Changed:**
+- `lua/nai/fileutils/tree.lua` - (modified) Added ignore pattern parsing from marker line and support for `-I` flag
+- `plugin/nvim-ai.lua` - (modified) Updated `:NAITree` command to parse and pass ignore patterns
+
+**Purpose:** Enable users to exclude specific directories from tree output (e.g., `node_modules`, `dist`, `build`) using the standard tree `-I` flag, matching the behavior of the system `tree` command.
+
+**Implementation:** 
+- Added `parse_marker_options()` function to extract options from the tree marker line itself (e.g., `>>> tree -I 'node_modules|dist'`)
+- Updated `expand_tree_in_buffer()` to parse options from first line and append them to the tree command execution
+- Modified `format_tree_block()` to accept optional `ignore_patterns` parameter and include it in the marker line
+- Updated `:NAITree` command parser to extract `-I` flag with quoted or unquoted patterns (supports both single/double quotes)
+- Maintains backward compatibility with existing tree blocks without ignore patterns
+- Updated `has_unexpanded_tree_blocks()` to match `>>> tree` with optional content after marker
+
+**New Dependencies:** None
+
+**Breaking Changes:** None - existing tree blocks continue to work as before
+
+**Related Files:** 
+- `lua/nai/blocks/expander.lua` - Calls the tree processor's marker matching function
+- `lua/nai/parser/processors/tree.lua` - Processes tree blocks for API requests (unchanged, uses expanded content)
+
+**TODO/Follow-up:** Could add support for other tree flags (`-L` for depth limit, `-a` for hidden files) using same pattern if needed
 ### Unified Model Picker with OpenClaw Context Awareness - (2026-02-05)
 **Affects:** Model Selection, OpenClaw Integration
 
@@ -27,7 +90,7 @@ Changes made since the main summaries were last generated. When updates in a mod
 
 **TODO/Follow-up:**
 - Consider removing `:NAIOpenClawModel` command if redundant (currently kept for explicit model-only switching)
-- Could add gateway selection if user has multiple OpenClaw gateways configured (currently uses first/active gateway)
+ Could add gateway selection if user has multiple OpenClaw gateways configured (currently uses first/active gateway)
 
 ### OpenClaw Model Selection Integration - (2026-02-05)
 **Affects:** OpenClaw Integration, Tools/Picker

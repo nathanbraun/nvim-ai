@@ -15,6 +15,20 @@ function M.process_tree_block(lines)
   return table.concat(lines, "\n")
 end
 
+-- Parse options from the tree marker line
+local function parse_marker_options(marker_line)
+  local options = ""
+
+  -- Extract everything after ">>> tree"
+  local after_marker = marker_line:match("^>>>%s*tree%s+(.*)$")
+
+  if after_marker and after_marker ~= "" then
+    options = after_marker
+  end
+
+  return options
+end
+
 -- Create and expand a tree in the buffer
 function M.expand_tree_in_buffer(buffer_id, start_line, end_line)
   return block_processor.expand_sync_block({
@@ -26,22 +40,28 @@ function M.expand_tree_in_buffer(buffer_id, start_line, end_line)
     completed_marker = ">>> tree",
     error_marker = ">>> tree-error",
     use_spinner = false,
-    
+
     -- Spinner message
     spinner_message = function(target, options)
       return "Generating directory tree..."
     end,
-    
+
     -- Execute the tree generation
     execute = function(lines, options)
       -- Initialize variables
       local directory_paths = {}
       local tree_options = ""
 
+      -- Parse options from the first line (marker line)
+      if lines[1] then
+        tree_options = parse_marker_options(lines[1])
+      end
+
       -- Skip the first line which contains the tree marker
+      -- and collect directory paths and additional options from comment lines
       for i = 2, #lines do
         local line = lines[i]
-        -- Check if line starts with '--' for options
+        -- Check if line starts with '--' for additional options
         if line:match("^%s*%-%-") then
           local option = line:match("^%s*%-%-(.+)$")
           if option then
@@ -68,17 +88,12 @@ function M.expand_tree_in_buffer(buffer_id, start_line, end_line)
       -- Prepare the result
       local timestamp = os.date("%Y-%m-%d %H:%M:%S")
       local result_lines = {
-        ">>> tree [" .. timestamp .. "]"
+        ">>> tree" .. (tree_options ~= "" and " " .. tree_options or "") .. " [" .. timestamp .. "]"
       }
 
       -- Add all directory paths
       for _, dir in ipairs(directory_paths) do
         table.insert(result_lines, dir)
-      end
-
-      -- Add options as comments if any were provided
-      if tree_options ~= "" then
-        table.insert(result_lines, "-- " .. tree_options:gsub("^%s*", ""))
       end
 
       -- Add a blank line
@@ -98,7 +113,10 @@ function M.expand_tree_in_buffer(buffer_id, start_line, end_line)
           table.insert(result_lines, "==> " .. expanded_path .. " <==")
 
           -- Run the tree command synchronously
-          local cmd = "tree " .. vim.fn.shellescape(expanded_path) .. tree_options
+          local cmd = "tree " .. vim.fn.shellescape(expanded_path)
+          if tree_options ~= "" then
+            cmd = cmd .. " " .. tree_options
+          end
 
           local result = vim.fn.system(cmd)
           local exit_code = vim.v.shell_error
@@ -138,7 +156,7 @@ function M.has_unexpanded_tree_blocks(buffer_id)
       in_ignored_block = true
     elseif in_ignored_block and line:match("^" .. vim.pesc(constants.MARKERS.IGNORE_END or "```") .. "$") then
       in_ignored_block = false
-    elseif line == ">>> tree" then
+    elseif line:match("^>>>%s*tree") and not line:match("%[%d%d%d%d%-%d%d%-%d%d") then
       return true
     end
   end
@@ -147,7 +165,7 @@ function M.has_unexpanded_tree_blocks(buffer_id)
 end
 
 -- Format a tree block for the buffer
-function M.format_tree_block(directory_paths, options)
+function M.format_tree_block(directory_paths, ignore_patterns)
   -- Handle both string and table inputs
   if type(directory_paths) == "string" then
     directory_paths = { directory_paths }
@@ -159,17 +177,22 @@ function M.format_tree_block(directory_paths, options)
   end
 
   -- Start with the tree marker
-  local block = "\n>>> tree\n"
+  local marker = ">>> tree"
+
+  -- Add ignore patterns if provided
+  if ignore_patterns and ignore_patterns ~= "" then
+    marker = marker .. " -I '" .. ignore_patterns .. "'"
+  end
+
+  local block = "\n" .. marker .. "\n"
 
   -- Add each directory path on a separate line
   for _, dir in ipairs(directory_paths) do
-    block = block .. dir .. "\n "
+    block = block .. dir .. "\n"
   end
 
-  -- Add options if provided
-  if options and options ~= "" then
-    block = block .. "-- " .. options .. "\n"
-  end
+  -- Add trailing space
+  block = block .. " "
 
   return block
 end
@@ -177,16 +200,16 @@ end
 -- Register tree processor with the expander
 local function register_with_expander()
   local expander = require('nai.blocks.expander')
-  
+
   expander.register_processor('tree', {
     marker = function(line)
-      return line == ">>> tree"
+      return line:match("^>>>%s*tree") ~= nil
     end,
-    
+
     has_unexpanded = M.has_unexpanded_tree_blocks,
-    
+
     expand = M.expand_tree_in_buffer,
-    
+
     -- No active requests tracking for tree (synchronous operation)
     has_active_requests = nil,
   })

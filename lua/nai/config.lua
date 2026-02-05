@@ -115,16 +115,6 @@ tags: [ai]
 ---]],
     },
   },
-  tools = {
-    dumpling = {
-      base_endpoint = "https://app.dumplingai.com/api/v1/", -- Base endpoint for all Dumpling API calls
-      format = "markdown",                                  -- Output format: markdown, html, or screenshot
-      cleaned = true,                                       -- Whether to clean the output
-      render_js = true,                                     -- Whether to render JavaScript
-      max_content_length = 100000,                          -- Max length to prevent excessively large responses
-      include_timestamps = true,                            -- Whether to include timestamps in the output
-    },
-  },
   expand_placeholders = false,
   highlights = {
     user = { fg = "#88AAFF", bold = true },            -- User message highlighting
@@ -456,44 +446,6 @@ function M.save_credential(provider, api_key)
     vim.notify("Failed to save API key: could not write to " .. config_file, vim.log.levels.ERROR)
     return false
   end
-end
-
-function M.get_dumpling_api_key()
-  -- Try environment variable first
-  local key = vim.env["DUMPLING_API_KEY"]
-  if key and key ~= "" then
-    if M.options.debug and M.options.debug.enabled then
-      vim.notify("DEBUG: Found Dumpling API key in environment variable", vim.log.levels.DEBUG)
-    end
-    return key
-  end
-
-  -- Try credentials file
-  local credentials = read_credentials()
-  if credentials["dumpling"] then
-    if M.options.debug and M.options.debug.enabled then
-      vim.notify("DEBUG: Found Dumpling API key in credentials file", vim.log.levels.DEBUG)
-    end
-    return credentials["dumpling"]
-  end
-
-  -- Fall back to legacy path (if any)
-  local legacy_path = "~/.config/dumpling.token"
-  local token_file = vim.fn.expand(legacy_path)
-  if vim.fn.filereadable(token_file) == 1 then
-    local lines = vim.fn.readfile(token_file)
-    if #lines > 0 then
-      key = vim.fn.trim(lines[1])
-      if key ~= "" then
-        return key
-      end
-    end
-  end
-
-  if M.options.debug and M.options.debug.enabled then
-    vim.notify("DEBUG: No Dumpling API key found", vim.log.levels.DEBUG)
-  end
-  return nil
 end
 
 function M.ensure_valid_ollama_model(provider_config)

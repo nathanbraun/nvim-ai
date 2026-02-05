@@ -765,10 +765,7 @@ function M.expand_blocks(buffer_id)
   -- Ensure all block processors are loaded and registered
   -- This is necessary because they register themselves on load
   require('nai.fileutils.snapshot')
-  require('nai.fileutils.youtube')
   require('nai.fileutils.tree')
-  require('nai.fileutils.scrape')
-  require('nai.fileutils.crawl')
 
   -- Use the expander system to handle all block types
   local expander = require('nai.blocks.expander')

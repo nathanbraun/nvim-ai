@@ -23,46 +23,31 @@ vim.api.nvim_create_user_command('NAINew', function()
   require('nai').new_chat()
 end, { desc = 'Create new empty AI chat file' })
 
-vim.api.nvim_create_user_command('NAIScrape', function(opts)
-  local parser = require('nai.parser')
-  local url = opts.args
-
-  -- Insert a properly formatted scrape block at cursor position
-  local scrape_block = parser.format_scrape_block(url)
-  local lines = vim.split(scrape_block, "\n")
-
-  -- Insert at cursor position
-  local cursor = vim.api.nvim_win_get_cursor(0)
-  local row = cursor[1] - 1
-
-  vim.api.nvim_buf_set_lines(0, row, row, false, lines)
-
-  -- Position cursor at end of inserted block
-  vim.api.nvim_win_set_cursor(0, { row + #lines, 0 })
-end, {
-  nargs = "?",
-  desc = "Insert a scrape block at cursor position",
-  complete = function(ArgLead, CmdLine, CursorPos)
-    -- Simple clipboard-based URL completion
-    local clipboard = vim.fn.getreg("+"):match("https?://[%w%p]+")
-    if clipboard and clipboard:find(ArgLead, 1, true) == 1 then
-      return { clipboard }
-    end
-    return {}
-  end
-})
-
 vim.api.nvim_create_user_command('NAITree', function(opts)
   local parser = require('nai.parser')
   local tree = require('nai.fileutils.tree')
 
-  -- Parse arguments - could be multiple paths separated by spaces
+  -- Parse arguments - extract paths and -I flag
   local paths = {}
-  if opts.args and opts.args ~= "" then
-    -- Split the args on spaces, but handle quoted paths
-    for path_arg in opts.args:gmatch('[^%s"]+|"[^"]+') do
-      -- Remove quotes if present
-      path_arg = path_arg:gsub('^"(.+)"$', '%1')
+  local ignore_patterns = nil
+  local args = opts.args or ""
+
+  -- Look for -I flag and extract pattern
+  local ignore_match = args:match("-I%s+['\"]([^'\"]+)['\"]")
+  if not ignore_match then
+    ignore_match = args:match("-I%s+(%S+)")
+  end
+
+  if ignore_match then
+    ignore_patterns = ignore_match
+    -- Remove the -I flag and its argument from args
+    args = args:gsub("-I%s+['\"]([^'\"]+)['\"]", "")
+    args = args:gsub("-I%s+(%S+)", "")
+  end
+
+  -- Parse remaining arguments as paths
+  if args and args:match("%S") then
+    for path_arg in args:gmatch("%S+") do
       table.insert(paths, path_arg)
     end
   end
@@ -72,8 +57,8 @@ vim.api.nvim_create_user_command('NAITree', function(opts)
     table.insert(paths, vim.fn.expand('%:p:h'))
   end
 
-  -- Create the tree block with multiple paths
-  local tree_block = tree.format_tree_block(paths)
+  -- Create the tree block with paths and ignore patterns
+  local tree_block = tree.format_tree_block(paths, ignore_patterns)
 
   -- Insert at cursor position
   local cursor_pos = vim.api.nvim_win_get_cursor(0)
@@ -86,74 +71,8 @@ vim.api.nvim_create_user_command('NAITree', function(opts)
   vim.api.nvim_win_set_cursor(0, { row + #new_lines, 0 })
 end, {
   nargs = '*',
-  desc = 'Insert directory tree block',
+  desc = 'Insert directory tree block (supports -I flag for ignore patterns)',
   complete = 'dir'
-})
-
-
-vim.api.nvim_create_user_command('NAICrawl', function(opts)
-  local parser = require('nai.parser')
-  local url = opts.args
-
-  -- Insert a properly formatted crawl block at cursor position
-  local crawl_block = parser.format_crawl_block(url)
-  local lines = vim.split(crawl_block, "\n")
-
-  -- Insert at cursor position
-  local cursor = vim.api.nvim_win_get_cursor(0)
-  local row = cursor[1] - 1
-
-  vim.api.nvim_buf_set_lines(0, row, row, false, lines)
-
-  -- Position cursor at end of inserted block
-  vim.api.nvim_win_set_cursor(0, { row + #lines, 0 })
-end, {
-  nargs = "?",
-  desc = "Insert a website crawl block at cursor position",
-  complete = function(ArgLead, CmdLine, CursorPos)
-    -- Simple clipboard-based URL completion
-    local clipboard = vim.fn.getreg("+"):match("https?://[%w%p]+")
-    if clipboard and clipboard:find(ArgLead, 1, true) == 1 then
-      return { clipboard }
-    end
-    return {}
-  end
-})
-
-vim.api.nvim_create_user_command('NAIExpandScrape', function()
-  local scrape = require('nai.fileutils.scrape')
-  local buffer_id = vim.api.nvim_get_current_buf()
-
-  scrape.expand_scrape_blocks_in_buffer(buffer_id)
-end, { desc = 'Expand all scrape blocks in current buffer' })
-
-vim.api.nvim_create_user_command('NAIYoutube', function(opts)
-  local parser = require('nai.parser')
-  local url = opts.args
-
-  -- Insert a properly formatted YouTube block at cursor position
-  local youtube_block = parser.format_youtube_block(url)
-  local lines = vim.split(youtube_block, "\n")
-
-  -- Insert at cursor position
-  local cursor = vim.api.nvim_win_get_cursor(0)
-  local row = cursor[1] - 1
-
-  vim.api.nvim_buf_set_lines(0, row, row, false, lines)
-
-  -- Position cursor at end of inserted block
-  vim.api.nvim_win_set_cursor(0, { row + #lines, 0 })
-end, {
-  nargs = "?",
-  desc = "Insert a YouTube transcript block at cursor position",
-  complete = function(ArgLead, CmdLine, CursorPos)
-    -- Simple clipboard-based URL completion
-    local clipboard = vim.fn.getreg("+"):match("https?://[%w%p]+")
-    if clipboard and clipboard:find("youtube", 1, true) and clipboard:find(ArgLead, 1, true) == 1 then
-      return { clipboard }
-    end
-    return {}
-  end
 })
 
 vim.api.nvim_create_user_command('NAIUser', function()
@@ -207,34 +126,31 @@ end, {
   desc = "Insert a snapshot block at cursor position"
 })
 
-vim.api.nvim_create_user_command('NAIWeb', function(opts)
-  local parser = require('nai.parser')
-  local url = opts.args
+-- Deprecation notices for moved features
+local deprecated_web_commands = {
+  { name = 'NAIScrape',       desc = 'Web scraping (moved to nvim-dumpling)' },
+  { name = 'NAICrawl',        desc = 'Website crawling (moved to nvim-dumpling)' },
+  { name = 'NAIYoutube',      desc = 'YouTube transcripts (moved to nvim-dumpling)' },
+  { name = 'NAIWeb',          desc = 'Simple web fetching (moved to nvim-dumpling)' },
+  { name = 'NAIExpandScrape', desc = 'Expand scrape blocks (moved to nvim-dumpling)' },
+}
 
-  -- Insert a properly formatted web block at cursor position
-  local web_block = parser.format_web_block(url or "")
-  local lines = vim.split(web_block, "\n")
-
-  -- Insert at cursor position
-  local cursor = vim.api.nvim_win_get_cursor(0)
-  local row = cursor[1] - 1
-
-  vim.api.nvim_buf_set_lines(0, row, row, false, lines)
-
-  -- Position cursor at end of inserted block
-  vim.api.nvim_win_set_cursor(0, { row + #lines, 0 })
-end, {
-  nargs = "?",
-  desc = "Insert a web block at cursor position",
-  complete = function(ArgLead, CmdLine, CursorPos)
-    -- Simple clipboard-based URL completion
-    local clipboard = vim.fn.getreg("+"):match("https?://[%w%p]+")
-    if clipboard and clipboard:find(ArgLead, 1, true) == 1 then
-      return { clipboard }
-    end
-    return {}
-  end
-})
+for _, cmd_info in ipairs(deprecated_web_commands) do
+  vim.api.nvim_create_user_command(cmd_info.name, function()
+    vim.notify(
+      string.format(
+        '%s has been moved to nvim-dumpling plugin.\n' ..
+        'Install from: https://github.com/nathanbraun/nvim-dumpling\n' ..
+        'Commands are now: :DumpScrape, :DumpCrawl, :DumpYoutube, :DumpWeb',
+        cmd_info.name
+      ),
+      vim.log.levels.WARN
+    )
+  end, {
+    nargs = '*',
+    desc = cmd_info.desc .. ' [DEPRECATED]'
+  })
+end
 
 -- Add this to plugin/nvim-ai.lua, inside the plugin initialization section
 vim.api.nvim_create_user_command('NAIModel', function()
@@ -335,10 +251,10 @@ vim.api.nvim_create_user_command('NAISetKey', function(opts)
     key = vim.fn.inputsecret("Enter API key for " .. provider .. ": ")
   else
     -- Interactive mode - ask for both provider and key
-    local providers = { "openai", "google", "openrouter", "dumpling", "ollama" }
+    local providers = { "openai", "google", "openrouter", "ollama" }
 
     -- Use simple input instead of input with completion
-    provider = vim.fn.input("Provider (openai, google, openrouter, dumpling, ollama): ")
+    provider = vim.fn.input("Provider (openai, google, openrouter, ollama): ")
 
     if provider == "" then
       vim.notify("Operation cancelled", vim.log.levels.INFO)
@@ -354,7 +270,7 @@ vim.api.nvim_create_user_command('NAISetKey', function(opts)
   end
 
   -- Validate provider
-  local valid_providers = { "openai", "openrouter", "dumpling", "ollama", "google" } -- Add Google
+  local valid_providers = { "openai", "openrouter", "ollama", "google" }
   local is_valid = false
   for _, valid_provider in ipairs(valid_providers) do
     if provider == valid_provider then
@@ -451,7 +367,7 @@ end, {
   desc = "Set API key for a provider (usage: NAISetKey [provider] [key])",
   complete = function(ArgLead, CmdLine, CursorPos)
     -- Provide completion for providers
-    local providers = { "openai", "openrouter", "dumpling", "ollama", "google" } -- Add Google
+    local providers = { "openai", "openrouter", "ollama", "google" }
     if CmdLine:match("^%s*NAISetKey%s+%S+%s+") then
       -- If provider is already specified, don't provide completions for the key
       return {}
@@ -471,26 +387,15 @@ end, {
 -- Command to check which API keys are configured
 vim.api.nvim_create_user_command('NAICheckKeys', function()
   local config = require('nai.config')
-  local providers = { "openai", "openrouter", "dumpling", "google" }
+  local providers = { "openai", "openrouter", "google", "ollama" }
   local results = {}
 
   for _, provider in ipairs(providers) do
     local key = config.get_api_key(provider)
-    if provider ~= "dumpling" then
-      -- For regular providers
-      if key then
-        table.insert(results, provider .. ": ✓ Configured")
-      else
-        table.insert(results, provider .. ": ✗ Not configured")
-      end
+    if key then
+      table.insert(results, provider .. ": ✓ Configured")
     else
-      -- For dumpling
-      key = config.get_dumpling_api_key()
-      if key then
-        table.insert(results, "dumpling: ✓ Configured")
-      else
-        table.insert(results, "dumpling: ✗ Not configured")
-      end
+      table.insert(results, provider .. ": ✗ Not configured")
     end
   end
 
@@ -564,7 +469,7 @@ vim.api.nvim_create_user_command('NAISwitchProvider', function(opts)
     provider = vim.fn.input({
       prompt = "Current provider: " .. current .. "\nSwitch to (openai, openrouter, ollama, google): ",
       completion = function(_, _, _)
-        return { "openai", "openrouter", "ollama" }
+        return { "openai", "openrouter", "ollama", "google" }
       end
     })
 
@@ -575,7 +480,7 @@ vim.api.nvim_create_user_command('NAISwitchProvider', function(opts)
   end
 
   -- Validate provider
-  if provider ~= "openai" and provider ~= "openrouter" and provider ~= "ollama" then
+  if provider ~= "openai" and provider ~= "openrouter" and provider ~= "ollama" and provider ~= "google" then
     vim.notify("Invalid provider: " .. provider .. ". Valid options: openai, openrouter, ollama, google",
       vim.log.levels.ERROR)
     return
@@ -637,9 +542,9 @@ vim.api.nvim_create_user_command('NAITest', function(opts)
   end
 end, {
   nargs = "?",
-  desc = "Run nvim-ai tests (optional: parser, config, integration, fileutils)", -- Update description
+  desc = "Run nvim-ai tests (optional: parser, config, integration, fileutils)",
   complete = function(ArgLead, CmdLine, CursorPos)
-    local groups = { "parser", "config", "integration", "fileutils" }            -- Add fileutils
+    local groups = { "parser", "config", "integration", "fileutils" }
     local filtered = {}
     for _, group in ipairs(groups) do
       if group:find(ArgLead, 1, true) == 1 then
@@ -994,6 +899,7 @@ end, {
     return { "on", "off", "status" }
   end
 })
+
 -- Initialize the buffer detection system
 require('nai.buffer').setup_autocmds()
 require('nai.buffer').create_activation_command()
