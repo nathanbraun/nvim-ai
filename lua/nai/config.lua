@@ -42,13 +42,13 @@ M.defaults = {
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
       models = {
         "anthropic/claude-sonnet-4.5",
-        "anthropic/claude-opus-4.5",
-        "google/gemini-2.0-flash-001",
-        "openai/o3",
+        "anthropic/claude-opus-4.6",
+        "moonshotai/kimi-k2.5",
         "openai/gpt-5.2",
-        "openai/gpt-4o",
-        "openai/gpt-4o-mini",
-        "perplexity/r1-1776",
+        "openai/o3",
+        "google/gemini-3-flash-preview",
+        "perplexity/sonar-pro-search",
+        "openrouter/auto"
       },
     },
     google = {
@@ -81,12 +81,6 @@ M.defaults = {
       endpoint = nil, -- Uses HTTP gateway instead
       gateways = {
         {
-          name = "prax",
-          gateway_url = "https://praxs-mac-mini.tail2864a8.ts.net",
-          thinking_level = nil,
-          timeout_ms = 300000,
-        },
-        {
           name = "local",
           gateway_url = "http://localhost:18789",
           thinking_level = nil,
@@ -94,7 +88,6 @@ M.defaults = {
         },
       },
       models = {
-        "openclaw/prax",
         "openclaw/local",
       }
     },
@@ -132,7 +125,6 @@ tags: [ai]
       "You are an interpretor. Translate any further text/user messages you recieve to Spanish. If the text is a question, don't answer it, just translate the question to Spanish.",
       user_prefix = "",
       config = {
-        model = "openai/gpt-4o-mini",
         temperature = 0.1,
       }
     },
@@ -145,50 +137,6 @@ tags: [ai]
       system =
       "You are a testing expert. Generate comprehensive unit tests for the provided code, focusing on edge cases and full coverage.",
       user_prefix = "Generate tests for:",
-    },
-    math = {
-      system =
-      [[
-You are a conversational partner for developing mathematical intuition and understanding.
-
-**Core principles:**
-- Focus on building intuition and conceptual understanding rather than just solving problems
-- Use plain language, analogies, and visual descriptions to clarify ideas
-- When discussing any topic, be aware of the "level of abstraction" we're working at (concrete examples vs. general principles vs. underlying philosophy, etc.)
-- Don't be afraid to jump up a level of abstraction initially, so we understand what/why we're doing and the context.
-- If I say things like "let's go up a level," "zoom out," "get more concrete," or "what's the bigger picture," understand I'm asking to shift perspective—more abstract, more concrete, broader context, or deeper detail
-- Help me navigate between these levels fluidly, making the connections explicit
-
-**Formatting:**
-- Use `$...$` for inline math, e.g., "the function $f(x) = x^2$ has a minimum at $x = 0$"
-- Use `$$...$$` for display/block equations, e.g.,
-$$\int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2}$$
-- *The formatting is important*. Use latex with $'s, *not* \[.
-
-**Style:**
-- Keep responses clear and conversational
-- Don't just do the work for me—guide my thinking
-- Ask clarifying questions when my question could be interpreted at different levels
-- Show how ideas connect across levels of abstraction
-        ]],
-      config = {
-        model = "openai/gpt-5.2",
-      }
-    },
-    ["check-todo-list"] = {
-      system =
-      [[Your job is to evaluate a todo list and make sure everything is checked off.
-
-
-Instructions:
-- If everything is checked off, respond "Looks good!" and nothing else.
-- Otherwise remind me what I still have to do.]],
-      config = {
-        expand_placeholders = true
-      },
-      user_prefix = [[The todo is here:
-        $FILE_CONTENTS
-        ]]
     },
   },
   verification = {
@@ -236,60 +184,9 @@ local function read_credentials()
   return credentials
 end
 
--- Function to get API key for a specific provider
-function M.get_api_key(provider)
-  -- OpenClaw doesn't need an API key
-  if provider == "openclaw" then
-    return "local"
-  end
-
-  if provider == "ollama" then
-    -- Check if endpoint is not localhost
-    local endpoint = M.options.providers.ollama.endpoint
-    if not endpoint:match("localhost") and not endpoint:match("127.0.0.1") then
-      -- Try environment variable first
-      local key = vim.env.OLLAMA_API_KEY
-      if key and key ~= "" then
-        return key
-      end
-
-      -- Try credentials file
-      local credentials = read_credentials()
-      if credentials.ollama then
-        return credentials.ollama
-      end
-    else
-      -- Return a dummy key for local instances that don't need auth
-      return "local"
-    end
-  elseif provider == "google" then
-    -- Try environment variable first
-    local key = vim.env.GOOGLE_API_KEY
-    if key and key ~= "" then
-      return key
-    end
-
-    -- Try credentials file
-    local credentials = read_credentials()
-    if credentials.google then
-      return credentials.google
-    end
-
-    -- For backward compatibility, try old token files
-    local token_file = vim.fn.expand("~/.config/google.token")
-    if vim.fn.filereadable(token_file) == 1 then
-      local lines = vim.fn.readfile(token_file)
-      if #lines > 0 then
-        key = vim.fn.trim(lines[1])
-        if key ~= "" then
-          return key
-        end
-      end
-    end
-  end
-
+-- Look up an API key from env var, credentials file, and optional legacy token file
+local function lookup_api_key(env_var, credentials_key, legacy_path)
   -- Try environment variable first
-  local env_var = provider:upper() .. "_API_KEY"
   local key = vim.env[env_var]
   if key and key ~= "" then
     return key
@@ -297,18 +194,13 @@ function M.get_api_key(provider)
 
   -- Try credentials file
   local credentials = read_credentials()
-  if credentials[provider] then
-    return credentials[provider]
+  if credentials[credentials_key] then
+    return credentials[credentials_key]
   end
 
-  -- For backward compatibility, try old token files
-  local legacy_paths = {
-    openai = "~/.config/openai.token",
-    openrouter = "~/.config/open-router.token"
-  }
-
-  if legacy_paths[provider] then
-    local token_file = vim.fn.expand(legacy_paths[provider])
+  -- Try legacy token file
+  if legacy_path then
+    local token_file = vim.fn.expand(legacy_path)
     if vim.fn.filereadable(token_file) == 1 then
       local lines = vim.fn.readfile(token_file)
       if #lines > 0 then
@@ -321,6 +213,31 @@ function M.get_api_key(provider)
   end
 
   return nil
+end
+
+-- Legacy token file paths per provider
+local LEGACY_TOKEN_PATHS = {
+  openai = "~/.config/openai.token",
+  openrouter = "~/.config/open-router.token",
+  google = "~/.config/google.token",
+}
+
+-- Function to get API key for a specific provider
+function M.get_api_key(provider)
+  if provider == "openclaw" then
+    return "local"
+  end
+
+  if provider == "ollama" then
+    local endpoint = M.options.providers.ollama.endpoint
+    if endpoint:match("localhost") or endpoint:match("127.0.0.1") then
+      return "local"
+    end
+    return lookup_api_key("OLLAMA_API_KEY", "ollama", nil)
+  end
+
+  local env_var = provider:upper() .. "_API_KEY"
+  return lookup_api_key(env_var, provider, LEGACY_TOKEN_PATHS[provider])
 end
 
 -- Function to get the current provider configuration

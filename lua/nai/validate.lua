@@ -29,13 +29,6 @@ function M.validate_config(config)
 
   -- Check active_provider
   if config.active_provider then
-    local valid, err = M.check_enum(config.active_provider, 
-      { "openai", "openrouter", "ollama", "google", "openclaw" },
-      "active_provider")
-    if not valid then
-      table.insert(errors, err)
-    end
-
     -- Check if the specified provider exists in the providers table
     if not config.providers or not config.providers[config.active_provider] then
       table.insert(errors, "Config error: active_provider '" .. config.active_provider ..

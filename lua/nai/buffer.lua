@@ -59,6 +59,17 @@ function M.apply_syntax_overlay(bufnr)
   syntax.apply_to_buffer(bufnr)
 end
 
+-- Apply folding settings to all windows showing a buffer
+local function apply_folding_to_windows(bufnr)
+  for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
+    vim.wo[winid].foldmethod = "expr"
+    vim.wo[winid].foldexpr = "v:lua.require('nai.folding').get_fold_level(v:lnum)"
+    vim.wo[winid].foldenable = true
+    vim.wo[winid].foldlevel = 99
+  end
+  pcall(vim.cmd, "normal! zx")
+end
+
 -- Activate the plugin for a buffer
 function M.activate_buffer(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
@@ -95,17 +106,7 @@ function M.activate_buffer(bufnr)
   -- Apply folding unless explicitly disabled
   if config.options.active_filetypes.enable_folding ~= false then
     require('nai.folding').apply_to_buffer(bufnr)
-
-    -- Force folding method to take effect immediately for all windows showing this buffer
-    for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
-      vim.wo[winid].foldmethod = "expr"
-      vim.wo[winid].foldexpr = "v:lua.require('nai.folding').get_fold_level(v:lnum)"
-      vim.wo[winid].foldenable = true
-      vim.wo[winid].foldlevel = 99 -- Start with all folds open
-
-      -- Refresh folding
-      vim.cmd("normal! zx")
-    end
+    apply_folding_to_windows(bufnr)
   end
 
   -- Add cleanup on buffer unload
@@ -126,13 +127,7 @@ function M.activate_buffer(bufnr)
 
       -- Refresh folding for all windows showing this buffer
       if config.options.active_filetypes.enable_folding ~= false then
-        for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
-          vim.wo[winid].foldmethod = "expr"
-          vim.wo[winid].foldexpr = "v:lua.require('nai.folding').get_fold_level(v:lnum)"
-
-          -- Force folding to update
-          pcall(vim.cmd, "normal! zx")
-        end
+        apply_folding_to_windows(bufnr)
       end
     end
   end, 100)

@@ -5,6 +5,23 @@ local M = {}
 
 local config = require('nai.config')
 
+-- Config value type coercion map
+local CONFIG_TYPES = {
+  temperature = "number",
+  max_tokens = "number",
+  expand_placeholders = "boolean",
+}
+
+local function coerce_config_value(key, value)
+  local expected = CONFIG_TYPES[key]
+  if expected == "number" then
+    return tonumber(value)
+  elseif expected == "boolean" then
+    return value:lower() == "true"
+  end
+  return value
+end
+
 -- Initialize registry and register core processors
 local registry = require('nai.parser.registry')
 registry.register('user', require('nai.parser.processors.user'))
@@ -116,16 +133,8 @@ function M.parse_chat_buffer(content, buffer_id)
             -- Trim whitespace
             value = value:gsub("^%s*(.-)%s*$", "%1")
 
-            -- Convert certain values
-            if key == "temperature" then
-              value = tonumber(value)
-            elseif key == "max_tokens" then
-              value = tonumber(value)
-            elseif key == "expand_placeholders" then
-              -- Convert string boolean to actual boolean
-              value = value:lower() == "true"
-              vim.notify("Setting expand_placeholders to: " .. tostring(value), vim.log.levels.DEBUG)
-            end
+            -- Coerce to expected type
+            value = coerce_config_value(key, value)
 
             chat_config[key] = value
           else

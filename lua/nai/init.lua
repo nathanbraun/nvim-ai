@@ -93,12 +93,14 @@ end
 
 -- Function to switch between providers
 function M.switch_provider(provider)
-  if provider ~= "openai" and provider ~= "openrouter" and provider ~= "ollama" and provider ~= "openclaw" then
-    vim.notify("Invalid provider. Use 'openai', 'openrouter', 'ollama', or 'openclaw'", vim.log.levels.ERROR)
+  local config = require('nai.config')
+
+  if not config.options.providers[provider] then
+    local valid_providers = vim.tbl_keys(config.options.providers)
+    table.sort(valid_providers)
+    vim.notify("Invalid provider '" .. provider .. "'. Available: " .. table.concat(valid_providers, ", "), vim.log.levels.ERROR)
     return
   end
-
-  local config = require('nai.config')
   config.options.active_provider = provider
 
   -- Update state
@@ -623,6 +625,7 @@ end
 function M.new_chat_with_content(user_input)
   local parser = require('nai.parser')
   local fileutils = require('nai.fileutils')
+  local state = require('nai.state')
 
   -- Create a title from user input
   local title_text = user_input:sub(1, 40) .. (user_input:len() > 40 and "..." or "")
@@ -630,8 +633,9 @@ function M.new_chat_with_content(user_input)
 
   -- Create new buffer with filename
   vim.cmd("enew")
-  vim.api.nvim_buf_set_name(0, filename)
-  vim.bo.filetype = "naichat"
+  local buffer_id = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_name(buffer_id, filename)
+  vim.bo[buffer_id].filetype = "naichat"
 
   -- Generate header
   local header = parser.generate_header(title_text, nil) -- Let it auto-generate
@@ -644,14 +648,25 @@ function M.new_chat_with_content(user_input)
   table.insert(header_lines, user_input) -- User input
 
   -- Add all lines to the buffer
-  vim.api.nvim_buf_set_lines(0, 0, 0, false, header_lines)
+  vim.api.nvim_buf_set_lines(buffer_id, 0, 0, false, header_lines)
 
   -- Position cursor at the end
-  local line_count = vim.api.nvim_buf_line_count(0)
+  local line_count = vim.api.nvim_buf_line_count(buffer_id)
   vim.api.nvim_win_set_cursor(0, { line_count, 0 })
 
   -- Create indicator with nice placeholder
-  local indicator = utils.indicators.create_assistant_placeholder(0, line_count)
+  local indicator = utils.indicators.create_assistant_placeholder(buffer_id, line_count)
+
+  -- Register the indicator in state
+  local indicator_id = "indicator_" .. buffer_id .. "_" .. line_count
+  state.register_indicator(indicator_id, indicator)
+
+  -- Build request_data matching what prepare_chat_request returns
+  local request_data = {
+    indicator = indicator,
+    indicator_id = indicator_id,
+    needs_auto_title = false,
+  }
 
   -- Create messages for API
   local is_untitled = title_text:match("Untitled") ~= nil
@@ -667,84 +682,29 @@ function M.new_chat_with_content(user_input)
   }
 
   -- Cancel any ongoing requests
-  local state = require('nai.state')
   if state.has_active_requests() then
     M.cancel()
   end
 
-  -- Call API
-  M.active_request = api.chat_request(
+  -- Call API using shared handlers
+  api.chat_request(
     messages,
     function(response)
-      -- Get the position where we need to replace the placeholder
-      local insertion_row = utils.indicators.remove(indicator)
+      handle_chat_response(buffer_id, request_data, response, messages, nil)
 
-      -- Format response and append to buffer
-      local formatted_response = parser.format_assistant_message(response)
-      local lines_to_append = vim.split(formatted_response, "\n")
-
-      -- Replace the placeholder with the actual content
-      local placeholder_height = indicator.end_row - indicator.start_row
-      vim.api.nvim_buf_set_lines(
-        0,
-        insertion_row,
-        insertion_row + placeholder_height,
-        false,
-        lines_to_append
-      )
-
-      -- Add a new user message template
-      local new_user = parser.format_user_message("")
-      vim.api.nvim_buf_set_lines(0, -1, -1, false, vim.split(new_user, "\n"))
-
-      -- Save the file
-      vim.cmd("write")
-
-      -- Move cursor to end safely
-      local new_line_count = vim.api.nvim_buf_line_count(0)
-      local safe_pos = math.min(new_line_count, insertion_row + #lines_to_append + 2)
-
-      -- Check if we can safely set the cursor
-      local current_buf = vim.api.nvim_get_current_buf()
-      if vim.api.nvim_buf_is_valid(current_buf) then
-        vim.api.nvim_win_set_cursor(0, { safe_pos, 0 })
+      -- Post-save: write the file after response is handled
+      if vim.api.nvim_buf_is_valid(buffer_id) then
+        vim.api.nvim_buf_call(buffer_id, function()
+          vim.cmd("write")
+        end)
+        vim.notify("AI chat saved to " .. filename, vim.log.levels.INFO)
       end
-
-      -- Notify completion
-      vim.notify("AI chat saved to " .. filename, vim.log.levels.INFO)
     end,
     function(error_msg)
-      -- Handle errors (same as before)
-      local insertion_row = utils.indicators.remove(indicator)
-
-      -- Create error message
-      local error_lines = {
-        "",
-        "<<< assistant",
-        "",
-        "❌ Error: " .. error_msg,
-        "",
-      }
-
-      -- Replace placeholder with error message
-      local placeholder_height = indicator.end_row - indicator.start_row
-      vim.api.nvim_buf_set_lines(
-        0,
-        insertion_row,
-        insertion_row + placeholder_height,
-        false,
-        error_lines
-      )
-
-      -- Show error notification
+      handle_chat_error(buffer_id, request_data, error_msg)
       vim.notify(error_msg, vim.log.levels.ERROR)
-      M.active_request = nil
-      M.active_indicator = nil
     end
   )
-
-  -- Store indicator for cancellation
-  M.active_indicator = indicator
 end
 
 function M.expand_blocks(buffer_id)
