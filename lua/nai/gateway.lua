@@ -5,6 +5,7 @@ local M = {}
 local config = require('nai.config')
 local state = require('nai.state')
 local events = require('nai.events')
+local session_utils = require('nai.utils.session')
 
 -- Gateway connection state
 local gateway_job = nil
@@ -386,7 +387,7 @@ function M.chat_send(session_key, messages, on_stream, on_complete, on_error, ch
   end
 
   -- Generate request ID
-  local request_id = "nvim_" .. tostring(os.time()) .. "_" .. tostring(math.random(100000))
+  local request_id = session_utils.generate_request_id()
 
   -- Combine all consecutive user messages at the end (since last assistant response)
   local combined_user_content = {}
@@ -416,6 +417,7 @@ function M.chat_send(session_key, messages, on_stream, on_complete, on_error, ch
     params = {
       sessionKey = session_key,
       message = final_message, -- Combined message content
+      senderId = "nvim:" .. tostring(vim.fn.getpid()),
       idempotencyKey = request_id,
       deliver = false,
       timeoutMs = 300000
@@ -553,32 +555,9 @@ function M.get_session_key(buffer_id)
   local session_prefix = moltbot_config.session_prefix or "nvim"
 
   -- Try to extract from frontmatter
-  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, 20, false)
-  local in_frontmatter = false
-  local has_empty_session = false
-
-  for _, line in ipairs(lines) do
-    if line == "---" then
-      if in_frontmatter then
-        break
-      else
-        in_frontmatter = true
-      end
-    elseif in_frontmatter then
-      -- Check for moltbot_session field
-      local value = line:match("^moltbot_session:%s*(.+)$")
-      if value then
-        -- Trim whitespace
-        value = value:gsub("^%s*(.-)%s*$", "%1")
-        if value ~= "" then
-          return value
-        else
-          has_empty_session = true
-        end
-      elseif line:match("^moltbot_session:%s*$") then
-        has_empty_session = true
-      end
-    end
+  local value = session_utils.read_frontmatter_field(buffer_id, 'moltbot_session', 20)
+  if value then
+    return value
   end
 
   -- Generate new session key

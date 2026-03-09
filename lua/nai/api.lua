@@ -5,6 +5,7 @@ local M = {}
 local config = require('nai.config')
 local request_body = require('nai.api.request_body')
 local response_parser = require('nai.api.response_parser')
+local session_utils = require('nai.utils.session')
 
 -- Build curl args common to both Windows temp-file and standard paths
 local function build_curl_args(endpoint_url, auth_header, extra_args)
@@ -176,7 +177,7 @@ end
 
 -- Handle chat API request
 function M.chat_request(messages, on_complete, on_error, chat_config)
-  local request_id = tostring(os.time()) .. "_" .. tostring(math.random(10000))
+  local request_id = session_utils.generate_request_id()
 
   local provider = chat_config and chat_config.provider or config.options.active_provider
   local provider_config = config.options.providers[provider] or config.get_provider_config()
@@ -191,7 +192,7 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
 
   if not api_key then
     vim.schedule(function()
-      local error_request_id = "error_" .. tostring(os.time()) .. "_" .. tostring(math.random(10000))
+      local error_request_id = session_utils.generate_request_id("error")
 
       local state = require('nai.state')
       state.register_request(error_request_id, {

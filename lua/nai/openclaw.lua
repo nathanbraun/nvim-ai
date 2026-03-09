@@ -1,6 +1,8 @@
 --- OpenClaw Gateway integration via HTTP
 --- Replaces the WebSocket-based gateway.lua with simpler HTTP/SSE approach
 
+local session_utils = require('nai.utils.session')
+
 local M = {}
 
 -- Track active jobs for cancellation
@@ -9,11 +11,7 @@ M.active_jobs = {}
 --- Generate a unique request ID
 --- @return string
 local function generate_request_id()
-  return string.format("nvim_%d_%d_%04d",
-    vim.fn.getpid(),
-    os.time(),
-    math.random(0, 9999)
-  )
+  return session_utils.generate_request_id()
 end
 
 --- Get or create session key for a buffer
@@ -29,24 +27,11 @@ function M.get_session_key(buffer_id)
   end
 
   -- Try to extract from frontmatter
-  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, 30, false)
-  local in_frontmatter = false
-  for i, line in ipairs(lines) do
-    if line:match('^%-%-%-') then
-      if i == 1 then
-        in_frontmatter = true
-      else
-        break -- End of frontmatter
-      end
-    elseif in_frontmatter then
-      local key = line:match('^session_key:%s*(.+)$')
-      if key then
-        local trimmed = key:gsub('^%s*', ''):gsub('%s*$', '')
-        vim.b[buffer_id] = vim.b[buffer_id] or {}
-        vim.b[buffer_id].openclaw_session_key = trimmed
-        return trimmed
-      end
-    end
+  local value = session_utils.read_frontmatter_field(buffer_id, 'session_key')
+  if value then
+    vim.b[buffer_id] = vim.b[buffer_id] or {}
+    vim.b[buffer_id].openclaw_session_key = value
+    return value
   end
 
   -- Generate new session key based on filename

@@ -75,6 +75,18 @@ M.defaults = {
         "llama3.2:latest",
       },
     },
+    claude_proxy = {
+      name = "Claude (Max)",
+      description = "Claude via local proxy (uses Max subscription)",
+      temperature = 0.7,
+      max_tokens = 10000,
+      endpoint = "http://127.0.0.1:5757/v1/chat/completions",
+      models = {
+        "sonnet",
+        "opus",
+        "haiku",
+      },
+    },
     openclaw = {
       name = "OpenClaw",
       description = "OpenClaw Gateway",
@@ -224,7 +236,7 @@ local LEGACY_TOKEN_PATHS = {
 
 -- Function to get API key for a specific provider
 function M.get_api_key(provider)
-  if provider == "openclaw" then
+  if provider == "openclaw" or provider == "claude_proxy" then
     return "local"
   end
 
