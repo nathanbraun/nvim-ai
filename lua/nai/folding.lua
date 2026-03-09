@@ -33,17 +33,18 @@ function M.get_fold_level(lnum)
   local winid = vim.fn.win_getid()
 
   -- Check for chat markers - using direct string comparison for reliability
-  if line == ">>> user" then
+  local MARKERS = constants.MARKERS
+  if line == MARKERS.USER then
     return ">1" -- Start a fold for user messages
-  elseif line == "<<< assistant" then
+  elseif line == MARKERS.ASSISTANT then
     return ">1" -- Start a fold for assistant messages
-  elseif line == ">>> system" then
+  elseif line == MARKERS.SYSTEM then
     return ">1" -- Start a fold for system messages
-  elseif line == ">>> config" then
+  elseif line == MARKERS.CONFIG then
     return ">1" -- Start a fold for config messages
-  elseif line == ">>> ignore" then
+  elseif line == MARKERS.IGNORE then
     return ">2" -- Start a nested fold for ignore blocks
-  elseif line == "<<< ignore" then
+  elseif line == MARKERS.IGNORE_END then
     return "<2" -- End the nested fold for ignore blocks
   end
 

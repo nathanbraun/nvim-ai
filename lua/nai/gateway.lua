@@ -6,6 +6,7 @@ local config = require('nai.config')
 local state = require('nai.state')
 local events = require('nai.events')
 local session_utils = require('nai.utils.session')
+local constants = require('nai.constants')
 
 -- Gateway connection state
 local gateway_job = nil
@@ -55,7 +56,7 @@ function M.connect(model_name)
     gateway_config = moltbot_config
   end
 
-  local gateway_url = gateway_config.gateway_url or "ws://localhost:18789"
+  local gateway_url = gateway_config.gateway_url or constants.DEFAULT_GATEWAY_WS_URL
   local auth_token = gateway_config.auth_token
 
   local ws_client = get_ws_client_path()

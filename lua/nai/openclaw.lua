@@ -2,6 +2,7 @@
 --- Replaces the WebSocket-based gateway.lua with simpler HTTP/SSE approach
 
 local session_utils = require('nai.utils.session')
+local constants = require('nai.constants')
 
 local M = {}
 
@@ -86,7 +87,7 @@ end
 --- @param on_error function Callback: function(error_message: string)
 --- @return string run_id The request ID for cancellation
 function M.chat_send(session_key, message, gateway_config, on_stream, on_complete, on_error)
-  local gateway_url = gateway_config.gateway_url or 'http://localhost:18789'
+  local gateway_url = gateway_config.gateway_url or constants.DEFAULT_GATEWAY_URL
   local thinking = gateway_config.thinking_level
   local timeout_ms = gateway_config.timeout_ms or 300000
 
@@ -240,7 +241,7 @@ function M.cancel(session_key, gateway_url)
   M.active_jobs[session_key] = nil
 
   -- Notify gateway to abort (fire and forget)
-  gateway_url = gateway_url or 'http://localhost:18789'
+  gateway_url = gateway_url or constants.DEFAULT_GATEWAY_URL
 
   vim.fn.jobstart({
     'curl', '-s',
@@ -275,7 +276,7 @@ end
 --- @param gateway_url string Gateway URL to check
 --- @param callback function Callback: function(ok: boolean, error: string|nil)
 function M.health_check(gateway_url, callback)
-  gateway_url = gateway_url or 'http://localhost:18789'
+  gateway_url = gateway_url or constants.DEFAULT_GATEWAY_URL
 
   vim.fn.jobstart({
     'curl', '-s', '-f', '--max-time', '5',
@@ -319,7 +320,7 @@ end
 ---   On success: result = { primary = string|nil, fallbacks = string[], models = ModelInfo[] }
 ---   On error: result = error message string
 function M.fetch_models(gateway_url, callback)
-  gateway_url = gateway_url or 'http://localhost:18789'
+  gateway_url = gateway_url or constants.DEFAULT_GATEWAY_URL
 
   vim.fn.jobstart({
     'curl', '-s', '-f', '--max-time', '10',
@@ -370,7 +371,7 @@ end
 --- @param gateway_config table Gateway configuration
 --- @param callback function Callback: function(ok: boolean, error: string|nil)
 function M.set_model(session_key, model, gateway_config, callback)
-  local gateway_url = gateway_config.gateway_url or 'http://localhost:18789'
+  local gateway_url = gateway_config.gateway_url or constants.DEFAULT_GATEWAY_URL
   local timeout_ms = gateway_config.timeout_ms or 30000
 
   -- Send /model as a directive-only message

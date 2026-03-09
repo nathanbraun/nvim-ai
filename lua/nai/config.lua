@@ -2,6 +2,7 @@
 local M = {}
 
 local path = require('nai.utils.path')
+local constants = require('nai.constants')
 
 -- Default configuration
 M.defaults = {
@@ -94,7 +95,7 @@ M.defaults = {
       gateways = {
         {
           name = "local",
-          gateway_url = "http://localhost:18789",
+          gateway_url = constants.DEFAULT_GATEWAY_URL,
           thinking_level = nil,
           timeout_ms = 300000,
         },

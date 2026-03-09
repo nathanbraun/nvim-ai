@@ -15,6 +15,9 @@ M.MARKERS = {
   IGNORE_END = "<<< ignore",
 }
 
+M.DEFAULT_GATEWAY_URL = "http://localhost:18789"
+M.DEFAULT_GATEWAY_WS_URL = "ws://localhost:18789"
+
 M.AUTO_TITLE_INSTRUCTION =
 "\nFor your first response, please begin with 'Proposed Title: ' followed by a concise 3-7 word title summarizing this conversation. Place this on the first line of your response."
 

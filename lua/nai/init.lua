@@ -6,6 +6,7 @@ local config = require('nai.config')
 local api = require('nai.api')
 local utils = require('nai.utils')
 local error_utils = require('nai.utils.error')
+local constants = require('nai.constants')
 
 local function check_platform_compatibility()
   local path = require('nai.utils.path')
@@ -243,9 +244,52 @@ local function ensure_user_message(buffer_id, messages)
   return true, nil
 end
 
+-- Check if auto-title is needed and modify system message if so
+-- Returns true if auto-title was applied
+local function detect_and_apply_auto_title(buffer_id, messages)
+  if not config.options.chat_files.auto_title then
+    return false
+  end
+
+  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
+
+  -- Don't auto-title if there's a user-provided system message
+  for _, line in ipairs(lines) do
+    if line == constants.MARKERS.SYSTEM then
+      return false
+    end
+  end
+
+  -- Check if the title is still "Untitled"
+  local needs_auto_title = false
+  for i, line in ipairs(lines) do
+    if line:match("^title:%s*Untitled") then
+      needs_auto_title = true
+      break
+    end
+    if line == "---" and i > 1 then
+      break
+    end
+  end
+
+  if not needs_auto_title then
+    return false
+  end
+
+  -- Modify the system message to request a title
+  local parser = require('nai.parser')
+  for _, msg in ipairs(messages) do
+    if msg.role == "system" then
+      msg.content = parser.get_system_prompt_with_title_request(true)
+      break
+    end
+  end
+
+  return true
+end
+
 -- Prepare the chat request (indicator, auto-title logic, etc)
 local function prepare_chat_request(buffer_id, messages, chat_config)
-  local parser = require('nai.parser')
   local utils = require('nai.utils')
   local state = require('nai.state')
 
@@ -267,43 +311,8 @@ local function prepare_chat_request(buffer_id, messages, chat_config)
     })
   end
 
-  -- Check if we need auto-title
-  local needs_auto_title = false
-  local lines = vim.api.nvim_buf_get_lines(buffer_id, 0, -1, false)
-
-  if config.options.chat_files.auto_title then
-    -- Check if there's a user-provided system message
-    local has_user_system_message = false
-    for i, line in ipairs(lines) do
-      if line:match("^>>> system$") then
-        has_user_system_message = true
-        break
-      end
-    end
-
-    -- Only enable auto-title if there's no user-provided system message
-    if not has_user_system_message then
-      for i, line in ipairs(lines) do
-        if line:match("^title:%s*Untitled") then
-          needs_auto_title = true
-          break
-        end
-        if line == "---" and i > 1 then
-          break
-        end
-      end
-    end
-  end
-
-  -- If we need auto-title, modify the system message
-  if needs_auto_title then
-    for i, msg in ipairs(messages) do
-      if msg.role == "system" then
-        msg.content = parser.get_system_prompt_with_title_request(true)
-        break
-      end
-    end
-  end
+  -- Check and apply auto-title if needed
+  local needs_auto_title = detect_and_apply_auto_title(buffer_id, messages)
 
   return {
     indicator = indicator,
@@ -419,7 +428,7 @@ local function handle_chat_error(buffer_id, request_data, error_msg)
   -- Create error message
   local error_lines = {
     "",
-    "<<< assistant",
+    constants.MARKERS.ASSISTANT,
     "",
     "❌ Error: " .. error_msg,
     "",
@@ -601,7 +610,7 @@ function M.new_chat()
 
   -- Add user message right after header with exactly one blank line
   table.insert(header_lines, "")         -- One blank line after YAML header
-  table.insert(header_lines, ">>> user") -- User prompt
+  table.insert(header_lines, constants.MARKERS.USER) -- User prompt
   table.insert(header_lines, "")         -- One blank line after user prompt
 
   -- Add all lines to the buffer
@@ -643,7 +652,7 @@ function M.new_chat_with_content(user_input)
 
   -- Add user message right after header with exactly one blank line
   table.insert(header_lines, "")         -- One blank line after YAML header
-  table.insert(header_lines, ">>> user") -- User prompt
+  table.insert(header_lines, constants.MARKERS.USER) -- User prompt
   table.insert(header_lines, "")         -- One blank line after user prompt
   table.insert(header_lines, user_input) -- User input
 
