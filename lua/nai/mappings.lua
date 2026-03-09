@@ -24,13 +24,9 @@ M.defaults = {
   -- Insert commands
   insert = {
     user_message = "<Leader>anu", -- Add user message
-    scrape = "<Leader>and",       -- Add scrape block
-    web = "<Leader>anw",          -- Add web block
-    youtube = "<Leader>any",      -- Add YouTube block
     reference = "<Leader>anr",    -- Add reference block
     snapshot = "<Leader>ans",     -- Add snapshot block
     tree = "<Leader>ant",         -- Add tree block
-    crawl = "<Leader>anc",        -- Add crawl block
   },
 
   -- Settings
@@ -72,20 +68,12 @@ function M.apply_to_buffer(bufnr)
   -- Insert commands
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.user_message, ':NAIUser<CR>',
     { noremap = true, silent = true, desc = 'Add new user message' })
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.scrape, ':NAIScrape<CR>',
-    { noremap = true, silent = true, desc = 'Add scrape block' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.tree, ':NAITree<CR>',
     { noremap = true, silent = true, desc = 'Add directory tree block' })
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.web, ':NAIWeb<CR>',
-    { noremap = true, silent = true, desc = 'Add web block' })
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.youtube, ':NAIYoutube<CR>',
-    { noremap = true, silent = true, desc = 'Add YouTube block' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.reference, ':NAIReference<CR>',
     { noremap = true, silent = true, desc = 'Add reference block' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.snapshot, ':NAISnapshot<CR>',
     { noremap = true, silent = true, desc = 'Add snapshot block' })
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.crawl, ':NAICrawl<CR>',
-    { noremap = true, silent = true, desc = 'Add crawl block' })
 
   -- Settings
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.select_model, ':NAIModel<CR>',

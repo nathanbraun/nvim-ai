@@ -7,11 +7,8 @@ LLM chats as text files inside Neovim.
 - Chat with any LLM inside any text file.
 - Persistent. Save conversations as text files. Pick them up later and continue
   chatting. View, edit and regenerate conversation history.
-- Works with OpenAI, Google, OpenRouter or locally with Ollama.
-- Embed local text files, websites or YouTube video transcripts (requires
-  [Dumpling API](https://dumplingai.com) key).
+- Works with OpenAI, Google, OpenRouter, locally with Ollama, or via Claude Max subscription.
 - Configurable provider, model, temperature and system prompt.
-- Sign conversations — i.e. prove/verify text matches LLM output without edits.
 - No language dependencies, written in Lua.
 - Asynchronous.
 - Auto topic/title detection.
@@ -23,16 +20,16 @@ LLM chats as text files inside Neovim.
 - [Viewing previous conversations](#viewing-previous-conversations)
 - [Changing models](#changing-models)
 - [Other prompts](#other-prompts)
-- [Embedding local text files and web content](#embedding-local-text-files-and-web-content)
+- [Embedding local text files](#embedding-local-text-files)
 - [Alias blocks](#>>>-alias-blocks)
-- [Dumpling AI](#dumpling-ai)
-- [Verifying Chats](#verifying-chats)
 - [Escaping chat markers](#escaping-chat-markers)
 - [Configuration](#configuration)
+- [Health Check](#health-check)
 
 ## Prerequisites
 You'll need an OpenRouter (recommended), OpenAI or Google AI API key. *Or* an
-instance of Ollama running on your computer.
+instance of Ollama running on your computer. *Or* a Claude Max subscription with
+the Claude CLI installed.
 
 You can get an OpenRouter key here:
 
@@ -76,6 +73,8 @@ use {
 ```
 </details>
 
+### API key providers (OpenRouter, OpenAI, Google)
+
 After installing the plugin and getting your API key, open up Neovim and run:
 
 ```
@@ -85,6 +84,35 @@ After installing the plugin and getting your API key, open up Neovim and run:
 It'll ask you for your API key. Paste it in. By default this will be saved at:
 
 `~/.config/nvim-ai/credentials.json`
+
+### Claude Max (via local proxy)
+
+If you have a Claude Max subscription, you can use it directly without an API
+key. This requires the [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli)
+and Python 3. If you already have Claude Code installed, the CLI is already
+available and authenticated.
+
+1. Install and authenticate the Claude CLI if you don't have it: `claude login`
+2. Set your provider in your Neovim config:
+
+```lua
+require('nai').setup({
+    active_provider = "claude_proxy",
+    active_model = "sonnet",  -- or "opus", "haiku"
+})
+```
+
+The plugin will automatically start the proxy server when Neovim launches. To
+disable auto-start (e.g., if you manage the proxy yourself), set `auto_start =
+false` in the provider config:
+
+```lua
+providers = {
+    claude_proxy = {
+        auto_start = false,
+    },
+}
+```
 
 # Quickstart
 ## Your first conversation
@@ -168,13 +196,13 @@ directory.
 
 ## Changing models
 You can run the `:NAIModel` command (bound to `<leader>am` by default) to open
-up a picker of model options. `:NAIProvider` (`<leader>ap`) does the same for
-provider (OpenRouter, Ollama, etc).
+up a picker of model options. `:NAISwitchProvider` (`<leader>ap`) does the same
+for provider (OpenRouter, Ollama, etc).
 
 ![Select Model](images/change-model.gif)
 
 # Other prompts
-## >>> system 
+## >>> system
 You can configure the default system prompt in the config. You can set it for
 individual chats using the *system* prompt:
 
@@ -183,7 +211,7 @@ individual chats using the *system* prompt:
 Note you can only set the system prompt at the start of the chat, before any
 `>>> user` prompts.
 
-## >>> config 
+## >>> config
 You can also set `model`, `temperature` and a few other options in the `>>>
 config` block:
 
@@ -194,8 +222,8 @@ model: openai/gpt-4o-mini
 
 This goes before any system or user prompts. It'll take precedence over defaults.
 
-# Embedding local text files and web content
-## >>> reference 
+# Embedding local text files
+## >>> reference
 You can include other text files on your computer in the chat using the
 `reference` prompt. By default, `<leader>ar` inserts a reference prompt, although again, you can type it out.
 
@@ -205,7 +233,7 @@ directories) work too.
 
 ![Reference](images/reference.jpg)
 
-## >>> snapshot 
+## >>> snapshot
 When you submit your chat (`<leader>c` or `:NAIChat`) `reference` works by
 grabbing the *current* file contents and inserting it into the conversation
 behind the scenes (so `nvim-ai` sends the file contents to the LLM even though
@@ -232,9 +260,9 @@ timestamp, like this:
 This way you can ask about the file, make changes etc and the LLM will better
 be able to follow what's going on.
 
-## >>> tree 
+## >>> tree
 You can get filesystem directory information using the `tree` block. It expands
-similarly to `snapshot` blocks and looks like this: 
+similarly to `snapshot` blocks and looks like this:
 
 ```
 >>> tree [2025-04-30 15:03:27]
@@ -242,26 +270,26 @@ similarly to `snapshot` blocks and looks like this:
 
 /Users/nathanbraun/.../fruit-example
 ├── berries
-│   ├── blueberry
-│   │   ├── blueberry-info.txt
-│   │   └── list-of-varieties.txt
-│   └── strawberry
-│       ├── list-of-varieties.txt
-│       └── strawberry-info.txt
+│   ├── blueberry
+│   │   ├── blueberry-info.txt
+│   │   └── list-of-varieties.txt
+│   └── strawberry
+│       ├── list-of-varieties.txt
+│       └── strawberry-info.txt
 ├── citrus
-│   ├── lemon
-│   │   ├── lemon-info.txt
-│   │   └── list-of-varieties.txt
-│   └── orange
-│       ├── list-of-varieties.txt
-│       └── orange-info.txt
+│   ├── lemon
+│   │   ├── lemon-info.txt
+│   │   └── list-of-varieties.txt
+│   └── orange
+│       ├── list-of-varieties.txt
+│       └── orange-info.txt
 ├── fruit-code.py
 ├── fruits.csv
 ├── resources.txt
 └── tropical
     ├── banana
-    │   ├── banana-info.txt
-    │   └── list-of-varieties.txt
+    │   ├── banana-info.txt
+    │   └── list-of-varieties.txt
     └── pineapple
         ├── list-of-varieties.txt
         └── pineapple-info.txt
@@ -270,15 +298,6 @@ similarly to `snapshot` blocks and looks like this:
 
 Should be good for giving LLM context without necessarily having to pass whole
 files.
-
-## >>> web
-You can get text data from simple websites using the `>>> web` block followed
-by a URL. Behind the scenes it uses curl and
-[html2text](https://github.com/grobian/html2text) or
-[lynx](https://lynx.invisible-island.net/) and requires one of them be
-installed.
-
-![Web](images/web.jpg)
 
 ## >>> alias blocks
 
@@ -341,104 +360,6 @@ Instructions:
 ![Alias + Placeholders](images/alias-placeholder.gif)
 
 
-# Dumpling AI
-The `web` prompt works on simple sites, but won't work on e.g. SPA's or
-javascript-heavy content.
-
-[Dumpling AI](https://www.dumplingai.com/) is a paid (though inexpensive)
-service that provides a bunch of APIs to turn web content into LLM ready text.
-
-They provide a decent amount of free trial credits, so I recommend checking it
-out.
-
-When you get a Dumpling AI API key you can tell `nvim-ai` about it by running:
-
-```
-:NAISetKey dumpling
-```
-
-and pasting it in. Once you enable Dumpling, you'll be able to use the
-following prompts.
-
-Note: in order to save on credits and not repeatedly call the Dumpling API,
-**all of the dumpling prompts work similar to `snapshot`**. So `nvim-ai` will
-use Dumpling to get the text, then insert it into your chat file.
-
-## >>> scrape
-
-Like `web` but uses Dumpling's APIs instead of `curl` and `html2text`, so it
-works on more sites.
-
-It also takes longer and is more expensive than `web` (which is free), so I'd
-try `web` first and use `scrape` if it doesn't work.
-
-Type it out or press `<leader>ad` (for AI *dumpling*) to insert.
-
-## >>> crawl
-
-Like `scrape` but will also scrape the pages a site links to up to a
-configurable depth (defaults to 2). Uses more Dumpling credits.
-
-Type it out or press `<leader>ac` to insert.
-
-## >>> youtube
-Will expand to a transcript of any YouTube video. After its expanded you can
-follow up with user prompts to ask questions about the transcript.
-
-# Verifying Chats
-The point of `nvim-ai` is to chat with and edit LLM conversations in text
-files, but sometimes (theoretically) you might want to "prove" than an AI
-conversation is unaltered.
-
-An example would be using an LLM as an arbitrator for dispute resolution. Say
-you and a friend disagree — maybe you're playing a board game and there's
-ambiguity in the rules — so you decide to each make your case and submit it to
-`o3` to decide.
-
-![Dispute prompt](images/dispute-prompt.jpg)
-
-If you're chatting with the LLM in your text editor, you can't just show your
-friend:
-
-```
->>> assistant
-You are right, your friend is wrong.
-```
-
-How do they know that was the actual response? Maybe *you* typed it. You're
-chatting with an LLM in your text editor, you could have typed anything!
-
-Instead you can submit your question to the LLM with `:NAISignedChat` to
-"prove" a conversation is unaltered.
-
-## How it works
-In a signed chat, `nvim-ai` hashes the full conversation history and latest
-response immediately after getting a reply from the LLM. It inserts that hash
-into the buffer as a signature block.
-
-Separately, the `:NAIVerify` command hashes the full buffer, compares it to the
-signature, and displays the "Verified" text (as an extended mark) if it
-matches.
-
-Also:
-
-- The hashing algorithm uses a persistent, secret key. This prevents the user
-  from simply editing the text in the buffer, then re-hashing it and tampering
-  with the signature themselves.
-- As soon as the buffer is edited the "Verified" text disappears (since we can
-  no longer guarantee it matches) but you can check it again by running
-  `:NAIVerify`.
-
-The hashing algorithm will ignore previous signature blocks and blank lines.
-Other formatting changes count as differences.
-
-![Verified Chats](images/dispute.gif)
-
-## Caveats
-
-Obviously this isn't perfect. Theoretically the user has control over the
-plugin and could edit the LLM's response before it's hashed.
-
 # Escaping Chat Markers
 
 If you need to include examples of chat markers in your messages without having
@@ -447,13 +368,19 @@ them parsed as actual messages, use the `ignore` code block:
     ```ignore
     >>> user
     This is an example prompt
-    
+
     <<< assistant
     This is an example response
     ```
 
 Content within these blocks will be treated as regular text and won't be
 interpreted as message markers.
+
+# Health Check
+
+Run `:checkhealth nai` to verify your setup. This checks for required
+dependencies (curl), API key configuration, and provider-specific requirements
+(e.g., Claude CLI for the claude_proxy provider).
 
 # Configuration
 nvim-ai can be configured with the setup function (defaults below):
@@ -471,11 +398,10 @@ require('nai').setup({
   },
   default_system_prompt = "You are a general assistant.",
   active_provider = "openrouter", -- e.g. starting provider
-  active_model = "google/gemini-2.0-flash-001", -- e.g. starting model
+  active_model = "anthropic/claude-sonnet-4.5", -- e.g. starting model
   mappings = {
     enabled = true,          -- Whether to apply default key mappings
-    intercept_ctrl_c = true, -- New option to intercept Ctrl+C
-    -- Default mappings will be used from the mappings module
+    intercept_ctrl_c = true, -- Intercept Ctrl+C to cancel active requests
   },
   providers = {
     openai = {
@@ -496,11 +422,12 @@ require('nai').setup({
       max_tokens = 10000,
       endpoint = "https://openrouter.ai/api/v1/chat/completions",
       models = {
-        "anthropic/claude-3.7-sonnet",
-        "google/gemini-2.0-flash-001",
-        "openai/gpt-4o",
-        "openai/gpt-4o-mini",
-        "perplexity/r1-1776",
+        "anthropic/claude-sonnet-4.5",
+        "anthropic/claude-opus-4.6",
+        "openai/o3",
+        "google/gemini-3-flash-preview",
+        "perplexity/sonar-pro-search",
+        "openrouter/auto"
       },
     },
     google = {
@@ -527,6 +454,19 @@ require('nai').setup({
         "llama3.2:latest",
       },
     },
+    claude_proxy = {
+      name = "Claude (Max)",
+      description = "Claude via local proxy (uses Max subscription)",
+      temperature = 0.7,
+      max_tokens = 10000,
+      endpoint = "http://127.0.0.1:5757/v1/chat/completions",
+      auto_start = true, -- Automatically start the proxy server if not running
+      models = {
+        "sonnet",
+        "opus",
+        "haiku",
+      },
+    },
   },
   chat_files = {
     directory = vim.fn.expand("~/nvim-ai-notes"), -- Default save location
@@ -544,22 +484,12 @@ tags: [ai]
 ---]],
     },
   },
-  tools = {
-    dumpling = {
-      base_endpoint = "https://app.dumplingai.com/api/v1/", -- Base endpoint for all Dumpling API calls
-      format = "markdown",                                  -- Output format: markdown, html, or screenshot
-      cleaned = true,                                       -- Whether to clean the output
-      render_js = true,                                     -- Whether to render JavaScript
-      max_content_length = 100000,                          -- Max length to prevent excessively large responses
-      include_timestamps = true,                            -- Whether to include timestamps in the output
-    },
-  },
   expand_placeholders = false,
   highlights = {
     user = { fg = "#88AAFF", bold = true },            -- User message highlighting
     assistant = { fg = "#AAFFAA", bold = true },       -- Assistant message highlighting
     system = { fg = "#FFAA88", bold = true },          -- System message highlighting
-    special_block = { fg = "#AAAAFF", bold = true },   -- Special blocks (scrape, youtube, etc.)
+    special_block = { fg = "#AAAAFF", bold = true },   -- Special blocks (reference, snapshot, tree, etc.)
     error_block = { fg = "#FF8888", bold = true },     -- Error blocks
     content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
     placeholder = { fg = "#FFCC66", bold = true },     -- Golden yellow for placeholders

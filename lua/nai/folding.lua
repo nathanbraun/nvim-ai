@@ -50,7 +50,7 @@ function M.get_fold_level(lnum)
 
   -- Check for special blocks (nested folding)
   if line:match("^>>> %w+") then
-    -- Any special block marker (scrape, youtube, etc.)
+    -- Any special block marker (reference, snapshot, tree, etc.)
     return ">2" -- Nested fold
   end
 

@@ -32,12 +32,65 @@ end
 local function check_dependencies()
   local has_curl = error_utils.check_executable("curl", "Please install curl for API requests")
 
-  -- These are optional but good to check
-  error_utils.check_executable("html2text", "Install for better web content formatting")
-
   if not has_curl then
     error_utils.log("nvim-ai may not function correctly without required dependencies", error_utils.LEVELS.WARNING)
   end
+end
+
+-- Track the proxy job so we can clean it up
+M._claude_proxy_job = nil
+
+-- Start the claude-proxy server if it isn't already running
+function M.ensure_claude_proxy()
+  local proxy_config = config.options.providers.claude_proxy or {}
+  local endpoint = proxy_config.endpoint or "http://127.0.0.1:5757/v1/chat/completions"
+  local health_url = endpoint:gsub("/v1/chat/completions$", "/health")
+
+  -- Check if it's already running
+  vim.system(
+    { "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "1", health_url },
+    { text = true },
+    function(obj)
+      if vim.trim(obj.stdout or "") == "200" then
+        return -- already running
+      end
+
+      -- Find the proxy script
+      local script_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h:h:h")
+      local script_path = script_dir .. "/scripts/claude-proxy.py"
+
+      if vim.fn.filereadable(script_path) ~= 1 then
+        vim.schedule(function()
+          vim.notify("claude-proxy.py not found at: " .. script_path, vim.log.levels.WARN)
+        end)
+        return
+      end
+
+      -- Extract port from endpoint
+      local port = endpoint:match(":(%d+)/") or "5757"
+
+      vim.schedule(function()
+        M._claude_proxy_job = vim.fn.jobstart(
+          { "python3", script_path, port },
+          {
+            detach = true,
+            on_stderr = function(_, data)
+              if data and data[1] and data[1] ~= "" then
+                -- Only log errors, not normal startup output
+                for _, line in ipairs(data) do
+                  if line:match("[Ee]rror") or line:match("[Tt]raceback") then
+                    vim.schedule(function()
+                      vim.notify("claude-proxy: " .. line, vim.log.levels.ERROR)
+                    end)
+                  end
+                end
+              end
+            end,
+          }
+        )
+      end)
+    end
+  )
 end
 
 -- Setup function that should be called by the user
@@ -51,13 +104,31 @@ function M.setup(opts)
   -- Check platform compatibility
   check_platform_compatibility()
 
-  -- Check if API key is configured for the active provider
+  -- Check if API key / dependencies are configured for the active provider
   local provider = config.options.active_provider
+  local no_key_providers = { openclaw = true, claude_proxy = true }
 
-  -- Skip API key check for openclaw
-  if provider ~= "openclaw" then
+  if no_key_providers[provider] then
+    -- Local providers: check that their dependencies are available
+    if provider == "claude_proxy" then
+      if vim.fn.executable("claude") ~= 1 then
+        vim.defer_fn(function()
+          vim.notify(
+            "claude_proxy requires the Claude CLI.\n" ..
+            "Install it and run: claude login",
+            vim.log.levels.WARN
+          )
+        end, 1000)
+      else
+        -- Auto-start proxy if configured
+        local proxy_config = config.options.providers.claude_proxy or {}
+        if proxy_config.auto_start ~= false then
+          M.ensure_claude_proxy()
+        end
+      end
+    end
+  else
     local api_key = config.get_api_key(provider)
-
     if not api_key then
       vim.defer_fn(function()
         vim.notify(
@@ -65,7 +136,7 @@ function M.setup(opts)
           "Please set your API key with :NAISetKey " .. provider,
           vim.log.levels.WARN
         )
-      end, 1000) -- Delay to ensure it's seen after startup
+      end, 1000)
     end
   end
 

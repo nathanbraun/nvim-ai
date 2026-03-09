@@ -126,32 +126,6 @@ end, {
   desc = "Insert a snapshot block at cursor position"
 })
 
--- Deprecation notices for moved features
-local deprecated_web_commands = {
-  { name = 'NAIScrape',       desc = 'Web scraping (moved to nvim-dumpling)' },
-  { name = 'NAICrawl',        desc = 'Website crawling (moved to nvim-dumpling)' },
-  { name = 'NAIYoutube',      desc = 'YouTube transcripts (moved to nvim-dumpling)' },
-  { name = 'NAIWeb',          desc = 'Simple web fetching (moved to nvim-dumpling)' },
-  { name = 'NAIExpandScrape', desc = 'Expand scrape blocks (moved to nvim-dumpling)' },
-}
-
-for _, cmd_info in ipairs(deprecated_web_commands) do
-  vim.api.nvim_create_user_command(cmd_info.name, function()
-    vim.notify(
-      string.format(
-        '%s has been moved to nvim-dumpling plugin.\n' ..
-        'Install from: https://github.com/nathanbraun/nvim-dumpling\n' ..
-        'Commands are now: :DumpScrape, :DumpCrawl, :DumpYoutube, :DumpWeb',
-        cmd_info.name
-      ),
-      vim.log.levels.WARN
-    )
-  end, {
-    nargs = '*',
-    desc = cmd_info.desc .. ' [DEPRECATED]'
-  })
-end
-
 -- Add this to plugin/nvim-ai.lua, inside the plugin initialization section
 vim.api.nvim_create_user_command('NAIModel', function()
   require('nai.tools.picker').select_model()

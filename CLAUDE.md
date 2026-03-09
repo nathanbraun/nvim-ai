@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-nvim-ai is a Neovim plugin for AI-powered chat within the editor. Users chat in markdown buffers with special block syntax for embedding files, web content, and directory trees. Conversations are saved as `.nai` (markdown) files.
+nvim-ai is a Neovim plugin for AI-powered chat within the editor. Users chat in markdown buffers with special block syntax for embedding files and directory trees. Conversations are saved as `.nai` (markdown) files.
 
 ## Running Tests
 
@@ -52,4 +52,4 @@ Providers treating API keys as unnecessary (local providers like ollama, opencla
 
 ## File Format
 
-`.nai` files are markdown with role markers (`## user`, `## assistant`, `## system`) and special blocks (`@file`, `@snapshot`, `@tree`, `@web`, `@youtube`) that get expanded before sending to the API.
+`.nai` files are markdown with role markers (`## user`, `## assistant`, `## system`) and special blocks (`@file`, `@snapshot`, `@tree`) that get expanded before sending to the API.

@@ -82,6 +82,7 @@ M.defaults = {
       temperature = 0.7,
       max_tokens = 10000,
       endpoint = "http://127.0.0.1:5757/v1/chat/completions",
+      auto_start = true, -- Automatically start the proxy server if not running
       models = {
         "sonnet",
         "opus",
@@ -126,7 +127,7 @@ tags: [ai]
     user = { fg = "#88AAFF", bold = true },            -- User message highlighting
     assistant = { fg = "#AAFFAA", bold = true },       -- Assistant message highlighting
     system = { fg = "#FFAA88", bold = true },          -- System message highlighting
-    special_block = { fg = "#AAAAFF", bold = true },   -- Special blocks (scrape, youtube, etc.)
+    special_block = { fg = "#AAAAFF", bold = true },   -- Special blocks (reference, snapshot, tree, etc.)
     error_block = { fg = "#FF8888", bold = true },     -- Error blocks
     content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
     placeholder = { fg = "#FFCC66", bold = true },     -- Golden yellow for placeholders

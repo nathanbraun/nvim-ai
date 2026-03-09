@@ -13,13 +13,6 @@ function M.check()
     vim.health.error("curl not found", { "Install curl for API requests to work" })
   end
 
-  -- Check optional dependencies
-  if vim.fn.executable("html2text") == 1 then
-    vim.health.ok("html2text found (optional)")
-  else
-    vim.health.info("html2text not found (optional, used for web content formatting)")
-  end
-
   -- Check configuration
   local ok, config = pcall(require, "nai.config")
   if not ok then
@@ -55,6 +48,49 @@ function M.check()
   -- Check for local providers that don't need keys
   if no_key_providers[provider] then
     vim.health.ok(provider .. ": no API key required (local provider)")
+  end
+
+  -- Claude proxy checks
+  if provider == "claude_proxy" then
+    vim.health.start("nvim-ai: claude_proxy")
+
+    if vim.fn.executable("python3") == 1 then
+      vim.health.ok("python3 found")
+    else
+      vim.health.error("python3 not found", { "Install Python 3 to run the claude-proxy server" })
+    end
+
+    if vim.fn.executable("claude") == 1 then
+      vim.health.ok("claude CLI found")
+    else
+      vim.health.error("claude CLI not found", {
+        "Install the Claude CLI: https://docs.anthropic.com/en/docs/claude-cli",
+        "Make sure it is authenticated (run: claude login)",
+      })
+    end
+
+    -- Find the proxy script
+    local script_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h:h:h:h")
+    local script_path = script_dir .. "/scripts/claude-proxy.py"
+    if vim.fn.filereadable(script_path) == 1 then
+      vim.health.ok("Proxy script: " .. script_path)
+    else
+      vim.health.warn("Proxy script not found at: " .. script_path)
+    end
+
+    -- Check if the proxy is currently running
+    local endpoint = config.options.providers.claude_proxy
+      and config.options.providers.claude_proxy.endpoint
+      or "http://127.0.0.1:5757/v1/chat/completions"
+    local health_url = endpoint:gsub("/v1/chat/completions$", "/health")
+    local result = vim.fn.system("curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 " .. vim.fn.shellescape(health_url))
+    if vim.trim(result) == "200" then
+      vim.health.ok("Proxy server is running at " .. health_url)
+    else
+      vim.health.warn("Proxy server is not running", {
+        "Start it with: python3 " .. script_path,
+      })
+    end
   end
 
   -- Check credentials file
