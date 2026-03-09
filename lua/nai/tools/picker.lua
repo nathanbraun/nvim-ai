@@ -598,185 +598,8 @@ function M.select_openclaw_model()
   end)
 end
 
---- Show the OpenClaw model picker with fallbacks
-function M.show_openclaw_model_picker(models, gateway_config, current_model)
-  -- Try snacks first
-  local has_snacks, _ = pcall(require, 'snacks')
-  if has_snacks then
-    return M.show_openclaw_model_picker_snacks(models, gateway_config, current_model)
-  end
-
-  -- Try telescope next
-  local has_telescope, _ = pcall(require, 'telescope')
-  if has_telescope then
-    return M.show_openclaw_model_picker_telescope(models, gateway_config, current_model)
-  end
-
-  -- Try fzf-lua last
-  local has_fzf_lua, _ = pcall(require, 'fzf-lua')
-  if has_fzf_lua then
-    return M.show_openclaw_model_picker_fzf_lua(models, gateway_config, current_model)
-  end
-
-  -- Fallback to simple UI
-  return M.show_openclaw_model_picker_simple(models, gateway_config, current_model)
-end
-
---- Handle OpenClaw model selection
-local function handle_openclaw_model_selection(model_key, gateway_config)
-  local openclaw = require('nai.openclaw')
-  local buffer_id = vim.api.nvim_get_current_buf()
-  local session_key = openclaw.get_session_key(buffer_id)
-
-  vim.notify("Setting model to " .. model_key .. "...", vim.log.levels.INFO)
-
-  openclaw.set_model(session_key, model_key, gateway_config, function(ok, err)
-    if ok then
-      -- Track locally
-      openclaw.set_current_model(buffer_id, model_key)
-      vim.notify("OpenClaw model set to " .. model_key, vim.log.levels.INFO)
-    else
-      vim.notify("Failed to set model: " .. tostring(err), vim.log.levels.ERROR)
-    end
-  end)
-end
-
---- Snacks implementation for OpenClaw model picker
-function M.show_openclaw_model_picker_snacks(models, gateway_config, current_model)
-  local Snacks = require('snacks')
-
-  local finder = function()
-    local items = {}
-    for i, model in ipairs(models) do
-      table.insert(items, {
-        idx = i,
-        text = model.display,
-        value = model.value,
-        ordinal = model.ordinal,
-        preview = {
-          text = "Model: " .. model.value ..
-              "\nAliases: " .. (model.aliases and #model.aliases > 0 and table.concat(model.aliases, ", ") or "none") ..
-              "\nTags: " .. (model.tags and #model.tags > 0 and table.concat(model.tags, ", ") or "none") ..
-              "\n\nStatus: " .. (model.value == current_model and "Current model" or "Available"),
-          ft = "markdown"
-        }
-      })
-    end
-    return items
-  end
-
-  Snacks.picker.pick({
-    finder = finder,
-    format = function(item)
-      return { { item.text } }
-    end,
-    title = "Select OpenClaw Model",
-    preview = "preview",
-    confirm = function(picker, item)
-      picker:close()
-      if item then
-        handle_openclaw_model_selection(item.value, gateway_config)
-      end
-    end
-  })
-
-  return true
-end
-
---- Telescope implementation for OpenClaw model picker
-function M.show_openclaw_model_picker_telescope(models, gateway_config, current_model)
-  local actions = require("telescope.actions")
-  local action_state = require("telescope.actions.state")
-  local pickers = require("telescope.pickers")
-  local finders = require("telescope.finders")
-  local conf = require("telescope.config").values
-
-  pickers.new({}, {
-    prompt_title = "Select OpenClaw Model",
-    finder = finders.new_table {
-      results = models,
-      entry_maker = function(entry)
-        return {
-          value = entry.value,
-          display = entry.display,
-          ordinal = entry.ordinal,
-        }
-      end
-    },
-    sorter = conf.generic_sorter({}),
-    attach_mappings = function(prompt_bufnr, map)
-      actions.select_default:replace(function()
-        local selection = action_state.get_selected_entry()
-        actions.close(prompt_bufnr)
-
-        if selection then
-          handle_openclaw_model_selection(selection.value, gateway_config)
-        end
-      end)
-      return true
-    end,
-    layout_strategy = "center",
-    layout_config = {
-      width = 0.6,
-      height = 0.5,
-    },
-  }):find()
-
-  return true
-end
-
---- fzf-lua implementation for OpenClaw model picker
-function M.show_openclaw_model_picker_fzf_lua(models, gateway_config, current_model)
-  local fzf_lua = require('fzf-lua')
-
-  local items = {}
-  local item_map = {}
-  for _, model in ipairs(models) do
-    table.insert(items, model.display)
-    item_map[model.display] = model
-  end
-
-  fzf_lua.fzf_exec(items, {
-    prompt = "Select OpenClaw Model> ",
-    actions = {
-      ["default"] = function(selected)
-        if selected and #selected > 0 then
-          local selected_display = selected[1]
-          local model = item_map[selected_display]
-          if model then
-            handle_openclaw_model_selection(model.value, gateway_config)
-          end
-        end
-      end
-    }
-  })
-
-  return true
-end
-
---- Simple fallback for OpenClaw model picker
-function M.show_openclaw_model_picker_simple(models, gateway_config, current_model)
-  local items = {}
-  for _, model in ipairs(models) do
-    table.insert(items, {
-      name = model.display,
-      value = model.value,
-    })
-  end
-
-  vim.ui.select(items, {
-    prompt = "Select OpenClaw Model",
-    format_item = function(item)
-      return item.name
-    end
-  }, function(choice)
-    if choice then
-      handle_openclaw_model_selection(choice.value, gateway_config)
-    end
-  end)
-
-  return true
-end
+-- NOTE: OpenClaw model picker functions are defined further down in this file
+-- (show_openclaw_model_picker, handle_openclaw_model_selection, and per-backend variants)
 
 function M.browse_files()
   -- Get the notes directory from config
@@ -824,17 +647,24 @@ function M.browse_files()
         if file_path and file_path ~= "" then
           local title = M.extract_title(file_path) or vim.fn.fnamemodify(file_path, ":t:r")
           local display = title .. " (" .. vim.fn.fnamemodify(file_path, ":t") .. ")"
+          local mtime = vim.fn.getftime(file_path)
 
           table.insert(items, {
             value = file_path,
             display = display,
             title = title,
-            ordinal = title, -- For sorting
+            ordinal = title,
             filename = vim.fn.fnamemodify(file_path, ":t"),
-            path = file_path -- Ensure path is included
+            path = file_path,
+            mtime = mtime,
           })
         end
       end
+
+      -- Sort by modification time, most recent first
+      table.sort(items, function(a, b)
+        return (a.mtime or 0) > (b.mtime or 0)
+      end)
 
       if #items == 0 then
         vim.notify("No valid chat files found in " .. notes_dir, vim.log.levels.WARN)
@@ -864,6 +694,8 @@ function M.extract_title(file_path)
       end
     elseif in_yaml and line:match("^title:%s*(.+)$") then
       title = line:match("^title:%s*(.+)$")
+      -- Strip surrounding quotes
+      title = title:gsub('^"(.*)"$', '%1'):gsub("^'(.*)'$", '%1')
       break
     end
   end
