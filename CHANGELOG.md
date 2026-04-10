@@ -2,6 +2,9 @@
 Features
 - Added ability to chat with Claude Code via pro or max plan
 
+Fixes
+- Updated documentation
+
 Removed
 - Dumpling API support
 - Openclaw support

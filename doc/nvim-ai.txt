@@ -11,24 +11,28 @@ CONTENTS                                                      *nvim-ai-contents*
         4.2 Special Blocks ......................... |nvim-ai-blocks|
         4.3 Key Mappings ........................... |nvim-ai-mappings|
     5. Commands .................................... |nvim-ai-commands|
-    6. API ......................................... |nvim-ai-api|
-    7. Troubleshooting ............................. |nvim-ai-troubleshooting|
-    8. License ..................................... |nvim-ai-license|
+    6. Troubleshooting ............................. |nvim-ai-troubleshooting|
+    7. License ..................................... |nvim-ai-license|
 
 ==============================================================================
 1. INTRODUCTION                                           *nvim-ai-introduction*
 
-nvim-ai is a Neovim plugin that integrates AI assistants like OpenAI's GPT and
-other LLM providers directly into your editor. It provides a chat interface and
-special blocks for enhanced interactions with AI models.
+nvim-ai is a Neovim plugin for AI-powered chat within the editor. Users chat
+in markdown buffers with special block syntax for embedding files and directory
+trees. Conversations are saved as markdown files.
 
 Features:
-- Chat with AI assistants in any buffer
-- Support for multiple AI providers (OpenAI, OpenRouter)
-- Special blocks for web scraping, YouTube transcripts, file references
+- Chat with any LLM inside any text file
+- Persistent conversations saved as markdown files
+- Support for multiple providers: OpenAI, OpenRouter, Google, Ollama, and
+  Claude Max (via local proxy)
+- Special blocks for file references, snapshots, and directory trees
 - Syntax highlighting and folding for chat conversations
-- System message customization
-- Configurable key mappings
+- Auto topic/title detection
+- Configurable provider, model, temperature and system prompt
+- Alias system for reusable prompt templates
+- Asynchronous requests
+- No language dependencies, written in Lua
 
 ==============================================================================
 2. INSTALLATION                                           *nvim-ai-installation*
@@ -73,7 +77,8 @@ nvim-ai can be configured with the setup function:
         credentials = {
             file_path = "~/.config/nvim-ai/credentials.json",
         },
-        active_provider = "openai", -- or "openrouter"
+        active_provider = "openrouter",
+        active_model = "anthropic/claude-sonnet-4.5",
         mappings = {
             enabled = true,
             intercept_ctrl_c = true,
@@ -86,42 +91,73 @@ nvim-ai can be configured with the setup function:
                 blocks = "<Leader>ae",
             },
             insert = {
-                user_message = "<Leader>au",
-                scrape = "<Leader>ad",
-                web = "<Leader>aw",
-                youtube = "<Leader>ay",
-                reference = "<Leader>ar",
-                snapshot = "<Leader>as",
-                crawl = "<Leader>ac",
+                user_message = "<Leader>anu",
+                reference = "<Leader>anr",
+                snapshot = "<Leader>ans",
+                tree = "<Leader>ant",
             },
             settings = {
                 select_model = "<Leader>am",
                 toggle_provider = "<Leader>ap",
-            }
+            },
+            files = {
+                browse = "<Leader>ao",
+            },
         },
         providers = {
             openai = {
                 name = "OpenAI",
                 description = "OpenAI API (GPT models)",
-                model = "gpt-4o",
                 temperature = 0.7,
                 max_tokens = 10000,
                 endpoint = "https://api.openai.com/v1/chat/completions",
+                models = { "gpt-4", "o3" },
             },
             openrouter = {
                 name = "OpenRouter",
                 description = "OpenRouter API (Multiple providers)",
-                model = "anthropic/claude-3.5-sonnet",
                 temperature = 0.7,
                 max_tokens = 10000,
                 endpoint = "https://openrouter.ai/api/v1/chat/completions",
                 models = {
-                    "anthropic/claude-3.5-sonnet",
-                    "google/gemini-2.0-flash-001",
-                    "openai/gpt-4o",
-                    "openai/gpt-4o-mini",
-                    "perplexity/r1-1776",
+                    "anthropic/claude-sonnet-4.5",
+                    "anthropic/claude-opus-4.6",
+                    "openai/o3",
+                    "google/gemini-3-flash-preview",
+                    "perplexity/sonar-pro-search",
+                    "openrouter/auto",
                 },
+            },
+            google = {
+                name = "Google",
+                description = "Google AI (Gemini models)",
+                temperature = 0.7,
+                max_tokens = 8000,
+                endpoint = "https://generativelanguage.googleapis.com/v1beta/models/",
+                models = {
+                    "gemini-2.5-flash-preview-04-17",
+                    "gemini-2.0-flash",
+                    "gemini-2.0-pro",
+                    "gemini-1.5-flash",
+                    "gemini-1.5-pro",
+                },
+            },
+            ollama = {
+                name = "Ollama",
+                description = "Local models via Ollama",
+                temperature = 0.7,
+                max_tokens = 4000,
+                endpoint = "http://localhost:11434/api/chat",
+                models = { "llama3.2:latest" },
+            },
+            claude_proxy = {
+                name = "Claude (Max)",
+                description = "Claude via local proxy (uses Max subscription)",
+                temperature = 0.7,
+                max_tokens = 10000,
+                endpoint = "http://127.0.0.1:5757/v1/chat/completions",
+                auto_start = true,
+                models = { "sonnet", "opus", "haiku" },
             },
         },
         active_filetypes = {
@@ -140,10 +176,10 @@ nvim-ai can be configured with the setup function:
             header = {
                 enabled = true,
                 template = [[---
-title: {title}
-date: {date}
-tags: [ai]
----]],
+    title: {title}
+    date: {date}
+    tags: [ai]
+    ---]],
             },
         },
         default_system_prompt = "You are a general assistant.",
@@ -159,22 +195,15 @@ tags: [ai]
         },
         aliases = {
             translate = {
-                system = "You are an interpreter. Translate any further text/user messages you receive to Spanish.",
+                system = "You are an interpreter. Translate to Spanish.",
                 user_prefix = "",
-                config = {
-                    model = "openai/gpt-4o-mini",
-                    temperature = 0.1,
-                }
-            },
-            refactor = {
-                system = "You are a coding expert. Refactor the provided code to improve readability, efficiency, and adherence to best practices. Explain your key improvements.",
-                user_prefix = "Refactor the following code:",
+                config = { temperature = 0.1 },
             },
         },
         format_response = {
-            enabled = true,
+            enabled = false,
             exclude_code_blocks = true,
-            wrap_width = 80
+            wrap_width = 80,
         },
         debug = {
             enabled = false,
@@ -185,8 +214,10 @@ tags: [ai]
 
 API Keys Configuration:
 - Use the |:NAISetKey| command to set API keys for providers
-- API keys are stored in the credentials file (default: ~/.config/nvim-ai/credentials.json)
-- Alternatively, set environment variables: OPENAI_API_KEY, OPENROUTER_API_KEY, DUMPLING_API_KEY
+- Keys are stored in the credentials file (default: ~/.config/nvim-ai/credentials.json)
+- Alternatively, set environment variables: OPENAI_API_KEY, OPENROUTER_API_KEY,
+  GOOGLE_API_KEY, OLLAMA_API_KEY
+- Claude proxy and Ollama (localhost) do not require API keys
 
 ==============================================================================
 4. USAGE                                                       *nvim-ai-usage*
@@ -197,8 +228,9 @@ Start a new chat:
 - Use |:NAINew| command
 - Press <Leader>ai (default mapping)
 
-This creates a new buffer with a YAML header and an initial user message prompt.
-Type your message and then use |:NAIChat| or <Leader>c to submit it.
+This creates a new markdown file in your notes directory with a YAML header
+and an initial user message prompt. Type your message and then use |:NAIChat|
+or <Leader>c to submit it.
 
 Continue conversation:
 - Use |:NAIChat| command
@@ -209,20 +241,16 @@ Cancel a running request:
 - Press <Leader>ax (default mapping)
 - Press <C-c> if intercept_ctrl_c is enabled
 
+Browse previous chats:
+- Use |:NAIBrowse| command
+- Press <Leader>ao (default mapping)
+
 4.2 Special Blocks                                             *nvim-ai-blocks*
 
 Special blocks enhance the chat with external content:
 
-Web Block - Simple web content fetch:
->
-    >>> web
-    https://example.com
-<
-
-Reference Block - Include file contents. Supports wildcards and glob patterns.
-  Note: re-reads current file contents every time. So if you ask the LLM about
-  a file with reference, then edit it, and ask a follow up, the LLM will have
-  no way of knowing the original state. Vs snapshot block (see below)
+Reference Block - Include file contents. Supports wildcards and glob
+  patterns. Re-reads current file contents each time the chat is submitted.
 >
     >>> reference
     /path/to/file.txt
@@ -230,102 +258,110 @@ Reference Block - Include file contents. Supports wildcards and glob patterns.
     /path/to/all/lua/files/**/*.lua
 <
 
-Snapshot Block - Reads files and inserts their content into the chat. Supports
-  wildcards and glob patterns. Will expand to >>> snapshotted with snapshot of
-  file contents when run NAIChat or NAIExpand commands.
-
+Snapshot Block - Reads files and inserts their contents directly into the
+  chat buffer with a timestamp. Unlike reference blocks, this preserves the
+  file state at the time of expansion. Supports wildcards and glob patterns.
 >
     >>> snapshot
     /path/to/project/*.lua
 <
 
-
-Scrape Block - Fetch content from a webpage. Works on more complicated sites
-  and in cases where `>>> web` won't. Requires Dumpling API key.
+Tree Block - Insert a directory tree listing. Shows the file structure of a
+  directory. Supports the -I flag for ignore patterns.
 >
-    >>> scrape
-    https://example.com
+    >>> tree
+    /path/to/project
 <
 
-YouTube Block - Fetch a youtube transcript. Requires Dumpling API key.
->
-    >>> youtube
-    https://www.youtube.com/watch?v=example
-<
-
-Crawl Block - Crawl multiple pages from a website. Requires Dumpling API key.
->
-    >>> crawl
-    https://example.com
-    -- limit: 5
-    -- depth: 2
-    -- format: markdown
-<
-
-Expand snapshot, scrape, youtube, crawl blocks:
+Expand blocks without submitting:
 - Use |:NAIExpand| command
 - Press <Leader>ae (default mapping)
-- Also expands with |:NAIChat| (<Leader>c)
+- Blocks also expand when using |:NAIChat| (<Leader>c)
+
+Alias Block - Use predefined prompt templates (see Configuration for
+  defining aliases):
+>
+    >>> translate
+
+    Hello, how are you?
+<
+
+Config Block - Override settings for a single chat:
+>
+    >>> config
+    model: openai/gpt-4o-mini
+    temperature: 0.3
+<
+
+Ignore Block - Escape chat markers so they aren't parsed:
+>
+    ```ignore
+    >>> user
+    This won't be treated as a real prompt
+    ```
+<
 
 4.3 Key Mappings                                             *nvim-ai-mappings*
 
 Default mappings (can be customized in configuration):
 
 Chat operations:
-    <Leader>c  - Submit/continue chat (get a response from the LLM)
-    <Leader>ai - New chat
-    <Leader>ax - Cancel request. <Control-C> also works.
+    <Leader>c   - Submit/continue chat
+    <Leader>ai  - New chat
+    <Leader>ax  - Cancel request (<C-c> also works)
 
 Block operations:
-    <Leader>ae - Expand snapshot, scrape, youtube, crawl blocks.
+    <Leader>ae  - Expand snapshot and tree blocks
 
 Insert blocks:
-    <Leader>au - Add user message
-    <Leader>ad - Add scrape block
-    <Leader>aw - Add web block
-    <Leader>ay - Add YouTube block
-    <Leader>ar - Add reference block
-    <Leader>as - Add snapshot block
-    <Leader>ac - Add crawl block
+    <Leader>anu - Add user message
+    <Leader>anr - Add reference block
+    <Leader>ans - Add snapshot block
+    <Leader>ant - Add tree block
 
 Settings:
-    <Leader>am - Select model
-    <Leader>ap - Toggle provider
+    <Leader>am  - Select model
+    <Leader>ap  - Select provider
+
+Files:
+    <Leader>ao  - Browse AI chat files
 
 ==============================================================================
 5. COMMANDS                                                   *nvim-ai-commands*
 
 Core commands:
-    :NAIChat [prompt]      - Continue chat or start with optional prompt
-    :NAINew                - Create new chat buffer
-    :NAICancel             - Cancel ongoing request
-    :NAIExpand             - Expand all special blocks
+    :NAIChat [prompt]              - Continue chat or start with optional prompt
+    :NAINew                        - Create new chat buffer
+    :NAICancel                     - Cancel ongoing request
+    :NAIExpand                     - Expand all special blocks
+    :NAIBrowse                     - Browse previous chat files
 
 Block insertion:
-    :NAIScrape [url]       - Insert scrape block
-    :NAIWeb [url]          - Insert web block
-    :NAIYoutube [url]      - Insert YouTube block
-    :NAIReference [path]   - Insert reference block
-    :NAISnapshot           - Insert snapshot block
-    :NAICrawl [url]        - Insert crawl block
-    :NAIUser               - Insert user message
+    :NAIUser                       - Insert user message
+    :NAIReference [path]           - Insert reference block
+    :NAISnapshot                   - Insert snapshot block
+    :NAITree [path] [-I pattern]   - Insert directory tree block
 
 Configuration:
-    :NAISetKey [provider] [key]  - Set API key for a provider
-    :NAICheckKeys                - Check which API keys are configured
-    :NAISwitchProvider [provider] - Switch between providers
-    :NAIProvider                 - Open provider selection UI
-    :NAIModel                    - Open model selection UI
-    :NAIConfig                   - Insert config block
-    :NAIRefreshHighlights        - Refresh syntax highlighting
+    :NAISetKey [provider] [key]    - Set API key for a provider
+    :NAICheckKeys                  - Check which API keys are configured
+    :NAISwitchProvider [provider]  - Switch between providers
+    :NAIModel                      - Open model selection UI
+    :NAIConfig                     - Insert config block
+    :NAIRefreshHighlights          - Refresh syntax highlighting
 
-Debug & Testing:
-    :NAIDebug                    - Show debug information
-    :NAITest [group]             - Run tests (optional group)
+Ollama:
+    :NAIOllamaPull [model]         - Pull a model from Ollama
 
+Debug:
+    :NAIDebug                      - Show debug information
+    :NAIToggleDebug                - Toggle debug mode
+    :NAITest [group]               - Run tests (optional group)
 
 ==============================================================================
 6. TROUBLESHOOTING                                     *nvim-ai-troubleshooting*
+
+Run `:checkhealth nai` to verify your setup.
 
 Common issues:
 
@@ -345,10 +381,12 @@ Buffer Activation:
 
 Dependency Issues:
 - Plugin requires 'curl' for API requests
-- For web content, 'html2text' is recommended
-- For model selection UI, 'telescope.nvim' is recommended
+- For model selection UI, telescope.nvim, snacks.nvim, or fzf-lua is
+  recommended (falls back to vim.ui.select)
 
 ==============================================================================
-8. LICENSE                                                     *nvim-ai-license*
+7. LICENSE                                                     *nvim-ai-license*
 
 MIT License
+
+vim:tw=78:ts=8:ft=help:norl:
