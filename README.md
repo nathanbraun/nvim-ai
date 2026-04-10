@@ -493,7 +493,6 @@ tags: [ai]
     error_block = { fg = "#FF8888", bold = true },     -- Error blocks
     content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
     placeholder = { fg = "#FFCC66", bold = true },     -- Golden yellow for placeholders
-    signature = { fg = "#777777", italic = true },     -- Gray for signature lines
   },
   aliases = {
     translate = {
@@ -530,10 +529,6 @@ Instructions:
         $FILE_CONTENTS
         ]]
     },
-  },
-  verification = {
-    enabled = false,            -- Whether to enable response verification
-    highlight_verified = true, -- Highlight verified responses
   },
   format_response = {
     enabled = false,            -- Whether to format the assistant's response

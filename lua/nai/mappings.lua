@@ -8,17 +8,12 @@ M.defaults = {
   -- Chat commands
   chat = {
     continue = "<Leader>c",       -- Continue chat
-    verified_chat = "<Leader>av", -- Continue chat
     new = "<Leader>ai",           -- New chat
     cancel = "<Leader>ax",        -- Cancel request
   },
 
   expand = {
     blocks = "<Leader>ae", -- Expand blocks
-  },
-
-  verify = {
-    reverify = "<Leader>arv", -- Re-verify blocks
   },
 
   -- Insert commands
@@ -33,7 +28,6 @@ M.defaults = {
   settings = {
     select_model = "<Leader>am",    -- Select model
     toggle_provider = "<Leader>ap", -- Toggle provider
-    toggle_openclaw = "<Leader>at", -- Toggle OpenClaw
   },
 
   -- Files
@@ -50,8 +44,6 @@ function M.apply_to_buffer(bufnr)
   -- Chat commands
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.chat.continue, ':NAIChat<CR>',
     { noremap = true, silent = true, desc = 'Continue chat' })
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.chat.verified_chat, ':NAISignedChat<CR>',
-    { noremap = true, silent = true, desc = 'Continue and verify chat' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.chat.new, ':NAINew<CR>',
     { noremap = true, silent = true, desc = 'New chat' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.chat.cancel, ':NAICancel<CR>',
@@ -60,10 +52,6 @@ function M.apply_to_buffer(bufnr)
   -- expand commands
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.expand.blocks, ':NAIExpand<CR>',
     { noremap = true, silent = true, desc = 'Expand special blocks' })
-
-  -- re-verify commands
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.verify.reverify, ':NAIVerify<CR>',
-    { noremap = true, silent = true, desc = 'Re-verify blocks' })
 
   -- Insert commands
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.insert.user_message, ':NAIUser<CR>',
@@ -80,8 +68,6 @@ function M.apply_to_buffer(bufnr)
     { noremap = true, silent = true, desc = 'Select model' })
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.toggle_provider, ':NAIProvider<CR>',
     { noremap = true, silent = true, desc = 'Select provider' })
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.settings.toggle_openclaw, ':NAIToggleOpenClaw<CR>',
-    { noremap = true, silent = true, desc = 'Toggle OpenClaw' })
 
   -- Add the browse mapping
   vim.api.nvim_buf_set_keymap(bufnr, 'n', M.active.files.browse, ':NAIBrowse<CR>',

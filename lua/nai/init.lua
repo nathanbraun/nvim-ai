@@ -106,7 +106,7 @@ function M.setup(opts)
 
   -- Check if API key / dependencies are configured for the active provider
   local provider = config.options.active_provider
-  local no_key_providers = { openclaw = true, claude_proxy = true }
+  local no_key_providers = { claude_proxy = true }
 
   if no_key_providers[provider] then
     -- Local providers: check that their dependencies are available
@@ -184,54 +184,6 @@ function M.switch_provider(provider)
   end
 
   vim.notify("Switched to " .. provider .. " provider", vim.log.levels.INFO)
-end
-
--- Function to toggle between openclaw and last non-openclaw provider
-function M.toggle_openclaw()
-  local config = require('nai.config')
-  local state = require('nai.state')
-
-  local current_provider = state.get_current_provider()
-
-  if current_provider == "openclaw" then
-    -- Switch to last non-openclaw provider
-    local last_provider = state.ui:get_last_non_openclaw_provider()
-    local last_model = state.ui:get_last_non_openclaw_model()
-
-    -- Fallback to config defaults if no previous non-openclaw state
-    if not last_provider then
-      last_provider = config.options.active_provider
-      if last_provider == "openclaw" then
-        -- If config default is also openclaw, use openrouter as final fallback
-        last_provider = "openrouter"
-      end
-    end
-
-    if not last_model then
-      last_model = config.options.active_model
-    end
-
-    -- Update config and state
-    config.options.active_provider = last_provider
-    config.options.active_model = last_model
-    state.set_current_provider(last_provider)
-    state.set_current_model(last_model)
-
-    vim.notify("Switched to " .. last_provider .. " (" .. last_model .. ")", vim.log.levels.INFO)
-  else
-    -- Switch to openclaw (first gateway)
-    local openclaw_config = config.options.providers.openclaw
-    local first_gateway = openclaw_config.gateways[1]
-    local openclaw_model = "openclaw/" .. first_gateway.name
-
-    -- Update config and state
-    config.options.active_provider = "openclaw"
-    config.options.active_model = openclaw_model
-    state.set_current_provider("openclaw")
-    state.set_current_model(openclaw_model)
-
-    vim.notify("Switched to openclaw (" .. openclaw_model .. ")", vim.log.levels.INFO)
-  end
 end
 
 -- ============================================================================
@@ -393,7 +345,7 @@ local function prepare_chat_request(buffer_id, messages, chat_config)
 end
 
 -- Handle successful chat response
-local function handle_chat_response(buffer_id, request_data, response, messages, chat_config, force_signature)
+local function handle_chat_response(buffer_id, request_data, response, messages, chat_config)
   local parser = require('nai.parser')
   local fileutils = require('nai.fileutils')
   local utils = require('nai.utils')
@@ -447,16 +399,6 @@ local function handle_chat_response(buffer_id, request_data, response, messages,
     insertion_row + placeholder_height,
     false,
     lines_to_append
-  )
-
-  -- Add verification signature if enabled
-  local verification = require('nai.verification')
-  verification.add_signature_after_response(
-    buffer_id,
-    insertion_row + #lines_to_append,
-    messages,
-    modified_response,
-    force_signature
   )
 
   -- Add new user message template
@@ -516,7 +458,7 @@ local function handle_chat_error(buffer_id, request_data, error_msg)
   )
 end
 
-function M.chat(opts, force_signature)
+function M.chat(opts)
   local buffer_id = vim.api.nvim_get_current_buf()
   local state = require('nai.state')
 
@@ -579,7 +521,7 @@ function M.chat(opts, force_signature)
   local request_handle = api.chat_request(
     messages,
     function(response)
-      handle_chat_response(buffer_id, request_data, response, messages, chat_config, force_signature)
+      handle_chat_response(buffer_id, request_data, response, messages, chat_config)
     end,
     function(error_msg)
       handle_chat_error(buffer_id, request_data, error_msg)

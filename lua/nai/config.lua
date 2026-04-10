@@ -16,7 +16,7 @@ M.defaults = {
     enable_folding = true,                         -- Enable chat folding
   },
   default_system_prompt = "You are a general assistant. ",
-  active_provider = "openrouter", -- "openai", "openrouter", "openclaw", etc.
+  active_provider = "openrouter", -- "openai", "openrouter", "google", etc.
   active_model = "anthropic/claude-sonnet-4.5",
   mappings = {
     enabled = true,          -- Whether to apply default key mappings
@@ -89,22 +89,6 @@ M.defaults = {
         "haiku",
       },
     },
-    openclaw = {
-      name = "OpenClaw",
-      description = "OpenClaw Gateway",
-      endpoint = nil, -- Uses HTTP gateway instead
-      gateways = {
-        {
-          name = "local",
-          gateway_url = constants.DEFAULT_GATEWAY_URL,
-          thinking_level = nil,
-          timeout_ms = 300000,
-        },
-      },
-      models = {
-        "openclaw/local",
-      }
-    },
   },
   chat_files = {
     directory = vim.fn.expand("~/nvim-ai-notes"), -- Default save location
@@ -131,7 +115,6 @@ tags: [ai]
     error_block = { fg = "#FF8888", bold = true },     -- Error blocks
     content_start = { fg = "#AAAAAA", italic = true }, -- Content markers
     placeholder = { fg = "#FFCC66", bold = true },     -- Golden yellow for placeholders
-    signature = { fg = "#777777", italic = true },     -- Gray for signature lines
   },
   aliases = {
     translate = {
@@ -152,10 +135,6 @@ tags: [ai]
       "You are a testing expert. Generate comprehensive unit tests for the provided code, focusing on edge cases and full coverage.",
       user_prefix = "Generate tests for:",
     },
-  },
-  verification = {
-    enabled = false,           -- Whether to enable response verification
-    highlight_verified = true, -- Highlight verified responses
   },
   format_response = {
     enabled = false,            -- Whether to format the assistant's response
@@ -238,7 +217,7 @@ local LEGACY_TOKEN_PATHS = {
 
 -- Function to get API key for a specific provider
 function M.get_api_key(provider)
-  if provider == "openclaw" or provider == "claude_proxy" then
+  if provider == "claude_proxy" then
     return "local"
   end
 

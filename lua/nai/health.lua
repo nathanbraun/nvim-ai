@@ -27,7 +27,7 @@ function M.check()
 
   -- Check API keys
   local providers_to_check = { "openai", "openrouter", "google", "ollama" }
-  local no_key_providers = { openclaw = true, claude_proxy = true }
+  local no_key_providers = { claude_proxy = true }
 
   for _, p in ipairs(providers_to_check) do
     local key = config.get_api_key(p)

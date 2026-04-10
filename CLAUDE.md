@@ -27,9 +27,7 @@ Test files are in `lua/nai/tests/` using a custom framework (`framework.lua`). R
 - `config.lua` — Provider definitions, model lists, credentials loading from `~/.config/nvim-ai/credentials.json`
 - `parser.lua` — Converts buffer content ↔ API message arrays, handles aliases
 - `state.lua` — Facade over specialized state managers in `state/`
-- `openclaw.lua` — HTTP/SSE gateway for OpenClaw provider (not OpenAI-compatible)
 - `gateway.lua` — WebSocket integration for moltbot
-- `verification.lua` — Cryptographic signature generation/verification for chat integrity
 - `fileutils/` — Block expansion: file references, snapshots, directory trees
 
 **Plugin commands** are registered in `plugin/nvim-ai.lua`: `:NAIChat`, `:NAINew`, `:NAICancel`, `:NAIExpand`, `:NAIModel`, `:NAIProvider`, `:NAIUser`, `:NAIReference`, `:NAISnapshot`, `:NAITree`.
@@ -41,7 +39,7 @@ Providers are defined in `config.lua` with endpoint, models, and auth. The `api.
 2. Request body formatting in `api/request_body.lua`
 3. Response parsing in `api/response_parser.lua`
 
-Providers treating API keys as unnecessary (local providers like ollama, openclaw, claude_proxy) are handled specially in `config.lua:get_api_key()`.
+Providers treating API keys as unnecessary (local providers like ollama, claude_proxy) are handled specially in `config.lua:get_api_key()`.
 
 ## Design Patterns
 

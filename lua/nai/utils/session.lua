@@ -1,5 +1,5 @@
 --- Shared session key utilities
---- Used by openclaw.lua and gateway.lua for frontmatter-based session keys
+--- Used by gateway.lua for frontmatter-based session keys
 
 local M = {}
 

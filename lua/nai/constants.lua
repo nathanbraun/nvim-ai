@@ -15,7 +15,6 @@ M.MARKERS = {
   IGNORE_END = "<<< ignore",
 }
 
-M.DEFAULT_GATEWAY_URL = "http://localhost:18789"
 M.DEFAULT_GATEWAY_WS_URL = "ws://localhost:18789"
 
 M.AUTO_TITLE_INSTRUCTION =

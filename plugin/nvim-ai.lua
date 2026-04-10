@@ -131,10 +131,6 @@ vim.api.nvim_create_user_command('NAIModel', function()
   require('nai.tools.picker').select_model()
 end, { nargs = 0, desc = 'Select LLM model' })
 
-vim.api.nvim_create_user_command('NAIOpenClawModel', function()
-  require('nai.tools.picker').select_openclaw_model()
-end, { desc = "Select OpenClaw model" })
-
 vim.api.nvim_create_user_command('NAIRefreshHighlights', function()
   require('nai.syntax').define_highlight_groups()
 
@@ -499,11 +495,6 @@ end, {
   end
 })
 
--- Toggle between openclaw and last non-openclaw provider
-vim.api.nvim_create_user_command('NAIToggleOpenClaw', function()
-  require('nai').toggle_openclaw()
-end, { desc = "Toggle between OpenClaw and last non-OpenClaw provider" })
-
 -- Test command
 vim.api.nvim_create_user_command('NAITest', function(opts)
   local group = opts.args
@@ -766,65 +757,13 @@ vim.api.nvim_create_user_command('NAIVerboseDebug', function()
     -- Execute a test curl command to check Google API connectivity
     local api_key = config.get_api_key("google")
     if api_key then
-      local test_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" ..
-          api_key
-      local test_data = '{"contents":[{"parts":[{"text":"Hello, world!"}]}]}'
-
-      vim.notify("Testing Google API connectivity...", vim.log.levels.INFO)
-
-      vim.system({
-        "curl",
-        "-s",
-        "-X", "POST",
-        test_url,
-        "-H", "Content-Type: application/json",
-        "-d", test_data
-      }, { text = true }, function(obj)
-        if obj.code ~= 0 then
-          vim.notify("Curl test failed with code: " .. obj.code, vim.log.levels.ERROR)
-        else
-          vim.notify("Curl test response:\n" .. (obj.stdout or "Empty response"), vim.log.levels.INFO)
-        end
-      end)
+      local masked_key = string.sub(api_key, 1, 4) .. "..." .. string.sub(api_key, -4)
+      vim.notify("Google API key found: " .. masked_key, vim.log.levels.INFO)
     else
-      vim.notify("No Google API key found for testing", vim.log.levels.WARN)
+      vim.notify("No Google API key found", vim.log.levels.WARN)
     end
   end
 end, { desc = "Toggle verbose debugging for nvim-ai" })
-
-vim.api.nvim_create_user_command('NAIVerify', function()
-  local buffer_id = vim.api.nvim_get_current_buf()
-  local verification = require('nai.verification')
-  verification.verify_last_response(buffer_id)
-end, { desc = "Verify the integrity of the last AI response in the current buffer" })
-
-vim.api.nvim_create_user_command('NAISignedChat', function(opts)
-  -- Get the current buffer ID before starting the chat
-  local buffer_id = vim.api.nvim_get_current_buf()
-
-  -- Start the chat with forced signature
-  local request_handle = require('nai').chat(opts, true)
-
-  -- If we have a handle, set up a listener to run NAIVerify when complete
-  if request_handle then
-    local events = require('nai.events')
-
-    -- Create a one-time event listener that will clean itself up
-    local remove_listener = events.on('request:complete', function(request_id, content)
-      -- Remove this listener after it's triggered
-      if remove_listener then remove_listener() end
-
-      -- Run NAIVerify after a short delay to ensure buffer is updated
-      vim.defer_fn(function()
-        -- Make sure buffer is still valid
-        if vim.api.nvim_buf_is_valid(buffer_id) then
-          -- Run the verification command
-          vim.cmd("NAIVerify")
-        end
-      end, 100) -- 100ms delay should be enough for buffer to update
-    end)
-  end
-end, { range = true, nargs = '?', desc = 'AI chat with forced verification signature and automatic verification' })
 
 vim.api.nvim_create_user_command('NAITreeTest', function()
   local current_dir = vim.fn.getcwd()

@@ -1,3 +1,12 @@
+# 3.0.0 (2026-04-10)
+Features
+- Added ability to chat with Claude Code via pro or max plan
+
+Removed
+- Dumpling API support
+- Openclaw support
+- Verification feature
+
 # 2.3.3 (2025-09-16)
 Fixes
 - better handle directories/files with brackets in them
