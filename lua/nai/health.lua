@@ -62,10 +62,20 @@ function M.check()
 
     if vim.fn.executable("claude") == 1 then
       vim.health.ok("claude CLI found")
+
+      -- Check if claude is authenticated
+      local auth_result = vim.fn.system("claude --version 2>&1")
+      if vim.v.shell_error ~= 0 then
+        vim.health.warn("claude CLI may not be authenticated", {
+          "Run: claude login",
+        })
+      else
+        vim.health.ok("claude CLI version: " .. vim.trim(auth_result))
+      end
     else
       vim.health.error("claude CLI not found", {
         "Install the Claude CLI: https://docs.anthropic.com/en/docs/claude-cli",
-        "Make sure it is authenticated (run: claude login)",
+        "Then authenticate with: claude login",
       })
     end
 

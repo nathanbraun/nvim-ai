@@ -27,9 +27,12 @@ LLM chats as text files inside Neovim.
 - [Health Check](#health-check)
 
 ## Prerequisites
-You'll need an OpenRouter (recommended), OpenAI or Google AI API key. *Or* an
-instance of Ollama running on your computer. *Or* a Claude Max subscription with
-the Claude CLI installed.
+You'll need one of the following:
+- A **Claude Pro or Max** subscription with the Claude CLI installed (see
+  [setup instructions](#claude-pro-or-max-via-local-proxy) below)
+- An **OpenRouter** API key (recommended for API access — one key, many models)
+- An **OpenAI** or **Google AI** API key
+- A local **Ollama** instance
 
 You can get an OpenRouter key here:
 
@@ -85,26 +88,39 @@ It'll ask you for your API key. Paste it in. By default this will be saved at:
 
 `~/.config/nvim-ai/credentials.json`
 
-### Claude Max (via local proxy)
+### Claude Pro or Max (via local proxy)
 
-If you have a Claude Max subscription, you can use it directly without an API
-key. This requires the [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli)
-and Python 3. If you already have Claude Code installed, the CLI is already
-available and authenticated.
+If you have a Claude Pro ($20/mo) or Max subscription, you can use Claude
+directly without an API key. This works by running a small local proxy server
+that forwards requests through the Claude CLI.
 
-1. Install and authenticate the Claude CLI if you don't have it: `claude login`
+**Requirements:**
+- A [Claude Pro or Max](https://claude.ai/upgrade) subscription
+- The [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli) (if you
+  have Claude Code installed, the CLI is already available)
+- Python 3
+
+**Setup:**
+
+1. Make sure the Claude CLI is installed and authenticated:
+   ```
+   claude login
+   ```
+
 2. Set your provider in your Neovim config:
+   ```lua
+   require('nai').setup({
+       active_provider = "claude_proxy",
+       active_model = "sonnet",  -- or "opus", "haiku"
+   })
+   ```
 
-```lua
-require('nai').setup({
-    active_provider = "claude_proxy",
-    active_model = "sonnet",  -- or "opus", "haiku"
-})
-```
+That's it. The plugin will automatically start the proxy server when Neovim
+launches and you'll see a confirmation message ("Claude proxy started on
+:5757"). You can verify everything is working with `:checkhealth nai`.
 
-The plugin will automatically start the proxy server when Neovim launches. To
-disable auto-start (e.g., if you manage the proxy yourself), set `auto_start =
-false` in the provider config:
+To disable auto-start (e.g., if you manage the proxy yourself), set
+`auto_start = false` in the provider config:
 
 ```lua
 providers = {
@@ -113,6 +129,10 @@ providers = {
     },
 }
 ```
+
+**Note:** Claude Pro has lower usage limits than Max. If you hit rate limits
+frequently, consider upgrading to Max or using an API provider like
+OpenRouter.
 
 # Quickstart
 ## Your first conversation

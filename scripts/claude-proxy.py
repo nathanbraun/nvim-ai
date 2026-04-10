@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 claude-proxy: Local proxy that accepts OpenAI-compatible API requests
-and forwards them through the Claude CLI using your Max subscription.
+and forwards them through the Claude CLI using your Pro or Max subscription.
 
 Usage:
     python3 scripts/claude-proxy.py [port]

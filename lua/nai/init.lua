@@ -86,8 +86,36 @@ function M.ensure_claude_proxy()
                 end
               end
             end,
+            on_exit = function(_, code)
+              if code ~= 0 then
+                vim.schedule(function()
+                  vim.notify("claude-proxy failed to start (exit code " .. code .. ")", vim.log.levels.ERROR)
+                end)
+              end
+            end,
           }
         )
+
+        -- Verify proxy started after a short delay
+        vim.defer_fn(function()
+          vim.system(
+            { "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "2", health_url },
+            { text = true },
+            function(check)
+              vim.schedule(function()
+                if vim.trim(check.stdout or "") == "200" then
+                  vim.notify("Claude proxy started on :" .. port, vim.log.levels.INFO)
+                else
+                  vim.notify(
+                    "Claude proxy may not have started.\n" ..
+                    "Try running manually: python3 " .. script_path,
+                    vim.log.levels.WARN
+                  )
+                end
+              end)
+            end
+          )
+        end, 1500)
       end)
     end
   )
@@ -111,11 +139,18 @@ function M.setup(opts)
   if no_key_providers[provider] then
     -- Local providers: check that their dependencies are available
     if provider == "claude_proxy" then
+      local missing = {}
       if vim.fn.executable("claude") ~= 1 then
+        table.insert(missing, "claude CLI not found (install and run: claude login)")
+      end
+      if vim.fn.executable("python3") ~= 1 then
+        table.insert(missing, "python3 not found (required to run the proxy server)")
+      end
+
+      if #missing > 0 then
         vim.defer_fn(function()
           vim.notify(
-            "claude_proxy requires the Claude CLI.\n" ..
-            "Install it and run: claude login",
+            "claude_proxy setup issues:\n- " .. table.concat(missing, "\n- "),
             vim.log.levels.WARN
           )
         end, 1000)
