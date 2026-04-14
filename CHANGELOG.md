@@ -1,3 +1,7 @@
+# 3.0.1 (2026-04-14)
+Fixes
+- Issue with auto title insertion
+
 # 3.0.0 (2026-04-10)
 Features
 - Added ability to chat with Claude Code via pro or max plan

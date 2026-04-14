@@ -395,11 +395,12 @@ local function handle_chat_response(buffer_id, request_data, response, messages,
   -- Clear indicator from state
   state.clear_indicator(indicator_id)
 
-  -- Extract title if present
+  -- Extract title if present (strip leading whitespace before matching)
   local modified_response = response
-  local title_match = response:match("^Proposed Title:%s*(.-)[\r\n]")
+  local trimmed = response:gsub("^%s+", "")
+  local title_match = trimmed:match("^Proposed Title:%s*(.-)[\r\n]")
   if title_match then
-    modified_response = response:gsub("^Proposed Title:%s*.-%s*[\r\n]+", "")
+    modified_response = trimmed:gsub("^Proposed Title:%s*.-%s*[\r\n]+", "")
 
     -- Update the YAML frontmatter if we found a title
     if title_match and title_match:len() > 0 then
