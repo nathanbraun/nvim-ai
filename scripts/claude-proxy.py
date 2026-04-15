@@ -70,9 +70,23 @@ def resolve_model(model):
 
 
 class ClaudeProxyHandler(BaseHTTPRequestHandler):
+    def send_json_error(self, status, message):
+        """Send an error response as JSON instead of HTML."""
+        error_body = {
+            "error": {
+                "message": message,
+                "type": "proxy_error",
+                "code": status,
+            }
+        }
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(error_body).encode())
+
     def do_POST(self):
         if self.path != "/v1/chat/completions":
-            self.send_error(404)
+            self.send_json_error(404, "Not found")
             return
 
         content_length = int(self.headers.get("Content-Length", 0))
@@ -100,15 +114,19 @@ class ClaudeProxyHandler(BaseHTTPRequestHandler):
             )
 
             if result.returncode != 0:
+                stderr = result.stderr.strip()
                 log(f"✗ claude exited with code {result.returncode}")
-                self.send_error(502, f"Claude CLI error: {result.stderr[:200]}")
+                if "login" in stderr.lower() or "auth" in stderr.lower():
+                    self.send_json_error(401, f"Claude CLI auth error — try running: claude login\n{stderr[:200]}")
+                else:
+                    self.send_json_error(502, f"Claude CLI error: {stderr[:200]}")
                 return
 
             response_data = json.loads(result.stdout)
 
             if response_data.get("is_error"):
                 log(f"✗ claude returned error: {response_data.get('result', '')[:100]}")
-                self.send_error(502, response_data.get("result", "Unknown error"))
+                self.send_json_error(502, response_data.get("result", "Unknown error"))
                 return
 
             content = response_data.get("result", "")
@@ -146,13 +164,13 @@ class ClaudeProxyHandler(BaseHTTPRequestHandler):
 
         except subprocess.TimeoutExpired:
             log("✗ timed out after 300s")
-            self.send_error(504, "Claude CLI timed out")
+            self.send_json_error(504, "Claude CLI timed out")
         except json.JSONDecodeError as e:
             log(f"✗ failed to parse response: {e}")
-            self.send_error(502, "Failed to parse Claude CLI response")
+            self.send_json_error(502, "Failed to parse Claude CLI response")
         except Exception as e:
             log(f"✗ unexpected error: {e}")
-            self.send_error(500, str(e))
+            self.send_json_error(500, str(e))
 
     def do_GET(self):
         """Health check endpoint."""
@@ -162,7 +180,7 @@ class ClaudeProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"status": "ok"}).encode())
             return
-        self.send_error(404)
+        self.send_json_error(404, "Not found")
 
     def log_message(self, format, *args):
         # Suppress default request logging; we do our own
