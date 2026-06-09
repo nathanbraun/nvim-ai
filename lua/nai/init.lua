@@ -632,21 +632,15 @@ function M.new_chat()
   -- Generate a filename for the untitled chat
   local filename = fileutils.generate_filename("Untitled")
 
-  -- Create new buffer with filename (using .md extension instead of .naichat)
+  -- Create new buffer with the generated filename
   vim.cmd("enew")
   local buffer_id = vim.api.nvim_get_current_buf()
 
-  -- Make sure the extension is .md instead of .naichat
-  local md_filename = filename
-  if filename:match("%.naichat$") then
-    md_filename = filename:gsub("%.naichat$", ".md")
-  end
-
   -- Set buffer name with both arguments (buffer_id and name)
-  vim.api.nvim_buf_set_name(buffer_id, md_filename)
+  vim.api.nvim_buf_set_name(buffer_id, filename)
 
   -- Trigger filetype detection based on the filename
-  vim.cmd("doautocmd BufRead " .. vim.fn.fnameescape(md_filename))
+  vim.cmd("doautocmd BufRead " .. vim.fn.fnameescape(filename))
 
   -- Activate the buffer with our chat functionality
   require('nai.buffer').activate_buffer(buffer_id)

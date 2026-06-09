@@ -48,12 +48,11 @@ function M.generate_filename(title)
     clean_title = clean_title:sub(1, 40)
   end
 
-  -- Apply the filename format from config but use .md instead of .naichat
+  -- Apply the filename format from config
   local filename = config.options.chat_files.format
       :gsub("{date}", date)
       :gsub("{id}", id)
       :gsub("{title}", clean_title)
-      :gsub("%.naichat$", ".md") -- Replace .naichat with .md
 
   return path.expand(path.join(dir, filename))
 end

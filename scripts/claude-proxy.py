@@ -11,11 +11,16 @@ Then configure your nvim-ai plugin to use:
 """
 
 import json
+import os
+import select
+import signal
+import socket
 import subprocess
 import sys
+import threading
 import time
 import uuid
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = 5757
 
@@ -84,6 +89,82 @@ class ClaudeProxyHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(error_body).encode())
 
+    TIMEOUT = 300
+
+    def run_claude(self, cmd, prompt):
+        """Run `claude` and kill it if the HTTP client disconnects.
+
+        Returns (returncode, stdout, stderr), or None if the client went away
+        (in which case the claude process group has been terminated).
+        Raises subprocess.TimeoutExpired if claude exceeds TIMEOUT seconds.
+        """
+        # start_new_session=True puts claude in its own process group so we can
+        # kill it *and* any children it spawns with one os.killpg().
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+
+        # Drain stdin/stdout/stderr on a worker thread. communicate() handles
+        # writing the prompt and reading both pipes to EOF, so a large response
+        # can't fill a pipe buffer and deadlock claude.
+        io_result = {}
+
+        def _communicate():
+            try:
+                io_result["stdout"], io_result["stderr"] = proc.communicate(input=prompt)
+            except Exception as e:  # pragma: no cover - defensive
+                io_result["error"] = e
+
+        worker = threading.Thread(target=_communicate, daemon=True)
+        worker.start()
+
+        deadline = time.monotonic() + self.TIMEOUT
+        cancelled = False
+        timed_out = False
+
+        while worker.is_alive():
+            # A readable client socket whose peek returns empty means curl sent
+            # FIN (the user cancelled). Any real pipelined data (won't happen
+            # for our one-shot requests) just falls through and we keep waiting.
+            try:
+                readable, _, _ = select.select([self.connection], [], [], 0.1)
+                if readable and self.connection.recv(1, socket.MSG_PEEK) == b"":
+                    cancelled = True
+                    break
+            except OSError:
+                cancelled = True
+                break
+
+            if time.monotonic() > deadline:
+                timed_out = True
+                break
+
+        if cancelled or timed_out:
+            self._kill_group(proc, signal.SIGTERM)
+            worker.join(timeout=2)
+            if worker.is_alive():
+                self._kill_group(proc, signal.SIGKILL)
+                worker.join(timeout=2)
+
+        if cancelled:
+            return None
+        if timed_out:
+            raise subprocess.TimeoutExpired(cmd, self.TIMEOUT)
+
+        return proc.returncode, io_result.get("stdout", ""), io_result.get("stderr", "")
+
+    @staticmethod
+    def _kill_group(proc, sig):
+        try:
+            os.killpg(os.getpgid(proc.pid), sig)
+        except (ProcessLookupError, PermissionError):
+            pass
+
     def do_POST(self):
         if self.path != "/v1/chat/completions":
             self.send_json_error(404, "Not found")
@@ -105,24 +186,26 @@ class ClaudeProxyHandler(BaseHTTPRequestHandler):
         log(f"→ model={model}, {len(messages)} messages, prompt={len(prompt)} chars")
 
         try:
-            result = subprocess.run(
-                cmd,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=300,
-            )
+            outcome = self.run_claude(cmd, prompt)
 
-            if result.returncode != 0:
-                stderr = result.stderr.strip()
-                log(f"✗ claude exited with code {result.returncode}")
+            if outcome is None:
+                # Client cancelled; claude has been killed and the connection
+                # is gone, so there's nothing to send back.
+                log("✗ cancelled by client — killed claude")
+                return
+
+            returncode, stdout, stderr = outcome
+
+            if returncode != 0:
+                stderr = (stderr or "").strip()
+                log(f"✗ claude exited with code {returncode}")
                 if "login" in stderr.lower() or "auth" in stderr.lower():
                     self.send_json_error(401, f"Claude CLI auth error — try running: claude login\n{stderr[:200]}")
                 else:
                     self.send_json_error(502, f"Claude CLI error: {stderr[:200]}")
                 return
 
-            response_data = json.loads(result.stdout)
+            response_data = json.loads(stdout)
 
             if response_data.get("is_error"):
                 log(f"✗ claude returned error: {response_data.get('result', '')[:100]}")
@@ -193,7 +276,10 @@ def log(msg):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
-    server = HTTPServer(("127.0.0.1", port), ClaudeProxyHandler)
+    # ThreadingHTTPServer so each request gets its own thread: cancel detection
+    # (see ClaudeProxyHandler.run_claude) polls the client socket while claude
+    # runs, and concurrent requests don't block each other.
+    server = ThreadingHTTPServer(("127.0.0.1", port), ClaudeProxyHandler)
     log(f"Listening on http://127.0.0.1:{port}")
     log(f"Endpoint: http://127.0.0.1:{port}/v1/chat/completions")
     log("Press Ctrl+C to stop")

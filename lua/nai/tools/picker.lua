@@ -527,17 +527,20 @@ function M.browse_files()
     return
   end
 
-  -- Find all markdown files in the directory
+  -- Derive the file extension from the configured format
+  local ext = config.options.chat_files.format:match("(%.[^.]+)$") or ".md"
+
+  -- Find all chat files in the directory
   local find_command = nil
   local path = require('nai.utils.path')
 
   if path.is_windows then
     -- Windows command
     find_command = { 'powershell', '-NoProfile', '-Command',
-      string.format('Get-ChildItem -Path "%s" -Filter "*.md" -Recurse | ForEach-Object { $_.FullName }', notes_dir) }
+      string.format('Get-ChildItem -Path "%s" -Filter "*%s" -Recurse | ForEach-Object { $_.FullName }', notes_dir, ext) }
   else
     -- Unix command
-    find_command = { 'find', notes_dir, '-type', 'f', '-name', '*.md' }
+    find_command = { 'find', notes_dir, '-type', 'f', '-name', '*' .. ext }
   end
 
   -- Execute the find command and collect the results

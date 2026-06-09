@@ -7,6 +7,27 @@ local request_body = require('nai.api.request_body')
 local response_parser = require('nai.api.response_parser')
 local session_utils = require('nai.utils.session')
 
+-- Live curl process handles keyed by request_id, so cancel() can actually
+-- terminate the underlying subprocess. State (nai.state) only holds request
+-- metadata and deep-copies its values, which would strip the handle's methods,
+-- so the real handles live here instead.
+M._active_handles = {}
+
+-- Kill an in-flight request's subprocess. Works for vim.system handles
+-- (SystemObj:kill) and the libuv fallback (handle:close).
+local function terminate_handle(handle)
+  if not handle then
+    return
+  end
+  pcall(function()
+    if type(handle.kill) == 'function' then
+      handle:kill('sigterm')
+    elseif type(handle.close) == 'function' then
+      handle:close()
+    end
+  end)
+end
+
 -- Build curl args common to both Windows temp-file and standard paths
 local function build_curl_args(endpoint_url, auth_header, extra_args)
   local args = {
@@ -97,6 +118,8 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
   -- Build response handler
   local function process_response(obj)
     local state = require('nai.state')
+    -- The subprocess has exited by the time this fires; drop its handle.
+    M._active_handles[request_id] = nil
     if not state.get_active_requests()[request_id] then
       return
     end
@@ -238,18 +261,15 @@ function M.chat_request(messages, on_complete, on_error, chat_config)
 
   if handle then
     handle.request_id = request_id
+    M._active_handles[request_id] = handle
   end
 
   return {
     handle = request_id,
+    request_id = request_id,
     terminate = function()
-      if handle then
-        if vim.system and handle.terminate then
-          handle:terminate()
-        elseif not vim.system and handle.close then
-          handle:close()
-        end
-      end
+      terminate_handle(M._active_handles[request_id])
+      M._active_handles[request_id] = nil
     end
   }
 end
@@ -257,17 +277,19 @@ end
 function M.cancel_request(handle)
   local error_handler = require('nai.utils.error_handler')
 
-  if handle and handle.request_id then
-    error_handler.handle_request_cancellation(handle.request_id)
+  local request_id = handle and handle.request_id
+  if not request_id then
+    return
   end
 
-  if handle then
-    if vim.system and handle.terminate then
-      handle:terminate()
-    elseif not vim.system and handle.close then
-      handle:close()
-    end
-  end
+  -- Update state and emit the cancellation event.
+  error_handler.handle_request_cancellation(request_id)
+
+  -- Kill the underlying curl subprocess so it stops talking to the provider
+  -- (e.g. the claude_proxy, which otherwise keeps running `claude` to
+  -- completion and blocks the next request).
+  terminate_handle(M._active_handles[request_id])
+  M._active_handles[request_id] = nil
 end
 
 return M
