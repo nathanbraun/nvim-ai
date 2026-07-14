@@ -87,6 +87,7 @@ M.defaults = {
         "sonnet",
         "opus",
         "haiku",
+        "fable",
       },
     },
   },
